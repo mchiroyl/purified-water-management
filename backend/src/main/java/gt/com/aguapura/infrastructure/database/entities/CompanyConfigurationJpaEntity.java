@@ -56,6 +56,9 @@ public class CompanyConfigurationJpaEntity {
     @Column(name = "next_receipt_number", nullable = false)
     private long nextReceiptNumber = 1;
 
+    @Column(name = "logo_file_id")
+    private UUID logoFileId;
+
     @Column(name = "document_legend", nullable = false, length = 500)
     private String documentLegend;
 
@@ -98,12 +101,14 @@ public class CompanyConfigurationJpaEntity {
     public String getCurrencyCode() { return currencyCode; }
     public String getTimezone() { return timezone; }
     public String getReceiptPrefix() { return receiptPrefix; }
+    public long getNextReceiptNumber() { return nextReceiptNumber; }
+    public UUID getLogoFileId() { return logoFileId; }
     public String getDocumentLegend() { return documentLegend; }
     public long getVersion() { return version; }
 
     public void update(String commercialName, String legalName, String taxId, String address,
                        String phone, String whatsapp, String email, String currencyCode,
-                       String timezone, String receiptPrefix, String documentLegend) {
+                       String timezone, String receiptPrefix, long nextReceiptNumber, String documentLegend) {
         this.commercialName = commercialName;
         this.legalName = legalName;
         this.taxId = taxId;
@@ -114,6 +119,9 @@ public class CompanyConfigurationJpaEntity {
         this.currencyCode = currencyCode.toUpperCase();
         this.timezone = timezone;
         this.receiptPrefix = receiptPrefix.toUpperCase();
+        this.nextReceiptNumber = nextReceiptNumber;
         this.documentLegend = documentLegend;
     }
+
+    public void updateLogo(UUID logoFileId) { this.logoFileId = logoFileId; }
 }

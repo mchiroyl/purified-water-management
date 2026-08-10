@@ -36,7 +36,8 @@ public class CompanyConfigurationApplicationService {
                 request.commercialName().trim(), request.legalName().trim(), request.taxId().trim(),
                 request.address().trim(), safe(request.phone()), safe(request.whatsapp()), safe(request.email()),
                 request.currencyCode().toUpperCase(Locale.ROOT), request.timezone(),
-                request.receiptPrefix().toUpperCase(Locale.ROOT), safe(request.documentLegend()),
+                request.receiptPrefix().toUpperCase(Locale.ROOT), request.nextReceiptNumber(),
+                existing == null ? null : existing.logoFileId(), safe(request.documentLegend()),
                 existing == null ? 0 : existing.version());
         return toResponse(repository.save(data));
     }
@@ -56,6 +57,8 @@ public class CompanyConfigurationApplicationService {
     private CompanyConfigurationResponse toResponse(CompanyConfigurationPersistencePort.CompanyData entity) {
         return new CompanyConfigurationResponse(entity.id(), entity.commercialName(), entity.legalName(),
                 entity.taxId(), entity.address(), entity.phone(), entity.whatsapp(), entity.email(),
-                entity.currencyCode(), entity.timezone(), entity.receiptPrefix(), entity.documentLegend(), entity.version());
+                entity.currencyCode(), entity.timezone(), entity.receiptPrefix(), entity.nextReceiptNumber(),
+                entity.logoFileId(), entity.logoFileId() == null ? null : "/api/company-configuration/logo",
+                entity.documentLegend(), entity.version());
     }
 }

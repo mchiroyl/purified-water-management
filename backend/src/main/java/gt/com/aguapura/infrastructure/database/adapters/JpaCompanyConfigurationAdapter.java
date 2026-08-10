@@ -26,13 +26,14 @@ public class JpaCompanyConfigurationAdapter implements CompanyConfigurationPersi
         var entity = repository.findBySingletonKeyTrue().orElseGet(CompanyConfigurationJpaEntity::create);
         entity.update(data.commercialName(), data.legalName(), data.taxId(), data.address(), data.phone(),
                 data.whatsapp(), data.email(), data.currencyCode(), data.timezone(), data.receiptPrefix(),
-                data.documentLegend());
+                data.nextReceiptNumber(), data.documentLegend());
         return toData(repository.save(entity));
     }
 
     private CompanyData toData(CompanyConfigurationJpaEntity entity) {
         return new CompanyData(entity.getId(), entity.getCommercialName(), entity.getLegalName(), entity.getTaxId(),
                 entity.getAddress(), entity.getPhone(), entity.getWhatsapp(), entity.getEmail(), entity.getCurrencyCode(),
-                entity.getTimezone(), entity.getReceiptPrefix(), entity.getDocumentLegend(), entity.getVersion());
+                entity.getTimezone(), entity.getReceiptPrefix(), entity.getNextReceiptNumber(), entity.getLogoFileId(),
+                entity.getDocumentLegend(), entity.getVersion());
     }
 }

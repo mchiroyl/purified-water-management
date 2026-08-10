@@ -22,6 +22,7 @@ class CompanyConfigurationApplicationServiceTest {
         assertThat(result.commercialName()).isEqualTo("Agua Pura");
         assertThat(result.currencyCode()).isEqualTo("GTQ");
         assertThat(result.receiptPrefix()).isEqualTo("V");
+        assertThat(result.nextReceiptNumber()).isEqualTo(25);
         assertThat(repository.saved).isNotNull();
     }
 
@@ -29,7 +30,7 @@ class CompanyConfigurationApplicationServiceTest {
     void rejectsUnknownTimezone() {
         assertThatThrownBy(() -> service.upsert(new CompanyConfigurationRequest(
                 "Agua Pura", "Agua Pura, S.A.", "1234-5", "Ciudad de Guatemala",
-                "", "", "", "GTQ", "Mars/Olympus", "V", "")))
+                "", "", "", "GTQ", "Mars/Olympus", "V", 25, "")))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage("La zona horaria no es válida.");
     }
@@ -37,7 +38,7 @@ class CompanyConfigurationApplicationServiceTest {
     private CompanyConfigurationRequest validRequest(String currency, String prefix) {
         return new CompanyConfigurationRequest("Agua Pura", "Agua Pura, S.A.", "1234-5",
                 "Ciudad de Guatemala", "", "", "", currency.toUpperCase(),
-                "America/Guatemala", prefix, "Comprobante interno");
+                "America/Guatemala", prefix, 25, "Comprobante interno");
     }
 
     private static final class FakeCompanyPersistence implements CompanyConfigurationPersistencePort {
@@ -52,7 +53,7 @@ class CompanyConfigurationApplicationServiceTest {
         public CompanyData save(CompanyData data) {
             saved = new CompanyData(data.id(), data.commercialName(), data.legalName(), data.taxId(), data.address(),
                     data.phone(), data.whatsapp(), data.email(), data.currencyCode(), data.timezone(),
-                    data.receiptPrefix(), data.documentLegend(), data.version());
+                    data.receiptPrefix(), data.nextReceiptNumber(), data.logoFileId(), data.documentLegend(), data.version());
             return saved;
         }
     }

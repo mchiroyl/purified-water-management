@@ -9,6 +9,6 @@ public interface CompanyConfigurationPersistencePort {
 
     record CompanyData(UUID id, String commercialName, String legalName, String taxId, String address,
                        String phone, String whatsapp, String email, String currencyCode, String timezone,
-                       String receiptPrefix, String documentLegend, long version) {
+                       String receiptPrefix, long nextReceiptNumber, UUID logoFileId, String documentLegend, long version) {
     }
 }

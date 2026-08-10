@@ -14,6 +14,9 @@ public record CompanyConfigurationResponse(
         String currencyCode,
         String timezone,
         String receiptPrefix,
+        long nextReceiptNumber,
+        UUID logoFileId,
+        String logoUrl,
         String documentLegend,
         long version
 ) {

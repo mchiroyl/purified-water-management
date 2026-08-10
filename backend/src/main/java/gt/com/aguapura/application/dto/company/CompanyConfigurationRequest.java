@@ -2,6 +2,7 @@ package gt.com.aguapura.application.dto.company;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
@@ -16,6 +17,7 @@ public record CompanyConfigurationRequest(
         @NotBlank @Pattern(regexp = "[A-Z]{3}") String currencyCode,
         @NotBlank @Size(min = 3, max = 80) String timezone,
         @NotBlank @Size(max = 20) @Pattern(regexp = "[A-Za-z0-9-]+") String receiptPrefix,
+        @Positive long nextReceiptNumber,
         @Size(max = 500) String documentLegend
 ) {
 }
