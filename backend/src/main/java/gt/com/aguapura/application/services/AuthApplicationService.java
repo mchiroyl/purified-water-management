@@ -4,20 +4,15 @@ import gt.com.aguapura.application.dto.auth.AuthResponse;
 import gt.com.aguapura.application.dto.auth.AuthenticationResult;
 import gt.com.aguapura.application.dto.auth.LoginRequest;
 import gt.com.aguapura.application.dto.auth.SessionUserResponse;
+import gt.com.aguapura.application.ports.AccessTokenIssuer;
+import gt.com.aguapura.application.ports.AuthenticationPersistencePort;
+import gt.com.aguapura.application.ports.OpaqueTokenPort;
+import gt.com.aguapura.application.ports.PasswordVerificationPort;
+import gt.com.aguapura.application.ports.SessionPolicy;
 import gt.com.aguapura.domain.enums.DeviceStatus;
 import gt.com.aguapura.domain.enums.UserStatus;
 import gt.com.aguapura.domain.exceptions.BusinessException;
 import gt.com.aguapura.domain.exceptions.ErrorCategory;
-import gt.com.aguapura.infrastructure.configuration.SecurityProperties;
-import gt.com.aguapura.infrastructure.database.entities.DeviceJpaEntity;
-import gt.com.aguapura.infrastructure.database.entities.RefreshSessionJpaEntity;
-import gt.com.aguapura.infrastructure.database.entities.UserJpaEntity;
-import gt.com.aguapura.infrastructure.repositories.DeviceJpaRepository;
-import gt.com.aguapura.infrastructure.repositories.RefreshSessionJpaRepository;
-import gt.com.aguapura.infrastructure.repositories.UserJpaRepository;
-import gt.com.aguapura.infrastructure.security.JwtTokenService;
-import gt.com.aguapura.infrastructure.security.TokenHashingService;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,7 +21,6 @@ import java.time.Instant;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 public class AuthApplicationService {
@@ -34,47 +28,42 @@ public class AuthApplicationService {
     private static final int MAXIMUM_FAILED_ATTEMPTS = 5;
     private static final Duration LOCK_DURATION = Duration.ofMinutes(15);
 
-    private final UserJpaRepository users;
-    private final DeviceJpaRepository devices;
-    private final RefreshSessionJpaRepository sessions;
-    private final PasswordEncoder passwordEncoder;
-    private final JwtTokenService jwtTokens;
-    private final TokenHashingService tokenHashing;
-    private final SecurityProperties properties;
+    private final AuthenticationPersistencePort persistence;
+    private final PasswordVerificationPort passwordVerifier;
+    private final AccessTokenIssuer jwtTokens;
+    private final OpaqueTokenPort tokenHashing;
+    private final SessionPolicy policy;
 
-    public AuthApplicationService(UserJpaRepository users, DeviceJpaRepository devices,
-                                  RefreshSessionJpaRepository sessions, PasswordEncoder passwordEncoder,
-                                  JwtTokenService jwtTokens, TokenHashingService tokenHashing,
-                                  SecurityProperties properties) {
-        this.users = users;
-        this.devices = devices;
-        this.sessions = sessions;
-        this.passwordEncoder = passwordEncoder;
+    public AuthApplicationService(AuthenticationPersistencePort persistence,
+                                  PasswordVerificationPort passwordVerifier, AccessTokenIssuer jwtTokens,
+                                  OpaqueTokenPort tokenHashing, SessionPolicy policy) {
+        this.persistence = persistence;
+        this.passwordVerifier = passwordVerifier;
         this.jwtTokens = jwtTokens;
         this.tokenHashing = tokenHashing;
-        this.properties = properties;
+        this.policy = policy;
     }
 
     @Transactional
     public AuthenticationResult login(LoginRequest request) {
         String username = request.username().trim().toLowerCase(Locale.ROOT);
-        UserJpaEntity user = users.findByUsername(username).orElseThrow(AuthApplicationService::invalidCredentials);
+        var user = persistence.findUserByUsername(username).orElseThrow(AuthApplicationService::invalidCredentials);
         var now = Instant.now();
         user.unlockIfExpired(now);
         if (user.isTemporarilyLocked(now)) {
             throw new BusinessException("AUTH_TEMPORARILY_LOCKED", "La cuenta está bloqueada temporalmente.", ErrorCategory.UNAUTHORIZED);
         }
-        if (user.getStatus() != UserStatus.ACTIVE || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+        if (user.getStatus() != UserStatus.ACTIVE || !passwordVerifier.matches(request.password(), user.getPasswordHash())) {
             user.registerFailedAttempt(MAXIMUM_FAILED_ATTEMPTS, now.plus(LOCK_DURATION));
-            users.save(user);
+            persistence.saveUser(user);
             throw invalidCredentials();
         }
         user.registerSuccessfulLogin();
-        var device = devices.findFirstByUserIdAndFriendlyNameAndStatus(user.getId(), request.deviceName(), DeviceStatus.ACTIVE)
-                .orElseGet(() -> devices.save(new DeviceJpaEntity(user.getId(), request.deviceName(), request.appVersion())));
+        var device = persistence.findActiveDevice(user.getId(), request.deviceName())
+                .orElseGet(() -> persistence.createDevice(user.getId(), request.deviceName(), request.appVersion()));
         device.seen(request.appVersion());
-        devices.save(device);
-        users.save(user);
+        persistence.saveDevice(device);
+        persistence.saveUser(user);
         return issueSession(user, device.getId(), UUID.randomUUID());
     }
 
@@ -84,29 +73,28 @@ public class AuthApplicationService {
             throw invalidRefresh();
         }
         var tokenHash = tokenHashing.sha256(rawRefreshToken);
-        var existing = sessions.findByTokenHash(tokenHash).orElseThrow(AuthApplicationService::invalidRefresh);
+        var existing = persistence.findSessionByTokenHash(tokenHash).orElseThrow(AuthApplicationService::invalidRefresh);
         if (existing.getRevokedAt() != null) {
-            sessions.revokeFamily(existing.getFamilyId(), Instant.now(), "REFRESH_TOKEN_REUSE");
+            persistence.revokeFamily(existing.getFamilyId(), Instant.now(), "REFRESH_TOKEN_REUSE");
             throw invalidRefresh();
         }
         if (!existing.getExpiresAt().isAfter(Instant.now())) {
             existing.revoke("EXPIRED", null);
-            sessions.save(existing);
+            persistence.saveSession(existing);
             throw invalidRefresh();
         }
-        var user = users.findById(existing.getUserId()).orElseThrow(AuthApplicationService::invalidRefresh);
-        var device = devices.findById(existing.getDeviceId()).orElseThrow(AuthApplicationService::invalidRefresh);
+        var user = persistence.findUserById(existing.getUserId()).orElseThrow(AuthApplicationService::invalidRefresh);
+        var device = persistence.findDeviceById(existing.getDeviceId()).orElseThrow(AuthApplicationService::invalidRefresh);
         if (user.getStatus() != UserStatus.ACTIVE || device.getStatus() != DeviceStatus.ACTIVE) {
             throw invalidRefresh();
         }
 
         var newRawToken = tokenHashing.newOpaqueToken();
         var now = Instant.now();
-        var replacement = new RefreshSessionJpaEntity(user.getId(), device.getId(), existing.getFamilyId(),
-                tokenHashing.sha256(newRawToken), now, now.plus(properties.refreshTokenDuration()));
-        sessions.save(replacement);
+        var replacement = persistence.createSession(user.getId(), device.getId(), existing.getFamilyId(),
+                tokenHashing.sha256(newRawToken), now, now.plus(policy.refreshTokenDuration()));
         existing.revoke("ROTATED", replacement.getId());
-        sessions.save(existing);
+        persistence.saveSession(existing);
 
         var access = jwtTokens.issue(user, device.getId());
         return new AuthenticationResult(toResponse(user, access), newRawToken);
@@ -115,24 +103,24 @@ public class AuthApplicationService {
     @Transactional
     public void logout(String rawRefreshToken) {
         if (rawRefreshToken == null || rawRefreshToken.isBlank()) return;
-        sessions.findByTokenHash(tokenHashing.sha256(rawRefreshToken))
+        persistence.findSessionByTokenHash(tokenHashing.sha256(rawRefreshToken))
                 .ifPresent(session -> {
                     session.revoke("LOGOUT", null);
-                    sessions.save(session);
+                    persistence.saveSession(session);
                 });
     }
 
-    private AuthenticationResult issueSession(UserJpaEntity user, UUID deviceId, UUID familyId) {
+    private AuthenticationResult issueSession(AuthenticationPersistencePort.AuthUser user, UUID deviceId, UUID familyId) {
         var rawRefreshToken = tokenHashing.newOpaqueToken();
         var now = Instant.now();
-        sessions.save(new RefreshSessionJpaEntity(user.getId(), deviceId, familyId,
-                tokenHashing.sha256(rawRefreshToken), now, now.plus(properties.refreshTokenDuration())));
+        persistence.createSession(user.getId(), deviceId, familyId,
+                tokenHashing.sha256(rawRefreshToken), now, now.plus(policy.refreshTokenDuration()));
         var access = jwtTokens.issue(user, deviceId);
         return new AuthenticationResult(toResponse(user, access), rawRefreshToken);
     }
 
-    private AuthResponse toResponse(UserJpaEntity user, JwtTokenService.IssuedAccessToken access) {
-        Set<String> roles = user.getRoles().stream().map(role -> role.getCode()).collect(Collectors.toUnmodifiableSet());
+    private AuthResponse toResponse(AuthenticationPersistencePort.AuthUser user, AccessTokenIssuer.IssuedAccessToken access) {
+        Set<String> roles = user.getRoleCodes();
         var responseUser = new SessionUserResponse(user.getId(), user.getUsername(), user.getUsername(), roles, user.isMustChangePassword());
         return new AuthResponse(access.value(), access.expiresAt(), responseUser);
     }

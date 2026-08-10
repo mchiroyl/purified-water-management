@@ -1,6 +1,7 @@
 package gt.com.aguapura.infrastructure.database.entities;
 
 import gt.com.aguapura.domain.enums.UserStatus;
+import gt.com.aguapura.application.ports.AuthenticationPersistencePort;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -23,7 +24,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "app_user")
-public class UserJpaEntity {
+public class UserJpaEntity implements AuthenticationPersistencePort.AuthUser {
 
     @Id
     @GeneratedValue
@@ -122,6 +123,11 @@ public class UserJpaEntity {
 
     public Set<RoleJpaEntity> getRoles() {
         return roles;
+    }
+
+    @Override
+    public Set<String> getRoleCodes() {
+        return roles.stream().map(RoleJpaEntity::getCode).collect(java.util.stream.Collectors.toUnmodifiableSet());
     }
 
     public void addRole(RoleJpaEntity role) {

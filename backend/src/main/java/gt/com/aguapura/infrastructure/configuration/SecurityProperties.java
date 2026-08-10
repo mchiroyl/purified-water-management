@@ -1,6 +1,7 @@
 package gt.com.aguapura.infrastructure.configuration;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import gt.com.aguapura.application.ports.SessionPolicy;
 
 import java.time.Duration;
 import java.util.List;
@@ -13,7 +14,7 @@ public record SecurityProperties(
         long refreshTokenDays,
         boolean cookieSecure,
         List<String> allowedOrigins
-) {
+) implements SessionPolicy {
     public Duration accessTokenDuration() {
         return Duration.ofMinutes(accessTokenMinutes);
     }

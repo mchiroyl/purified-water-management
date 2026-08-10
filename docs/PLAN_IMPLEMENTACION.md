@@ -250,7 +250,7 @@ Verificación: tests backend/frontend/integración/E2E, Docker build, Compose, h
 | 0 | Completada | `docs/ANALISIS_INICIAL.md` y verificación de herramientas. |
 | 1 | Completada | ERS/SRS, reglas, permisos y trazabilidad creados y validados. |
 | 2 | Completada | Diagramas iniciales y ambos ERD creados y validados estructuralmente. |
-| 3 | En progreso | Estructura y builds listos; catálogo ya usa puertos, pero autenticación y empresa aún deben eliminar dependencias directas hacia infraestructura. |
+| 3 | Completada | Monolito modular con dependencias dirigidas: `domain`/`application` usan puertos y los adaptadores JPA/JWT quedan en infraestructura. |
 | 4 | Completada | Dockerfiles y Compose verificados con PostgreSQL, backend y frontend saludables. |
 | 5 | Completada | Flyway V1–V2 aplicado y esquema validado por Hibernate sobre PostgreSQL 18. |
 | 6 | Completada | Login, JWT, Argon2id, refresh rotativo, revocación, cookie y control de origen verificados. |

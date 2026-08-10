@@ -1,5 +1,7 @@
 package gt.com.aguapura.infrastructure.database.entities;
 
+import gt.com.aguapura.application.ports.AuthenticationPersistencePort;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -10,7 +12,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "refresh_session")
-public class RefreshSessionJpaEntity {
+public class RefreshSessionJpaEntity implements AuthenticationPersistencePort.AuthSession {
 
     @Id
     private UUID id;

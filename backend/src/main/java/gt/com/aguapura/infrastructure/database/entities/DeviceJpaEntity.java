@@ -1,6 +1,7 @@
 package gt.com.aguapura.infrastructure.database.entities;
 
 import gt.com.aguapura.domain.enums.DeviceStatus;
+import gt.com.aguapura.application.ports.AuthenticationPersistencePort;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -15,7 +16,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "device")
-public class DeviceJpaEntity {
+public class DeviceJpaEntity implements AuthenticationPersistencePort.AuthDevice {
 
     @Id
     @GeneratedValue

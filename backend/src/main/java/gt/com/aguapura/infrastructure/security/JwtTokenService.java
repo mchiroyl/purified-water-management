@@ -1,7 +1,8 @@
 package gt.com.aguapura.infrastructure.security;
 
 import gt.com.aguapura.infrastructure.configuration.SecurityProperties;
-import gt.com.aguapura.infrastructure.database.entities.UserJpaEntity;
+import gt.com.aguapura.application.ports.AccessTokenIssuer;
+import gt.com.aguapura.application.ports.AuthenticationPersistencePort;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
@@ -13,7 +14,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Component
-public class JwtTokenService {
+public class JwtTokenService implements AccessTokenIssuer {
 
     private final JwtEncoder encoder;
     private final SecurityProperties properties;
@@ -23,10 +24,10 @@ public class JwtTokenService {
         this.properties = properties;
     }
 
-    public IssuedAccessToken issue(UserJpaEntity user, UUID deviceId) {
+    public IssuedAccessToken issue(AuthenticationPersistencePort.AuthUser user, UUID deviceId) {
         var now = Instant.now();
         var expiresAt = now.plus(properties.accessTokenDuration());
-        var roles = user.getRoles().stream().map(role -> role.getCode()).sorted().toList();
+        var roles = user.getRoleCodes().stream().sorted().toList();
         var claims = JwtClaimsSet.builder()
                 .issuer(properties.issuer())
                 .issuedAt(now)
@@ -43,6 +44,4 @@ public class JwtTokenService {
         return new IssuedAccessToken(token, expiresAt);
     }
 
-    public record IssuedAccessToken(String value, Instant expiresAt) {
-    }
 }
