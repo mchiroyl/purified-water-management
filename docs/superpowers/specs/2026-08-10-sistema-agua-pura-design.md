@@ -1,8 +1,10 @@
 # Diseño del sistema de control para distribuidora de agua pura
 
 Fecha: 2026-08-10  
-Estado: diseño conversacional aprobado; especificación pendiente de revisión escrita  
+Estado: sustituido como fuente de requisitos por el prompt maestro unificado
 Tipo de solución: monolito modular para una sola empresa
+
+> Este documento conserva el razonamiento arquitectónico histórico. La única fuente canónica para planificar e implementar es `PROMPT_MAESTRO_SISTEMA_AGUA_PURA.md`.
 
 ## 1. Propósito
 

@@ -1,4 +1,4 @@
-# PROMPT MAESTRO — SISTEMA DE CONTROL DE VENTAS, RUTAS, INVENTARIO Y LIQUIDACIONES PARA DISTRIBUIDORA DE AGUA PURA
+# PROMPT MAESTRO UNIFICADO — SISTEMA DE CONTROL DE VENTAS, RUTAS, INVENTARIO Y LIQUIDACIONES PARA DISTRIBUIDORA DE AGUA PURA
 
 Actúa como un equipo profesional compuesto por:
 
@@ -17,6 +17,8 @@ Actúa como un equipo profesional compuesto por:
 Todos con más de 10 años de experiencia.
 
 Necesito que analices, diseñes, documentes, desarrolles, pruebes y dejes FUNCIONAL un sistema completo para una empresa dedicada a la distribución y venta de agua pura.
+
+Este archivo es la fuente canónica de requisitos. Toda decisión, plan, caso de uso, módulo, prueba y documentación debe derivarse de este documento. No crear fases paralelas, módulos duplicados ni implementaciones distintas para una misma capacidad.
 
 NO quiero únicamente ejemplos.
 
@@ -115,8 +117,16 @@ Desarrollar una aplicación web empresarial PWA que permita controlar completame
 - auditoría;
 - sincronización offline;
 - comprobantes digitales;
+- configuración empresarial;
+- facturación FEL opcional;
 - reportes;
 - dashboard.
+
+El sistema administrará una sola empresa purificadora de agua.
+
+NO implementar multitenencia.
+
+La identidad empresarial debe ser configurable y nunca quedar escrita directamente en el código.
 
 ---
 
@@ -298,6 +308,14 @@ API REST.
 
 No colocar lógica de negocio importante en Controllers.
 
+Implementar el backend como un MONOLITO MODULAR desplegable en una sola aplicación Spring Boot.
+
+NO dividir en microservicios.
+
+Dentro de cada capa, separar los módulos por capacidad de negocio.
+
+Una regla de negocio debe tener una única implementación autoritativa y reutilizable.
+
 ---
 
 # 8. FRONTEND ORGANIZADO
@@ -313,6 +331,7 @@ src/
 ├── components/
 ├── features/
 │   ├── auth/
+│   ├── company-configuration/
 │   ├── users/
 │   ├── products/
 │   ├── prices/
@@ -337,6 +356,14 @@ src/
 
 No crear componentes gigantes.
 
+Diseñar la experiencia por rol:
+
+- vendedor: navegación Mobile First orientada a ruta, venta y sincronización;
+- bodega: formularios táctiles para carga, recepción, devoluciones y mermas;
+- administrador/supervisor: navegación adaptable para dashboard, catálogos, revisiones, reportes y configuración.
+
+Los datos de identidad empresarial deben editarse en un único formulario y consumirse desde una única fuente de estado/API.
+
 ---
 
 # 9. ROLES
@@ -359,6 +386,8 @@ SUPERVISOR
 
 Puede:
 
+- configurar los datos e identidad de la empresa;
+- administrar la configuración FEL opcional;
 - administrar usuarios;
 - vendedores;
 - productos;
@@ -513,7 +542,11 @@ Nunca confiar en datos calculados por frontend.
 
 Nunca guardar en texto plano.
 
-Utilizar un PasswordEncoder seguro compatible con Spring Security.
+Utilizar Argon2id mediante un PasswordEncoder compatible con Spring Security.
+
+Ajustar sus parámetros al entorno para que la verificación sea deliberadamente costosa sin provocar denegación de servicio.
+
+Documentar el algoritmo y permitir migración futura mediante DelegatingPasswordEncoder o mecanismo equivalente.
 
 Nunca almacenar password en:
 
@@ -529,7 +562,9 @@ Nunca devolver hashes al frontend.
 
 NO almacenar refresh token inseguramente en localStorage.
 
-Diseñar manejo seguro.
+El access token debe ser corto y mantenerse solamente en memoria del frontend.
+
+El refresh token debe ser opaco, rotativo, almacenado como hash en servidor y asociado a usuario, sesión y dispositivo.
 
 Si arquitectura web lo permite, utilizar:
 
@@ -542,6 +577,10 @@ para refresh session.
 JWT Access Token debe ser corto.
 
 Implementar revocación.
+
+Detectar reutilización de refresh token y revocar la familia de sesión comprometida.
+
+Proteger los endpoints que usan cookie mediante validación de origen y protección CSRF apropiada.
 
 ---
 
@@ -1090,6 +1129,10 @@ retryCount
 lastError
 dependencies
 
+Guardar el cambio de negocio local y su entrada OUTBOX dentro de una única transacción IndexedDB.
+
+No permitir una operación local persistida sin su evento de sincronización correspondiente.
+
 ---
 
 # 41. ESTADOS DE SINCRONIZACIÓN
@@ -1137,6 +1180,8 @@ Resultado:
 NO DUPLICAR.
 
 Backend devuelve la operación existente.
+
+El backend debe almacenar el resultado original de la operación idempotente y devolverlo en reintentos sin repetir efectos secundarios.
 
 ---
 
@@ -1718,6 +1763,31 @@ Mostrar:
 
 # 70. COMPROBANTE DIGITAL
 
+Crear un único menú:
+
+CONFIGURACIÓN
+→
+DATOS DE LA EMPRESA.
+
+El formulario debe incluir:
+
+- nombre comercial;
+- razón social;
+- NIT;
+- dirección;
+- teléfonos;
+- WhatsApp;
+- correo electrónico;
+- logotipo;
+- moneda;
+- zona horaria;
+- prefijos y numeraciones de comprobantes internos;
+- información adicional autorizada para documentos.
+
+Estos datos constituyen la única fuente de verdad para la identidad mostrada por el sistema y para todos los comprobantes.
+
+NO crear otro formulario separado con datos duplicados para comprobantes.
+
 Después de venta sincronizada generar:
 
 PDF.
@@ -1738,6 +1808,37 @@ Debe contener:
 - total;
 - método pago;
 - estado.
+
+El PDF generado sin certificación FEL es un COMPROBANTE INTERNO y no debe presentarse como Documento Tributario Electrónico certificado.
+
+## FEL OPCIONAL
+
+Contemplar Factura Electrónica en Línea de Guatemala como integración opcional.
+
+La configuración FEL debe estar en un apartado independiente debido a sus permisos, credenciales y reglas propias, pero debe reutilizar directamente los datos de la empresa.
+
+Mientras no exista un certificador seleccionado:
+
+- FEL permanece desactivado;
+- no permitir activarlo;
+- no simular certificación;
+- no utilizar un proveedor ficticio;
+- los comprobantes internos PDF continúan funcionando.
+
+Cuando se seleccione un certificador autorizado:
+
+- implementar un adaptador real contra su contrato oficial;
+- validar credenciales antes de habilitar;
+- registrar solicitud, respuesta, identificadores, estado y errores de certificación;
+- conservar el DTE certificado y su trazabilidad;
+- no exponer credenciales en frontend, logs, PDF ni auditoría.
+
+Tomar como referencia normativa y técnica oficial:
+
+- https://portal.sat.gob.gt/portal/efactura/
+- https://portal.sat.gob.gt/portal/emisor-de-dte/
+- https://portal.sat.gob.gt/portal/certificador-de-dte/
+- https://portal.sat.gob.gt/portal/documentacion-tecnica-del-regimen-fel
 
 ---
 
@@ -1784,6 +1885,10 @@ Oficial:
 V-2026-000123.
 
 Mantener ambos para trazabilidad.
+
+La numeración configurable corresponde a comprobantes internos.
+
+Para FEL, utilizar exclusivamente los identificadores y autorizaciones devueltos por el proceso real de certificación. Nunca fabricar una autorización fiscal mediante una secuencia local.
 
 ---
 
@@ -1919,6 +2024,10 @@ ROLE
 USER_ROLE
 REFRESH_SESSION
 DEVICE
+
+COMPANY_CONFIGURATION
+FEL_CONFIGURATION
+FEL_DOCUMENT
 
 SELLER
 
@@ -2155,6 +2264,8 @@ correlationId
 
 timestamp.
 
+fieldErrors cuando existan errores por campo.
+
 No devolver stacktrace al cliente.
 
 ---
@@ -2223,6 +2334,8 @@ backend.
 
 frontend.
 
+El frontend debe servirse mediante Nginx o servidor web equivalente preparado para PWA y fallback de rutas SPA.
+
 Agregar:
 
 healthcheck.
@@ -2288,6 +2401,12 @@ hooks tests.
 
 sync tests.
 
+IndexedDB/Outbox tests.
+
+company configuration tests.
+
+receipt data source tests.
+
 ---
 
 # 94. PRUEBAS E2E
@@ -2324,6 +2443,13 @@ Escenario:
 26. Comprueba diferencias.
 27. Genera PDF.
 28. Comparte comprobante.
+
+Además comprobar:
+
+- el administrador configura los datos de la empresa una sola vez;
+- la interfaz y el PDF utilizan esa misma configuración;
+- el PDF interno no se identifica como DTE certificado;
+- FEL no puede activarse sin un adaptador real y credenciales válidas.
 
 ---
 
@@ -2600,6 +2726,8 @@ Indicar regla de dependencias.
 
 Incluir:
 
+Company Configuration.
+
 Auth.
 
 Users.
@@ -2631,6 +2759,8 @@ Auditing.
 Reports.
 
 PDF.
+
+FEL Adapter.
 
 ---
 
@@ -2933,7 +3063,7 @@ Incluir:
 2. Acceso al sistema.
 3. Instalar PWA.
 4. Iniciar sesión.
-5. Perfil Administrador.
+5. Perfil Administrador y configuración de datos de la empresa.
 6. Crear vendedor.
 7. Crear usuario.
 8. Crear producto.
@@ -2966,6 +3096,7 @@ Incluir:
 35. Cerrar sesión.
 36. Preguntas frecuentes.
 37. Errores comunes.
+38. FEL opcional y diferencia entre comprobante interno y DTE certificado.
 
 Utilizar capturas cuando el sistema esté terminado.
 
@@ -2982,6 +3113,8 @@ Debe incluir:
 - arquitectura;
 - tecnologías;
 - módulos;
+- configuración empresarial;
+- comprobantes internos y FEL opcional;
 - seguridad;
 - base de datos;
 - API;
@@ -3086,6 +3219,10 @@ a:
 Indicar todas las variables.
 
 NO incluir secretos reales.
+
+Las credenciales FEL solamente deben configurarse cuando exista un proveedor real.
+
+No guardar credenciales FEL en variables expuestas al frontend ni documentar valores reales.
 
 ---
 
@@ -3276,6 +3413,8 @@ Ejemplos.
 README debe permitir que una persona entienda en menos de 10 minutos:
 
 - qué hace sistema;
+- alcance de una sola empresa;
+- configuración empresarial y estado de FEL;
 - arquitectura;
 - tecnologías;
 - cómo levantar;
@@ -3301,7 +3440,7 @@ FASE 2
 Diagramas iniciales.
 
 FASE 3
-Arquitectura y estructura.
+Arquitectura monolítica modular y estructura.
 
 FASE 4
 Docker.
@@ -3313,7 +3452,7 @@ FASE 6
 Seguridad/Auth.
 
 FASE 7
-Usuarios/Roles/Devices.
+Usuarios/Roles/Devices/Configuración empresarial.
 
 FASE 8
 Productos/Presentaciones.
@@ -3370,7 +3509,7 @@ FASE 25
 Anulaciones.
 
 FASE 26
-PDF.
+Comprobantes PDF + FEL opcional, habilitable únicamente con proveedor real.
 
 FASE 27
 Compartir WhatsApp.
@@ -3687,6 +3826,9 @@ hasta que:
 - mermas funcionen;
 - liquidaciones funcionen;
 - PDF funcione;
+- los datos de empresa sean configurables desde un único formulario;
+- la interfaz y los comprobantes utilicen la misma configuración empresarial;
+- FEL permanezca bloqueado sin proveedor o certifique mediante un proveedor real cuando esté configurado;
 - tests pasen;
 - diagramas existan;
 - manuales existan;
@@ -3776,6 +3918,10 @@ EVERY IMPORTANT FEATURE HAS TESTS.
 
 EVERY RELEASE MUST BE VERIFIABLE.
 
+ONE COMPANY CONFIGURATION IS THE SINGLE SOURCE OF TRUTH.
+
+AN INTERNAL RECEIPT IS NEVER PRESENTED AS A CERTIFIED FEL DOCUMENT.
+
 ---
 
 # 160. INSTRUCCIÓN FINAL AL AGENTE
@@ -3803,6 +3949,12 @@ Después crea:
 docs/PLAN_IMPLEMENTACION.md.
 
 Luego ejecuta las fases en orden.
+
+El plan de implementación debe mapear exactamente las FASES 0 a 39 de este documento.
+
+NO crear una segunda secuencia de fases.
+
+NO implementar dos módulos, servicios o pantallas que resuelvan la misma función.
 
 No me entregues solamente instrucciones para que yo programe.
 

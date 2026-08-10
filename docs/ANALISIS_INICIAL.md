@@ -99,4 +99,4 @@ Cada fase incluirá código, pruebas, revisión de seguridad, actualización doc
 
 ## 8. Resultado del análisis
 
-No existe impedimento técnico local para comenzar la planificación. El diseño aprobado está documentado en `docs/superpowers/specs/2026-08-10-sistema-agua-pura-design.md`. La implementación requiere un plan detallado por fases antes de crear el código fuente.
+No existe impedimento técnico local para comenzar la planificación. Los requisitos y decisiones confirmadas están unificados en `PROMPT_MAESTRO_SISTEMA_AGUA_PURA.md`, que es la única fuente canónica. El documento de diseño conserva únicamente contexto histórico. La implementación requiere un plan detallado que utilice exactamente las fases 0 a 39 del prompt maestro.
