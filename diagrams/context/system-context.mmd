@@ -1,0 +1,24 @@
+flowchart LR
+    Owner["Propietario / Administrador"]
+    Warehouse["Bodega"]
+    Seller["Vendedor"]
+    Supervisor["Supervisor"]
+    Customer["Cliente"]
+    Device["Teléfono / Tablet / PC"]
+    System["Sistema de Agua Pura"]
+    DB[("PostgreSQL")]
+    IDB[("IndexedDB móvil")]
+    Storage["Storage de archivos"]
+    WhatsApp["WhatsApp / Web Share"]
+    Fel["Certificador FEL opcional"]
+
+    Owner --> System
+    Warehouse --> System
+    Seller --> Device --> System
+    Supervisor --> System
+    System --> Customer
+    Device <--> IDB
+    System <--> DB
+    System <--> Storage
+    Device --> WhatsApp
+    System -. "solo si está configurado" .-> Fel

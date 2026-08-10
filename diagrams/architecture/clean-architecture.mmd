@@ -1,0 +1,13 @@
+flowchart TD
+    Presentation["Presentation\nControllers, validators, advice"]
+    Application["Application\nUse cases, commands, queries, DTO"]
+    Domain["Domain\nEntities, value objects, rules, ports"]
+    Infrastructure["Infrastructure\nJPA, Security, Storage, PDF, Sync"]
+
+    Presentation --> Application
+    Application --> Domain
+    Infrastructure --> Domain
+    Infrastructure --> Application
+
+    Rule["Regla: dependencias apuntan hacia el dominio"]
+    Rule -.-> Domain

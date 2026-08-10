@@ -1,0 +1,35 @@
+flowchart TB
+    subgraph Client["PWA React / TypeScript"]
+        UI["UI por rol"]
+        Query["TanStack Query"]
+        Connection["ConnectionManager"]
+        Sync["SyncEngine"]
+        SW["Service Worker"]
+        IDB[("IndexedDB + Outbox")]
+        UI --> Query
+        UI --> Connection
+        UI --> Sync
+        Sync <--> IDB
+        SW --> UI
+    end
+
+    subgraph Backend["Spring Boot — monolito modular"]
+        REST["Presentation / REST"]
+        APP["Application / casos de uso"]
+        DOMAIN["Domain / reglas"]
+        INFRA["Infrastructure / adaptadores"]
+        REST --> APP --> DOMAIN
+        INFRA --> DOMAIN
+    end
+
+    PG[("PostgreSQL")]
+    Files["Storage de archivos"]
+    PDF["Generador PDF"]
+    FEL["Adaptador FEL opcional"]
+
+    Query -->|HTTPS JSON| REST
+    Sync -->|batch idempotente| REST
+    INFRA <--> PG
+    INFRA <--> Files
+    INFRA --> PDF
+    INFRA -.-> FEL

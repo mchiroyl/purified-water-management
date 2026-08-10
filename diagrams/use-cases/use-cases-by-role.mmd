@@ -1,0 +1,24 @@
+flowchart LR
+    Admin["Administrador"] --> A1["Configurar empresa"]
+    Admin --> A2["Gestionar usuarios y catálogos"]
+    Admin --> A3["Revisar diferencias y liquidaciones"]
+    Admin --> A4["Consultar auditoría y reportes"]
+    Admin --> A5["Configurar FEL opcional"]
+
+    Warehouse["Bodega"] --> B1["Preparar y entregar carga"]
+    Warehouse --> B2["Recibir devoluciones"]
+    Warehouse --> B3["Revisar mermas"]
+
+    Seller["Vendedor"] --> V1["Confirmar carga e iniciar ruta"]
+    Seller --> V2["Registrar venta y pago"]
+    Seller --> V3["Crear cliente ocasional/provisional"]
+    Seller --> V4["Registrar merma/devolución"]
+    Seller --> V5["Sincronizar y finalizar recorrido"]
+    Seller --> V6["Compartir comprobante"]
+
+    Supervisor["Supervisor"] --> S1["Revisar autorizaciones"]
+    Supervisor --> S2["Validar transferencias"]
+    Supervisor --> S3["Atender alertas e incidencias"]
+
+    Customer["Cliente"] --> C1["Recibir producto"]
+    Customer --> C2["Recibir comprobante digital"]
