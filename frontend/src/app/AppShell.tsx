@@ -13,6 +13,7 @@ export function AppShell() {
       <aside>
         <nav aria-label="Principal">
           <NavLink to="/">Inicio</NavLink>
+          <NavLink to="/products">Productos</NavLink>
           <NavLink to="/company">Configuración</NavLink>
         </nav>
         <button className="secondary" onClick={() => void logout()}>Cerrar sesión</button>
@@ -20,6 +21,7 @@ export function AppShell() {
       <section className="page"><Outlet /></section>
       <nav className="bottom-nav" aria-label="Navegación móvil">
         <NavLink to="/">Inicio</NavLink>
+        <NavLink to="/products">Productos</NavLink>
         <NavLink to="/company">Configuración</NavLink>
       </nav>
     </div>
