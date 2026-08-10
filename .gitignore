@@ -1,0 +1,30 @@
+# Environment and secrets
+.env
+*.local
+
+# Java / Maven
+backend/target/
+*.log
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Runtime data
+data/
+storage/
+backups/*.dump
+backups/*.sql
+
+# Generated diagram exports
+diagrams/**/*.png

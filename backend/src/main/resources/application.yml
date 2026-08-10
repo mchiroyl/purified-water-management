@@ -1,0 +1,74 @@
+spring:
+  application:
+    name: agua-pura-backend
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/agua_pura}
+    username: ${SPRING_DATASOURCE_USERNAME:agua_pura_app}
+    password: ${SPRING_DATASOURCE_PASSWORD:change-this-database-password}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 5000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        format_sql: false
+  flyway:
+    enabled: true
+    validate-migration-naming: true
+  jackson:
+    default-property-inclusion: non_null
+  servlet:
+    multipart:
+      max-file-size: 8MB
+      max-request-size: 10MB
+
+server:
+  port: 8080
+  forward-headers-strategy: framework
+  error:
+    include-message: never
+    include-stacktrace: never
+  max-http-request-header-size: 16KB
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,flyway
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /api-docs
+
+app:
+  security:
+    issuer: ${JWT_ISSUER:agua-pura-local}
+    secret-base64: ${JWT_SECRET_BASE64:Y2hhbmdlLXRoaXMtZGV2ZWxvcG1lbnQtc2VjcmV0LWtleS0xMjM0NTY3ODkw}
+    access-token-minutes: ${ACCESS_TOKEN_MINUTES:15}
+    refresh-token-days: ${REFRESH_TOKEN_DAYS:7}
+    cookie-secure: ${COOKIE_SECURE:false}
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+  bootstrap:
+    username: ${BOOTSTRAP_ADMIN_USERNAME:admin}
+    email: ${BOOTSTRAP_ADMIN_EMAIL:admin@example.invalid}
+    password: ${BOOTSTRAP_ADMIN_PASSWORD:replace-with-a-long-random-password}
+    force-password-change: ${BOOTSTRAP_ADMIN_FORCE_PASSWORD_CHANGE:true}
+  storage:
+    path: ${STORAGE_PATH:./storage}
+  fel:
+    enabled: ${FEL_ENABLED:false}
+    provider-code: ${FEL_PROVIDER_CODE:}
+    credential-secret-ref: ${FEL_CREDENTIAL_SECRET_REF:}

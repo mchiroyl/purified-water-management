@@ -250,4 +250,9 @@ Verificación: tests backend/frontend/integración/E2E, Docker build, Compose, h
 | 0 | Completada | `docs/ANALISIS_INICIAL.md` y verificación de herramientas. |
 | 1 | Completada | ERS/SRS, reglas, permisos y trazabilidad creados y validados. |
 | 2 | Completada | Diagramas iniciales y ambos ERD creados y validados estructuralmente. |
-| 3–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla. |
+| 3 | Completada | Estructura Spring Boot/React, paquetes por capas, ADR y builds reproducibles. |
+| 4 | Completada | Dockerfiles y Compose verificados con PostgreSQL, backend y frontend saludables. |
+| 5 | Completada | Flyway V1–V2 aplicado y esquema validado por Hibernate sobre PostgreSQL 18. |
+| 6 | Completada | Login, JWT, Argon2id, refresh rotativo, revocación, cookie y control de origen verificados. |
+| 7 | En progreso | RBAC base y formulario único de empresa operativos; faltan administración de usuarios, vendedores, dispositivos y logotipo. |
+| 8–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla. |
