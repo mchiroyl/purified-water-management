@@ -1,0 +1,324 @@
+erDiagram
+    IDB_APP_METADATA {
+        VARCHAR key PK
+        JSON value
+        DATETIME updated_at
+    }
+
+    IDB_USER_CONTEXT {
+        UUID user_id PK
+        VARCHAR username
+        JSON roles
+        UUID device_id
+        DATETIME cached_at
+    }
+
+    IDB_COMPANY_CONFIGURATION {
+        UUID id PK
+        VARCHAR commercial_name
+        VARCHAR legal_name
+        VARCHAR tax_id
+        JSON contact
+        VARCHAR logo_cache_key
+        CHAR currency_code
+        VARCHAR timezone
+        VARCHAR receipt_prefix
+        INT server_version
+        DATETIME cached_at
+    }
+
+    IDB_ROUTE_PACKAGE {
+        UUID route_run_id PK
+        UUID route_id
+        UUID seller_id
+        UUID vehicle_id
+        VARCHAR status
+        DATE business_date
+        VARCHAR package_version
+        DATETIME downloaded_at
+        DATETIME expires_at
+    }
+
+    IDB_CUSTOMER {
+        UUID id PK
+        UUID route_run_id
+        VARCHAR code
+        VARCHAR name
+        VARCHAR normalized_phone
+        VARCHAR customer_type
+        VARCHAR status
+        BOOLEAN credit_allowed
+        DECIMAL credit_available
+        DATETIME cached_at
+    }
+
+    IDB_PROVISIONAL_CUSTOMER {
+        UUID local_customer_id PK
+        UUID route_run_id
+        UUID seller_id
+        UUID device_id
+        VARCHAR name
+        VARCHAR normalized_phone
+        VARCHAR whatsapp
+        TEXT address_reference
+        VARCHAR sync_status
+        UUID server_customer_id
+        DATETIME created_at_local
+    }
+
+    IDB_PRODUCT {
+        UUID id PK
+        VARCHAR code
+        VARCHAR name
+        UUID base_uom_id
+        BOOLEAN active
+        BOOLEAN tracks_inventory
+        INT server_version
+    }
+
+    IDB_PRESENTATION {
+        UUID id PK
+        UUID product_id
+        VARCHAR code
+        VARCHAR name
+        DECIMAL units_per_presentation
+        BOOLEAN active
+    }
+
+    IDB_PRICE_VERSION {
+        UUID id PK
+        UUID price_list_id
+        INT version_number
+        DATETIME valid_from
+        DATETIME valid_to
+        VARCHAR status
+    }
+
+    IDB_PRICE_TIER {
+        UUID id PK
+        UUID price_version_id
+        UUID presentation_id
+        DECIMAL min_base_units
+        DECIMAL max_base_units
+        DECIMAL unit_price
+    }
+
+    IDB_SPECIAL_PRICE {
+        UUID id PK
+        UUID customer_id
+        UUID presentation_id
+        DECIMAL unit_price
+        DATETIME valid_from
+        DATETIME valid_to
+        VARCHAR status
+    }
+
+    IDB_ROUTE_LOAD {
+        UUID id PK
+        UUID route_run_id
+        VARCHAR status
+        DATETIME seller_confirmed_at
+        VARCHAR server_version
+    }
+
+    IDB_ROUTE_LOAD_ITEM {
+        UUID id PK
+        UUID route_load_id
+        UUID presentation_id
+        DECIMAL presentation_quantity
+        DECIMAL quantity_base_units
+    }
+
+    IDB_ROUTE_INVENTORY {
+        VARCHAR inventory_key PK
+        UUID route_run_id
+        UUID product_id
+        DECIMAL available_base_units
+        DECIMAL pending_base_units
+        INT server_version
+        DATETIME updated_at
+    }
+
+    IDB_LOCAL_SALE {
+        UUID local_sale_id PK
+        UUID server_sale_id
+        UUID route_run_id
+        UUID seller_id
+        UUID customer_id
+        UUID provisional_customer_id
+        UUID device_id
+        UUID client_operation_id
+        VARCHAR local_reference
+        VARCHAR official_number
+        CHAR currency_code
+        DECIMAL subtotal
+        DECIMAL discount_total
+        DECIMAL total
+        VARCHAR sync_status
+        DATETIME occurred_at_local
+    }
+
+    IDB_LOCAL_SALE_ITEM {
+        UUID id PK
+        UUID local_sale_id
+        UUID presentation_id
+        UUID price_version_id
+        UUID price_tier_id
+        UUID special_price_id
+        DECIMAL quantity_presentations
+        DECIMAL quantity_base_units
+        DECIMAL unit_price
+        DECIMAL subtotal
+    }
+
+    IDB_LOCAL_PAYMENT {
+        UUID local_payment_id PK
+        UUID server_payment_id
+        UUID local_sale_id
+        UUID route_run_id
+        UUID client_operation_id
+        VARCHAR payment_method
+        DECIMAL amount
+        VARCHAR verification_status
+        VARCHAR transfer_reference
+        VARCHAR evidence_cache_key
+        VARCHAR sync_status
+        DATETIME paid_at_local
+    }
+
+    IDB_LOCAL_WASTE {
+        UUID local_waste_id PK
+        UUID server_waste_id
+        UUID route_run_id
+        UUID seller_id
+        UUID device_id
+        UUID client_operation_id
+        VARCHAR status
+        TEXT reason
+        VARCHAR sync_status
+        DATETIME occurred_at_local
+    }
+
+    IDB_LOCAL_WASTE_ITEM {
+        UUID id PK
+        UUID local_waste_id
+        UUID waste_type_id
+        UUID presentation_id
+        DECIMAL reported_base_units
+        DECIMAL recoverable_base_units
+        DECIMAL approved_base_units
+    }
+
+    IDB_LOCAL_WASTE_EVIDENCE {
+        UUID id PK
+        UUID local_waste_id
+        VARCHAR blob_cache_key
+        VARCHAR media_type
+        BIGINT size_bytes
+        VARCHAR sha256
+        VARCHAR sync_status
+        DATETIME captured_at_local
+    }
+
+    IDB_LOCAL_RETURN {
+        UUID local_return_id PK
+        UUID server_return_id
+        UUID route_run_id
+        UUID customer_id
+        UUID local_sale_id
+        UUID client_operation_id
+        VARCHAR status
+        VARCHAR sync_status
+        DATETIME reported_at_local
+    }
+
+    IDB_LOCAL_RETURN_ITEM {
+        UUID id PK
+        UUID local_return_id
+        UUID presentation_id
+        DECIMAL presentation_quantity
+        DECIMAL quantity_base_units
+        VARCHAR condition
+    }
+
+    IDB_OUTBOX_OPERATION {
+        UUID client_operation_id PK
+        UUID device_id
+        VARCHAR entity_type
+        VARCHAR operation_type
+        UUID aggregate_local_id
+        JSON payload
+        JSON dependencies
+        VARCHAR status
+        INT retry_count
+        VARCHAR last_error_code
+        TEXT last_error_message
+        DATETIME next_attempt_at
+        DATETIME created_at_local
+        DATETIME updated_at
+    }
+
+    IDB_SYNC_RESULT {
+        UUID client_operation_id PK
+        VARCHAR result_status
+        UUID server_entity_id
+        JSON result_payload
+        VARCHAR error_code
+        DATETIME processed_at_server
+        DATETIME stored_at_local
+    }
+
+    IDB_FILE_CACHE {
+        VARCHAR cache_key PK
+        BLOB content
+        VARCHAR media_type
+        BIGINT size_bytes
+        VARCHAR sha256
+        VARCHAR purpose
+        DATETIME created_at
+        DATETIME expires_at
+    }
+
+    IDB_RECEIPT_CACHE {
+        UUID local_sale_id PK
+        UUID server_sale_id
+        VARCHAR official_number
+        VARCHAR file_cache_key
+        VARCHAR status
+        DATETIME generated_at
+    }
+
+    IDB_ROUTE_PACKAGE ||--o{ IDB_CUSTOMER : includes
+    IDB_ROUTE_PACKAGE ||--o{ IDB_PROVISIONAL_CUSTOMER : creates
+    IDB_ROUTE_PACKAGE ||--o| IDB_ROUTE_LOAD : receives
+    IDB_ROUTE_LOAD ||--|{ IDB_ROUTE_LOAD_ITEM : contains
+    IDB_PRESENTATION ||--o{ IDB_ROUTE_LOAD_ITEM : loaded_as
+    IDB_PRODUCT ||--o{ IDB_PRESENTATION : offers
+    IDB_PRICE_VERSION ||--o{ IDB_PRICE_TIER : defines
+    IDB_PRESENTATION ||--o{ IDB_PRICE_TIER : priced
+    IDB_CUSTOMER ||--o{ IDB_SPECIAL_PRICE : receives
+    IDB_PRESENTATION ||--o{ IDB_SPECIAL_PRICE : applies
+    IDB_ROUTE_PACKAGE ||--o{ IDB_ROUTE_INVENTORY : snapshots
+    IDB_PRODUCT ||--o{ IDB_ROUTE_INVENTORY : balances
+    IDB_ROUTE_PACKAGE ||--o{ IDB_LOCAL_SALE : records
+    IDB_CUSTOMER o|--o{ IDB_LOCAL_SALE : permanent_buyer
+    IDB_PROVISIONAL_CUSTOMER o|--o{ IDB_LOCAL_SALE : provisional_buyer
+    IDB_LOCAL_SALE ||--|{ IDB_LOCAL_SALE_ITEM : contains
+    IDB_PRESENTATION ||--o{ IDB_LOCAL_SALE_ITEM : sold_as
+    IDB_LOCAL_SALE ||--|{ IDB_LOCAL_PAYMENT : paid_by
+    IDB_ROUTE_PACKAGE ||--o{ IDB_LOCAL_WASTE : reports
+    IDB_LOCAL_WASTE ||--|{ IDB_LOCAL_WASTE_ITEM : contains
+    IDB_PRESENTATION ||--o{ IDB_LOCAL_WASTE_ITEM : damaged_as
+    IDB_LOCAL_WASTE ||--o{ IDB_LOCAL_WASTE_EVIDENCE : evidences
+    IDB_FILE_CACHE ||--o{ IDB_LOCAL_WASTE_EVIDENCE : stores_blob
+    IDB_ROUTE_PACKAGE ||--o{ IDB_LOCAL_RETURN : reports
+    IDB_LOCAL_RETURN ||--|{ IDB_LOCAL_RETURN_ITEM : contains
+    IDB_PRESENTATION ||--o{ IDB_LOCAL_RETURN_ITEM : returned_as
+    IDB_PROVISIONAL_CUSTOMER ||--o| IDB_OUTBOX_OPERATION : create_operation
+    IDB_LOCAL_SALE ||--o| IDB_OUTBOX_OPERATION : sale_operation
+    IDB_LOCAL_PAYMENT ||--o| IDB_OUTBOX_OPERATION : payment_operation
+    IDB_LOCAL_WASTE ||--o| IDB_OUTBOX_OPERATION : waste_operation
+    IDB_LOCAL_RETURN ||--o| IDB_OUTBOX_OPERATION : return_operation
+    IDB_OUTBOX_OPERATION ||--o| IDB_SYNC_RESULT : produces
+    IDB_LOCAL_SALE ||--o| IDB_RECEIPT_CACHE : caches
+    IDB_FILE_CACHE ||--o{ IDB_RECEIPT_CACHE : stores_pdf

@@ -2575,6 +2575,11 @@ Utilizar Mermaid, PlantUML o formato equivalente mantenible en texto.
 
 Además exportar a PNG/SVG cuando sea práctico.
 
+Los modelos de datos deben cubrir por separado:
+
+- PostgreSQL del backend;
+- IndexedDB utilizada por la PWA en teléfonos y otros dispositivos.
+
 ---
 
 # 100. DIAGRAMA DE CONTEXTO
@@ -2764,9 +2769,9 @@ FEL Adapter.
 
 ---
 
-# 106. DIAGRAMA ENTIDAD RELACIÓN
+# 106. DIAGRAMAS DE DATOS — POSTGRESQL E INDEXEDDB MÓVIL
 
-Generar ERD completo PostgreSQL.
+Generar un ERD completo de PostgreSQL.
 
 Mostrar:
 
@@ -2779,6 +2784,31 @@ cardinalidades.
 relaciones.
 
 No omitir tablas importantes.
+
+Generar también un ERD lógico completo de IndexedDB para la PWA móvil.
+
+Para cada object store de IndexedDB documentar:
+
+- nombre;
+- propósito;
+- keyPath/clave primaria;
+- índices;
+- UUID que relacionan datos;
+- dependencias entre operaciones;
+- datos descargados del servidor;
+- datos creados offline;
+- estado de sincronización;
+- estrategia de versionado y migración.
+
+IndexedDB no posee claves foráneas relacionales. El diagrama móvil debe mostrar relaciones lógicas por UUID sin afirmar que existen restricciones FK físicas.
+
+Crear como mínimo:
+
+- `diagrams/erd/postgresql-erd.mmd`;
+- `diagrams/erd/mobile-indexeddb-erd.mmd`;
+- `diagrams/erd/README.md`.
+
+Mantener ambos diagramas sincronizados con las migraciones Flyway y las versiones del esquema IndexedDB.
 
 ---
 
@@ -2999,6 +3029,33 @@ Documentar restricciones.
 
 Crear:
 
+`docs/ERS_SRS.md`.
+
+Este será el único documento ERS/SRS del sistema. No crear otro documento de requisitos que replique su contenido.
+
+Debe incluir:
+
+- propósito y alcance;
+- contexto del sistema;
+- actores y partes interesadas;
+- definiciones y abreviaturas;
+- supuestos y restricciones;
+- requisitos funcionales;
+- requisitos no funcionales;
+- reglas de negocio;
+- requisitos de seguridad;
+- requisitos de datos;
+- interfaces externas;
+- requisitos PWA y offline;
+- criterios de aceptación;
+- trazabilidad.
+
+Cada requisito debe tener un identificador único, redacción verificable, prioridad y criterio de aceptación.
+
+Las matrices, casos de uso, módulos, endpoints, migraciones y pruebas deben referenciar esos identificadores sin volver a definir la misma función.
+
+Crear:
+
 RF-001...
 
 Requisitos funcionales.
@@ -3117,6 +3174,8 @@ Debe incluir:
 - comprobantes internos y FEL opcional;
 - seguridad;
 - base de datos;
+- ERD PostgreSQL;
+- modelo lógico/ERD de IndexedDB móvil;
 - API;
 - PWA;
 - IndexedDB;
@@ -3379,6 +3438,7 @@ Incluir:
 - estructura;
 - añadir endpoint;
 - añadir migración;
+- añadir o migrar un object store de IndexedDB;
 - añadir caso uso;
 - añadir módulo frontend;
 - añadir prueba;
@@ -3434,10 +3494,10 @@ FASE 0
 Análisis del repositorio.
 
 FASE 1
-Requisitos y reglas negocio.
+ERS/SRS, matriz de requisitos y reglas de negocio.
 
 FASE 2
-Diagramas iniciales.
+Diagramas iniciales + ERD PostgreSQL + ERD IndexedDB móvil.
 
 FASE 3
 Arquitectura monolítica modular y estructura.
@@ -3530,7 +3590,7 @@ FASE 32
 Pruebas E2E.
 
 FASE 33
-Diagramas finales actualizados.
+Diagramas finales actualizados, incluidos ambos ERD.
 
 FASE 34
 Manual usuario.
@@ -3830,6 +3890,9 @@ hasta que:
 - la interfaz y los comprobantes utilicen la misma configuración empresarial;
 - FEL permanezca bloqueado sin proveedor o certifique mediante un proveedor real cuando esté configurado;
 - tests pasen;
+- ERS/SRS exista y mantenga trazabilidad con casos de uso y pruebas;
+- ERD PostgreSQL corresponda a las migraciones Flyway;
+- ERD IndexedDB corresponda al esquema móvil versionado;
 - diagramas existan;
 - manuales existan;
 - instalación local haya sido documentada.
@@ -3848,7 +3911,7 @@ proyecto/
 ├── frontend/
 │
 ├── docs/
-│   ├── REQUISITOS.md
+│   ├── ERS_SRS.md
 │   ├── REGLAS_NEGOCIO.md
 │   ├── CASOS_DE_USO.md
 │   ├── ARQUITECTURA.md
@@ -3865,6 +3928,9 @@ proyecto/
 │   ├── use-cases/
 │   ├── architecture/
 │   ├── erd/
+│   │   ├── postgresql-erd.mmd
+│   │   ├── mobile-indexeddb-erd.mmd
+│   │   └── README.md
 │   ├── sequences/
 │   ├── activities/
 │   ├── states/
