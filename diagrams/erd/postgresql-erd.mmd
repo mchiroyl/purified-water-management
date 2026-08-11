@@ -464,16 +464,22 @@ erDiagram
         VARCHAR code UK
         VARCHAR name
         VARCHAR evidence_policy
+        NUMERIC warehouse_approval_limit_base_units
+        NUMERIC supervisor_approval_limit_base_units
+        INTEGER daily_alert_threshold
         BOOLEAN active
     }
 
     WASTE {
         UUID id PK
-        UUID route_run_id FK
+        UUID client_reference UK
+        UUID route_id FK
+        UUID inventory_location_id FK
         UUID seller_id FK
+        UUID reported_by FK
         UUID device_id FK
-        UUID client_operation_id
         VARCHAR status
+        VARCHAR required_role
         TEXT reason
         TIMESTAMPTZ occurred_at_local
         TIMESTAMPTZ received_at_server
@@ -484,15 +490,20 @@ erDiagram
         UUID waste_id FK
         UUID waste_type_id FK
         UUID presentation_id FK
+        UUID product_id FK
+        NUMERIC presentation_quantity
         NUMERIC reported_base_units
         NUMERIC recoverable_base_units
+        NUMERIC proposed_approved_base_units
         NUMERIC approved_base_units
     }
 
     WASTE_EVIDENCE {
         UUID id PK
         UUID waste_id FK
-        UUID file_id FK
+        VARCHAR storage_reference
+        VARCHAR media_type
+        VARCHAR sha256
         UUID captured_device_id FK
         TIMESTAMPTZ captured_at_local
     }
@@ -501,6 +512,7 @@ erDiagram
         UUID id PK
         UUID waste_id FK
         UUID reviewer_id FK
+        VARCHAR reviewer_role
         VARCHAR decision
         NUMERIC approved_base_units
         TEXT notes
@@ -704,13 +716,16 @@ erDiagram
     SALE o|--o{ CUSTOMER_RETURN : references
     CUSTOMER_RETURN ||--|{ RETURN_ITEM : contains
     PRODUCT_PRESENTATION ||--o{ RETURN_ITEM : returned_as
-    ROUTE_RUN ||--o{ WASTE : reports
+    ROUTE ||--o{ WASTE : reports
+    INVENTORY_LOCATION ||--o{ WASTE : affects
     SELLER ||--o{ WASTE : declares
+    APP_USER ||--o{ WASTE : reports
+    DEVICE ||--o{ WASTE : captures
     WASTE ||--|{ WASTE_ITEM : contains
     WASTE_TYPE ||--o{ WASTE_ITEM : classifies
     PRODUCT_PRESENTATION ||--o{ WASTE_ITEM : damaged_as
     WASTE ||--o{ WASTE_EVIDENCE : proves
-    FILE_OBJECT ||--o{ WASTE_EVIDENCE : stores
+    DEVICE ||--o{ WASTE_EVIDENCE : captures
     WASTE ||--o{ WASTE_REVIEW : reviewed
     ROUTE_RUN ||--o{ CASH_DELIVERY : receives
     ROUTE_RUN ||--o| SETTLEMENT : closes

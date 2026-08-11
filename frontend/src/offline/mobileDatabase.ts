@@ -175,6 +175,7 @@ export type LocalWasteItemRecord = {
   localWasteId: string;
   wasteTypeId: string;
   presentationId: string;
+  presentationQuantity: string;
   reportedBaseUnits: string;
   recoverableBaseUnits: string;
   approvedBaseUnits?: string | null;
@@ -500,6 +501,27 @@ export function createMobileRepositories(db: MobileDatabase) {
       const transaction = db.transaction(['provisionalCustomers', 'outboxOperations'], 'readwrite');
       try {
         await transaction.objectStore('provisionalCustomers').put(customer);
+        await transaction.objectStore('outboxOperations').add(outbox);
+        await transaction.done;
+      } catch (error) {
+        return abortAndRethrow(transaction, error);
+      }
+    },
+    async saveWasteWithOutbox(
+      waste: LocalWasteRecord,
+      items: LocalWasteItemRecord[],
+      evidence: LocalWasteEvidenceRecord[],
+      files: FileCacheRecord[],
+      outbox: OutboxRecord,
+    ) {
+      const transaction = db.transaction([
+        'localWastes', 'localWasteItems', 'localWasteEvidence', 'fileCache', 'outboxOperations',
+      ], 'readwrite');
+      try {
+        await transaction.objectStore('localWastes').put(waste);
+        for (const item of items) await transaction.objectStore('localWasteItems').put(item);
+        for (const item of evidence) await transaction.objectStore('localWasteEvidence').put(item);
+        for (const file of files) await transaction.objectStore('fileCache').put(file);
         await transaction.objectStore('outboxOperations').add(outbox);
         await transaction.done;
       } catch (error) {

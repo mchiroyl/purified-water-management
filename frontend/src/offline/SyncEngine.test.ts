@@ -102,6 +102,28 @@ describe('SyncEngine', () => {
     db.close();
   });
 
+  it('marca la merma y su evidencia como pendientes de revisión tras sincronizar', async () => {
+    const db = await openMobileDatabase(newDatabaseName('waste'));
+    const repositories = createMobileRepositories(db);
+    const wasteOperation = { ...operation('waste-1'), entityType: 'WASTE', aggregateLocalId: 'waste-1' };
+    await repositories.localWastes.put({ localWasteId: 'waste-1', routeRunId: 'route-1', sellerId: 'seller-1',
+      deviceId: 'device-1', clientOperationId: 'waste-1', status: 'LOCAL_PENDING', reason: 'Rotura',
+      syncStatus: 'PENDING', occurredAtLocal: '2026-08-10T20:00:00-06:00' });
+    await repositories.localWasteEvidence.put({ id: 'evidence-1', localWasteId: 'waste-1',
+      blobCacheKey: 'blob-1', mediaType: 'image/jpeg', sizeBytes: 4, sha256: 'a'.repeat(64),
+      syncStatus: 'PENDING', capturedAtLocal: '2026-08-10T20:00:00-06:00' });
+    await repositories.outboxOperations.put(wasteOperation);
+    const engine = new SyncEngine({ database: async () => db, checkConnection: async () => 'ONLINE',
+      transport: { send: async () => [{ clientOperationId: 'waste-1', status: 'ACCEPTED', serverEntityId: 'server-waste-1' }] } });
+
+    await engine.sync();
+
+    expect(await repositories.localWastes.get('waste-1')).toMatchObject({ status: 'PENDING_REVIEW',
+      syncStatus: 'SYNCED', serverWasteId: 'server-waste-1' });
+    expect(await repositories.localWasteEvidence.get('evidence-1')).toMatchObject({ syncStatus: 'SYNCED' });
+    db.close();
+  });
+
   it('convierte un fallo de transporte en reintento y no reenvía antes de tiempo', async () => {
     let now = Date.parse('2026-08-11T02:00:00Z');
     const db = await openMobileDatabase(newDatabaseName('retry'));

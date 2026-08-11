@@ -153,6 +153,11 @@ Verificación: venta preservada y dependencias de sincronización correctas.
 Entregables: catálogo, evidencia, revisión total/parcial, políticas y alertas.  
 Verificación: vendedor no aprueba y merma no altera dinero.
 
+Estado: **completada**. Implementa catálogo configurable, evidencia fotográfica con SHA-256,
+Outbox offline, revisión segregada y escalable, aprobación parcial, alertas de frecuencia e
+indicadores. La prueba PostgreSQL confirma `PARTIALLY_APPROVED`, diferencia pendiente preservada,
+movimiento exclusivo `WASTE_OUT`, rechazo HTTP 403 al vendedor y cero mutaciones en venta/pago.
+
 ### FASE 22 — Devoluciones
 
 Entregables: devolución de cliente y recepción de producto bueno separadas de merma.  

@@ -8,7 +8,7 @@ import {
   type SyncStatus,
 } from './mobileDatabase';
 
-type ResultStoreName = 'outboxOperations' | 'syncResults' | 'provisionalCustomers' | 'localSales' | 'localPayments' | 'localWastes' | 'localReturns';
+type ResultStoreName = 'outboxOperations' | 'syncResults' | 'provisionalCustomers' | 'localSales' | 'localPayments' | 'localWastes' | 'localWasteEvidence' | 'localReturns';
 type ResultTransaction = IDBPTransaction<MobileDatabaseSchema, ResultStoreName[], 'readwrite'>;
 
 export type SyncRequestOperation = Pick<
@@ -209,6 +209,7 @@ export class SyncEngine {
       'localSales',
       'localPayments',
       'localWastes',
+      'localWasteEvidence',
       'localReturns',
     ], 'readwrite');
     const operations = new Map(batch.map((operation) => [operation.clientOperationId, operation]));
@@ -274,7 +275,11 @@ export class SyncEngine {
     } else if (operation.entityType === 'WASTE') {
       const store = transaction.objectStore('localWastes');
       const value = await store.get(operation.aggregateLocalId);
-      if (value) await store.put({ ...value, syncStatus, serverWasteId: serverEntityId ?? value.serverWasteId });
+      if (value) await store.put({ ...value, syncStatus, serverWasteId: serverEntityId ?? value.serverWasteId,
+        status: syncStatus === 'SYNCED' ? 'PENDING_REVIEW' : value.status });
+      const evidenceStore = transaction.objectStore('localWasteEvidence');
+      const evidence = await evidenceStore.index('localWasteId').getAll(operation.aggregateLocalId);
+      for (const item of evidence) await evidenceStore.put({ ...item, syncStatus });
     } else if (operation.entityType === 'RETURN') {
       const store = transaction.objectStore('localReturns');
       const value = await store.get(operation.aggregateLocalId);
