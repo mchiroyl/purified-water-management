@@ -109,3 +109,11 @@ Fuente: `docs/ERS_SRS.md` y `PROMPT_MAESTRO_SISTEMA_AGUA_PURA.md`.
 - **RB-065:** Los filtros y la exportación aplican exactamente el mismo alcance de autorización en el servidor.
 - **RB-066:** La exportación se rechaza si supera 20,000 filas; no se entrega un archivo silenciosamente incompleto.
 - **RB-067:** Toda celda CSV potencialmente interpretada como fórmula se neutraliza antes de descargarla.
+
+## Auditoría operativa
+
+- **RB-068:** Un evento de auditoría confirmado no se modifica ni elimina, incluso mediante SQL directo.
+- **RB-069:** La correlación almacenada coincide con `X-Correlation-Id` de la solicitud que produjo el evento.
+- **RB-070:** Contraseñas, tokens, secretos, credenciales, autorizaciones y cookies se eliminan recursivamente de before/after.
+- **RB-071:** Consultar el historial de auditoría produce a su vez un evento `AUDIT_VIEW`.
+- **RB-072:** Los intentos de login fallidos se conservan aunque la autenticación termine con HTTP 401.

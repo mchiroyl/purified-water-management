@@ -1,6 +1,7 @@
 package gt.com.aguapura.infrastructure.database.adapters;
 
 import gt.com.aguapura.application.ports.AuthorizationIncidentPort;
+import gt.com.aguapura.application.ports.AuditMetadataPort;
 import gt.com.aguapura.domain.exceptions.BusinessException;
 import gt.com.aguapura.domain.exceptions.ErrorCategory;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -18,8 +19,11 @@ import java.util.UUID;
 @Repository
 public class JdbcAuthorizationIncidentAdapter implements AuthorizationIncidentPort {
     private final JdbcClient jdbc;
+    private final AuditMetadataPort auditMetadata;
 
-    public JdbcAuthorizationIncidentAdapter(JdbcClient jdbc) { this.jdbc = jdbc; }
+    public JdbcAuthorizationIncidentAdapter(JdbcClient jdbc, AuditMetadataPort auditMetadata) {
+        this.jdbc = jdbc; this.auditMetadata = auditMetadata;
+    }
 
     @Override
     public boolean resourceExists(String entityType, UUID entityId) {
@@ -204,11 +208,12 @@ public class JdbcAuthorizationIncidentAdapter implements AuthorizationIncidentPo
     }
     private void audit(UUID userId, UUID deviceId, String action, String entityType, UUID entityId, String status) {
         jdbc.sql("""
-                INSERT INTO audit_log(user_id,device_id,action,entity_type,entity_id,after_data,correlation_id)
-                VALUES (:userId,:deviceId,:action,:entityType,:entityId,jsonb_build_object('status',:status),:correlation)
+                INSERT INTO audit_log(user_id,device_id,action,entity_type,entity_id,after_data,correlation_id,ip_address)
+                VALUES (:userId,:deviceId,:action,:entityType,:entityId,jsonb_build_object('status',:status),:correlation,:ip)
                 """).param("userId", userId).param("deviceId", deviceId).param("action", action)
                 .param("entityType", entityType).param("entityId", entityId).param("status", status)
-                .param("correlation", UUID.randomUUID()).update();
+                .param("correlation", auditMetadata.current().correlationId())
+                .param("ip", auditMetadata.current().ipAddress()).update();
     }
     private Instant instant(ResultSet rs, String column) throws SQLException {
         var value=rs.getTimestamp(column); return value==null?null:value.toInstant();

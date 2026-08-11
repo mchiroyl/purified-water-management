@@ -9,6 +9,7 @@ import gt.com.aguapura.application.dto.customer.ProvisionalReviewResponse;
 import gt.com.aguapura.application.dto.customer.RegistrationDecisionRequest;
 import gt.com.aguapura.application.services.CustomerRouteApplicationService;
 import gt.com.aguapura.application.services.ProvisionalCustomerApplicationService;
+import gt.com.aguapura.application.services.AuditApplicationService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -17,6 +18,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -24,11 +26,14 @@ import java.util.UUID;
 public class CustomerController {
     private final CustomerRouteApplicationService service;
     private final ProvisionalCustomerApplicationService provisionalCustomers;
+    private final AuditApplicationService audit;
 
     public CustomerController(CustomerRouteApplicationService service,
-                              ProvisionalCustomerApplicationService provisionalCustomers) {
+                              ProvisionalCustomerApplicationService provisionalCustomers,
+                              AuditApplicationService audit) {
         this.service = service;
         this.provisionalCustomers = provisionalCustomers;
+        this.audit = audit;
     }
 
     @GetMapping
@@ -64,7 +69,15 @@ public class CustomerController {
     public CustomerResponse decideRegistration(@PathVariable UUID id,
                                                @Valid @RequestBody RegistrationDecisionRequest request,
                                                @AuthenticationPrincipal Jwt jwt) {
-        return provisionalCustomers.decideRegistration(id, request, actor(jwt));
+        var result = provisionalCustomers.decideRegistration(id, request, actor(jwt));
+        if ("MERGED".equalsIgnoreCase(request.decision())) {
+            audit.record(actor(jwt), device(jwt), "CUSTOMER_MERGE", "CUSTOMER", id, Map.of(),
+                    Map.of("targetCustomerId", request.targetCustomerId(), "registrationState", result.registrationState()));
+        } else {
+            audit.record(actor(jwt), device(jwt), "CUSTOMER_REGISTRATION_DECISION", "CUSTOMER", id, Map.of(),
+                    Map.of("decision", request.decision(), "registrationState", result.registrationState()));
+        }
+        return result;
     }
 
     @PostMapping("/{id}/route-assignment")

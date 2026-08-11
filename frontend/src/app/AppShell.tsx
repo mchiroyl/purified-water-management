@@ -7,6 +7,7 @@ import { apiRequest } from '../services/apiClient';
 export function AppShell() {
   const { user, logout } = useSession();
   const isAdmin = user?.roles.includes('ADMINISTRADOR');
+  const canSeeAudit = isAdmin || user?.roles.includes('SUPERVISOR');
   const canCatalog = user?.roles.some(role => ['ADMINISTRADOR', 'BODEGA', 'SUPERVISOR'].includes(role));
   const canSeeCustomers = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'VENDEDOR'].includes(role));
   const canSeeRoutes = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
@@ -41,6 +42,7 @@ export function AppShell() {
     {canSeeAnnulments && <NavLink to="/annulments">Anulaciones</NavLink>}
     <NavLink to="/pending">Pendientes</NavLink>
     <NavLink to="/reports">Reportes</NavLink>
+    {canSeeAudit && <NavLink to="/audit">Auditoría</NavLink>}
     {isAdmin && <NavLink to="/administration">Usuarios</NavLink>}
     {isAdmin && <NavLink to="/company">Datos de la empresa</NavLink>}
     {isAdmin && <NavLink to="/fel-configuration">FEL opcional</NavLink>}

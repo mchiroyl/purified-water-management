@@ -2,6 +2,7 @@ package gt.com.aguapura.infrastructure.database.adapters;
 
 import gt.com.aguapura.application.ports.ReceiptDocumentPort;
 import gt.com.aguapura.application.ports.ReceiptPdfPort;
+import gt.com.aguapura.application.ports.AuditMetadataPort;
 import gt.com.aguapura.domain.exceptions.BusinessException;
 import gt.com.aguapura.domain.exceptions.ErrorCategory;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,10 +28,13 @@ import java.util.UUID;
 public class FileSystemReceiptDocumentAdapter implements ReceiptDocumentPort {
     private final JdbcClient jdbc;
     private final Path root;
+    private final AuditMetadataPort auditMetadata;
 
-    public FileSystemReceiptDocumentAdapter(JdbcClient jdbc, @Value("${app.storage.path}") String storagePath) {
+    public FileSystemReceiptDocumentAdapter(JdbcClient jdbc, @Value("${app.storage.path}") String storagePath,
+                                            AuditMetadataPort auditMetadata) {
         this.jdbc = jdbc;
         this.root = Path.of(storagePath).toAbsolutePath().normalize();
+        this.auditMetadata = auditMetadata;
     }
 
     @Override
@@ -108,11 +112,12 @@ public class FileSystemReceiptDocumentAdapter implements ReceiptDocumentPort {
                     """).param("id", receiptId).param("saleId", saleId).param("fileId", fileId)
                     .param("number", documentNumber).param("actor", actorId).param("device", deviceId).update();
             jdbc.sql("""
-                    INSERT INTO audit_log(user_id,device_id,action,entity_type,entity_id,after_data,correlation_id)
+                    INSERT INTO audit_log(user_id,device_id,action,entity_type,entity_id,after_data,correlation_id,ip_address)
                     VALUES (:actor,:device,'RECEIPT_GENERATED','RECEIPT_DOCUMENT',:id,
-                            jsonb_build_object('saleId',:saleId,'documentKind','INTERNAL_RECEIPT'),:correlation)
+                            jsonb_build_object('saleId',:saleId,'documentKind','INTERNAL_RECEIPT'),:correlation,:ip)
                     """).param("actor", actorId).param("device", deviceId).param("id", receiptId)
-                    .param("saleId", saleId).param("correlation", UUID.randomUUID()).update();
+                    .param("saleId", saleId).param("correlation", auditMetadata.current().correlationId())
+                    .param("ip", auditMetadata.current().ipAddress()).update();
             return new StoredReceipt(receiptId, saleId, documentNumber, fileName,
                     "application/pdf", content, Instant.now());
         } catch (IOException | RuntimeException exception) {

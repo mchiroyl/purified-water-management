@@ -1,6 +1,7 @@
 package gt.com.aguapura.infrastructure.database.adapters;
 
 import gt.com.aguapura.application.ports.FelConfigurationPort;
+import gt.com.aguapura.application.ports.AuditMetadataPort;
 import gt.com.aguapura.domain.exceptions.BusinessException;
 import gt.com.aguapura.domain.exceptions.ErrorCategory;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -13,9 +14,11 @@ import java.util.UUID;
 @Repository
 public class JdbcFelConfigurationAdapter implements FelConfigurationPort {
     private final JdbcClient jdbc;
+    private final AuditMetadataPort auditMetadata;
 
-    public JdbcFelConfigurationAdapter(JdbcClient jdbc) {
+    public JdbcFelConfigurationAdapter(JdbcClient jdbc, AuditMetadataPort auditMetadata) {
         this.jdbc = jdbc;
+        this.auditMetadata = auditMetadata;
     }
 
     @Override
@@ -42,12 +45,13 @@ public class JdbcFelConfigurationAdapter implements FelConfigurationPort {
                 "La configuración FEL cambió; recargue antes de guardar.", ErrorCategory.CONFLICT);
         var current = get();
         jdbc.sql("""
-                INSERT INTO audit_log(user_id,device_id,action,entity_type,entity_id,after_data,correlation_id)
+                INSERT INTO audit_log(user_id,device_id,action,entity_type,entity_id,after_data,correlation_id,ip_address)
                 VALUES (:actor,:device,'FEL_CONFIGURATION_UPDATED','FEL_CONFIGURATION',:id,
-                        jsonb_build_object('enabled',:enabled,'providerCode',:provider,'environment',:environment),:correlation)
+                        jsonb_build_object('enabled',:enabled,'providerCode',:provider,'environment',:environment),:correlation,:ip)
                 """).param("actor", item.actorId()).param("device", item.deviceId()).param("id", current.id())
                 .param("enabled", current.enabled()).param("provider", current.providerCode())
-                .param("environment", current.environment()).param("correlation", UUID.randomUUID()).update();
+                .param("environment", current.environment()).param("correlation", auditMetadata.current().correlationId())
+                .param("ip", auditMetadata.current().ipAddress()).update();
         return current;
     }
 

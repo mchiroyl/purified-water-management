@@ -1,6 +1,7 @@
 package gt.com.aguapura.infrastructure.database.adapters;
 
 import gt.com.aguapura.application.ports.AnnulmentPort;
+import gt.com.aguapura.application.ports.AuditMetadataPort;
 import gt.com.aguapura.domain.exceptions.BusinessException;
 import gt.com.aguapura.domain.exceptions.ErrorCategory;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -17,7 +18,10 @@ import java.util.UUID;
 @Repository
 public class JdbcAnnulmentAdapter implements AnnulmentPort {
     private final JdbcClient jdbc;
-    public JdbcAnnulmentAdapter(JdbcClient jdbc){this.jdbc=jdbc;}
+    private final AuditMetadataPort auditMetadata;
+    public JdbcAnnulmentAdapter(JdbcClient jdbc, AuditMetadataPort auditMetadata){
+        this.jdbc=jdbc; this.auditMetadata=auditMetadata;
+    }
 
     @Override public boolean sellerOwnsSale(UUID userId,UUID saleId){
         return Boolean.TRUE.equals(jdbc.sql("SELECT EXISTS(SELECT 1 FROM sale sale JOIN seller s ON s.id=sale.seller_id WHERE sale.id=:id AND s.user_id=:user)")
@@ -132,9 +136,10 @@ public class JdbcAnnulmentAdapter implements AnnulmentPort {
                 item.decidedBy(),item.decidedByUsername(),item.decisionNotes(),item.requestedAt(),item.decidedAt(),effects);
     }
     private void audit(UUID user,UUID device,String action,UUID id,String status){jdbc.sql("""
-            INSERT INTO audit_log(user_id,device_id,action,entity_type,entity_id,after_data,correlation_id)
-            VALUES (:user,:device,:action,'ANNULMENT',:id,jsonb_build_object('status',:status),:correlation)
+            INSERT INTO audit_log(user_id,device_id,action,entity_type,entity_id,after_data,correlation_id,ip_address)
+            VALUES (:user,:device,:action,'ANNULMENT',:id,jsonb_build_object('status',:status),:correlation,:ip)
             """).param("user",user).param("device",device).param("action",action).param("id",id)
-            .param("status",status).param("correlation",UUID.randomUUID()).update();}
+            .param("status",status).param("correlation",auditMetadata.current().correlationId())
+            .param("ip",auditMetadata.current().ipAddress()).update();}
     private BusinessException notFound(){return new BusinessException("ANNULMENT_NOT_FOUND","No se encontró la venta o solicitud.",ErrorCategory.NOT_FOUND);}
 }

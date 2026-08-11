@@ -12,12 +12,14 @@ import gt.com.aguapura.domain.exceptions.ErrorCategory;
 import gt.com.aguapura.domain.waste.WasteReviewPolicy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -25,10 +27,18 @@ import java.util.UUID;
 public class WasteApplicationService {
     private final WastePort persistence;
     private final InventoryApplicationService inventory;
+    private final AuditApplicationService audit;
 
     public WasteApplicationService(WastePort persistence, InventoryApplicationService inventory) {
+        this(persistence, inventory, null);
+    }
+
+    @Autowired
+    public WasteApplicationService(WastePort persistence, InventoryApplicationService inventory,
+                                   AuditApplicationService audit) {
         this.persistence = persistence;
         this.inventory = inventory;
+        this.audit = audit;
     }
 
     @Transactional
@@ -65,7 +75,11 @@ public class WasteApplicationService {
                 item.capturedAtLocal())).toList();
         var created = persistence.create(new WastePort.NewWaste(request.clientReference(), request.clientReference(),
                 route, actorId, deviceId, request.reason().trim(), request.occurredAtLocal(), items, evidence));
-        return response(created);
+        var result = response(created);
+        if (audit != null) audit.record(actorId, deviceId, "CREATE_WASTE", "WASTE", result.id(), Map.of(),
+                Map.of("routeId", result.routeId(), "reportedBaseUnits", result.reportedBaseUnits(),
+                        "status", result.status(), "evidenceCount", result.evidence().size()));
+        return result;
     }
 
     @Transactional(readOnly = true)
@@ -115,7 +129,14 @@ public class WasteApplicationService {
                             inventory.consume(waste.inventoryLocationId(), item.productId(), requested.get(item.id()),
                                     "WASTE_OUT", "Merma aprobada", "WASTE", id, actorId, deviceId));
         }
-        return response(reviewed);
+        var result = response(reviewed);
+        String action = "REJECTED".equals(result.status()) ? "REJECT_WASTE"
+                : "PARTIALLY_APPROVED".equals(result.status()) ? "PARTIAL_WASTE_APPROVAL"
+                : "APPROVED".equals(result.status()) ? "APPROVE_WASTE" : "WASTE_REVIEW";
+        if (audit != null) audit.record(actorId, deviceId, action, "WASTE", id, Map.of(),
+                Map.of("status", result.status(), "approvedBaseUnits", result.approvedBaseUnits(),
+                        "pendingBaseUnits", result.pendingDifferenceBaseUnits()));
+        return result;
     }
 
     @Transactional(readOnly = true)

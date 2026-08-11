@@ -19,6 +19,7 @@ import { OperationsControlPage } from '../features/control/OperationsControlPage
 import { AnnulmentsPage } from '../features/annulments/AnnulmentsPage';
 import { PendingOperationsPage } from '../offline/PendingOperationsPage';
 import { ReportsPage } from '../features/reports/ReportsPage';
+import { AuditPage } from '../features/audit/AuditPage';
 import { AppShell } from './AppShell';
 import { DashboardPage } from './DashboardPage';
 
@@ -43,6 +44,7 @@ export function App() {
   const isWarehouse = user.roles.includes('BODEGA');
   const isSeller = user.roles.includes('VENDEDOR');
   const canReviewProvisional = isAdmin || user.roles.includes('SUPERVISOR');
+  const canSeeAudit = isAdmin || user.roles.includes('SUPERVISOR');
   return (
     <Routes>
       <Route element={<AppShell />}>
@@ -67,6 +69,7 @@ export function App() {
         <Route path="annulments" element={canSeeAnnulments ? <AnnulmentsPage canRequest canDecide={isAdmin || user.roles.includes('SUPERVISOR')} /> : <Navigate to="/" replace />} />
         <Route path="pending" element={<PendingOperationsPage />} />
         <Route path="reports" element={<ReportsPage />} />
+        <Route path="audit" element={canSeeAudit ? <AuditPage /> : <Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

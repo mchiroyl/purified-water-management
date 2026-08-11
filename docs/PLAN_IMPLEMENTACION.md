@@ -261,6 +261,16 @@ consultar y exportar. Las consultas reales de los tres reportes y la descarga CS
 Entregables: eventos requeridos, before/after seguro y correlationId.  
 Verificación: cobertura de acciones críticas y ausencia de secretos.
 
+Estado: **completada**. `audit_log` ahora es inmutable mediante trigger, posee índices por acción y
+correlación y solo admite códigos normalizados. El servicio central elimina recursivamente campos de
+contraseña, token, secreto, credencial, autorización y cookie antes de escribir; la misma protección
+se aplica al leer historia previa. Login exitoso/fallido, logout, usuarios/roles/dispositivos, precios,
+cargas, ventas online u offline, mermas online u offline, cierres, fusiones y configuración registran
+los eventos obligatorios. Los adaptadores históricos usan el `X-Correlation-Id` real y la IP de la
+solicitud. Administrador y supervisor disponen de búsqueda paginada; consultar auditoría genera
+`AUDIT_VIEW`. El despliegue aplicó Flyway 18 y confirmó correlación HTTP exacta, `LOGIN_FAILED` sin
+secretos y rechazo de UPDATE por PostgreSQL.
+
 ### FASE 31 — Hardening seguridad
 
 Entregables: rate limiting, headers, CORS, límites, sanitización, logs y perfiles productivos.  
@@ -340,4 +350,5 @@ Verificación: tests backend/frontend/integración/E2E, Docker build, Compose, h
 | 27 | Completada | Web Share, fallback WhatsApp y caché/pendiente de comprobante en IndexedDB verificados. |
 | 28 | Completada | Dashboard oficial por zona empresarial, alcance por rol, pendientes y alertas verificados en API y UI. |
 | 29 | Completada | Reportes paginados/exportables de ventas, mermas y liquidaciones con filtros y alcance por rol. |
-| 30–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |
+| 30 | Completada | Auditoría inmutable, filtrable, correlacionada y sanitizada con cobertura de eventos críticos. |
+| 31–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |

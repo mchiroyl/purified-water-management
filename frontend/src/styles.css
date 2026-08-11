@@ -68,6 +68,11 @@ h2 { margin-top: 0; }
 .report-table-wrap th, .report-table-wrap td { padding: .75rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
 .report-table-wrap th { color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; }
 .report-pagination { justify-content: flex-end; }
+.audit-filters { display: grid; gap: .8rem; margin-bottom: 1rem; }
+.audit-list, .audit-data { display: grid; gap: .8rem; }
+.audit-event { overflow: hidden; }
+.audit-event time { color: var(--muted); }
+.audit-data code { display: block; margin-top: .35rem; padding: .7rem; border-radius: .55rem; background: #f3f7f8; overflow-wrap: anywhere; white-space: pre-wrap; }
 .form-grid { display: grid; gap: 1rem; }
 .wide { grid-column: 1 / -1; }
 .catalog-form { margin: 1.5rem 0; }
@@ -165,6 +170,8 @@ h2 { margin-top: 0; }
   .metric-grid { grid-template-columns: repeat(4, 1fr); }
   .report-filters { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .report-actions { grid-column: 1 / -1; }
+  .audit-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .audit-data { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 1.5rem; }
   .compact-grid { padding: 0; }
   .presentation-row { grid-template-columns: 1fr 1.4fr 1fr 1fr auto; align-items: end; }

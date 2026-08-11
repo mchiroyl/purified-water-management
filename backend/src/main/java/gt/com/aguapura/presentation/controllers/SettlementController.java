@@ -5,6 +5,7 @@ import gt.com.aguapura.application.dto.settlement.CashDeliveryRequest;
 import gt.com.aguapura.application.dto.settlement.CloseSettlementRequest;
 import gt.com.aguapura.application.dto.settlement.SettlementResponse;
 import gt.com.aguapura.application.services.SettlementApplicationService;
+import gt.com.aguapura.application.services.AuditApplicationService;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -17,15 +18,18 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/settlements")
 public class SettlementController {
     private final SettlementApplicationService service;
+    private final AuditApplicationService audit;
 
-    public SettlementController(SettlementApplicationService service) {
+    public SettlementController(SettlementApplicationService service, AuditApplicationService audit) {
         this.service = service;
+        this.audit = audit;
     }
 
     @GetMapping
@@ -55,8 +59,13 @@ public class SettlementController {
     public SettlementResponse close(@PathVariable UUID loadId,
                                     @Valid @RequestBody CloseSettlementRequest request,
                                     @AuthenticationPrincipal Jwt jwt) {
-        return service.close(loadId, request.pendingLocalOperations(), request.notes(), actor(jwt), device(jwt),
+        var result = service.close(loadId, request.pendingLocalOperations(), request.notes(), actor(jwt), device(jwt),
                 role(jwt));
+        audit.record(actor(jwt), device(jwt), "SETTLEMENT_CLOSE", "SETTLEMENT", result.id(), Map.of(),
+                Map.of("routeLoadId", result.routeLoadId(), "status", result.status(),
+                        "monetaryDifference", result.monetaryDifference(),
+                        "physicalDifference", result.physicalDifferenceTotal()));
+        return result;
     }
 
     private UUID actor(Jwt jwt) { return UUID.fromString(jwt.getClaimAsString("userId")); }

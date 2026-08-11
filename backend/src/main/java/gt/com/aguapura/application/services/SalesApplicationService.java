@@ -16,6 +16,7 @@ import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -25,12 +26,14 @@ public class SalesApplicationService {
     private final SalesPort persistence;
     private final PricingApplicationService pricing;
     private final InventoryApplicationService inventory;
+    private final AuditApplicationService audit;
 
     public SalesApplicationService(SalesPort persistence, PricingApplicationService pricing,
-                                   InventoryApplicationService inventory) {
+                                   InventoryApplicationService inventory, AuditApplicationService audit) {
         this.persistence = persistence;
         this.pricing = pricing;
         this.inventory = inventory;
+        this.audit = audit;
     }
 
     @Transactional
@@ -80,7 +83,12 @@ public class SalesApplicationService {
         items.stream().sorted((left, right) -> left.productId().compareTo(right.productId())).forEach(item ->
                 inventory.consume(context.inventoryLocationId(), item.productId(), item.quantityBaseUnits(),
                         "SALE_OUT", "Venta " + sale.documentNumber(), "SALE", saleId, actorId, deviceId));
-        return response(sale);
+        var result = response(sale);
+        audit.record(actorId, deviceId, "CREATE_SALE", "SALE", result.id(), Map.of(),
+                Map.of("documentNumber", result.documentNumber(), "routeId", result.routeId(),
+                        "customerId", result.customerId(), "total", result.total(),
+                        "currencyCode", result.currencyCode(), "status", result.status()));
+        return result;
     }
 
     @Transactional(readOnly = true)

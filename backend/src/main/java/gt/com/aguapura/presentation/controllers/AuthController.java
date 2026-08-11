@@ -3,6 +3,7 @@ package gt.com.aguapura.presentation.controllers;
 import gt.com.aguapura.application.dto.auth.AuthResponse;
 import gt.com.aguapura.application.dto.auth.LoginRequest;
 import gt.com.aguapura.application.services.AuthApplicationService;
+import gt.com.aguapura.application.services.AuditApplicationService;
 import gt.com.aguapura.infrastructure.configuration.SecurityProperties;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
@@ -14,6 +15,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
@@ -22,15 +25,21 @@ public class AuthController {
 
     private final AuthApplicationService service;
     private final SecurityProperties properties;
+    private final AuditApplicationService audit;
 
-    public AuthController(AuthApplicationService service, SecurityProperties properties) {
+    public AuthController(AuthApplicationService service, SecurityProperties properties,
+                          AuditApplicationService audit) {
         this.service = service;
         this.properties = properties;
+        this.audit = audit;
     }
 
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         var result = service.login(request);
+        audit.record(result.response().user().id(), result.response().user().deviceId(), "LOGIN",
+                "AUTHENTICATION", result.response().user().id(), Map.of(),
+                Map.of("username", result.response().user().username(), "deviceName", request.deviceName()));
         return withRefreshCookie(result.response(), result.refreshToken());
     }
 

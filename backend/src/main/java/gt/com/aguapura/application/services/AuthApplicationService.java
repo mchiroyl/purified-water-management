@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -33,29 +34,42 @@ public class AuthApplicationService {
     private final AccessTokenIssuer jwtTokens;
     private final OpaqueTokenPort tokenHashing;
     private final SessionPolicy policy;
+    private final AuditApplicationService audit;
 
     public AuthApplicationService(AuthenticationPersistencePort persistence,
                                   PasswordVerificationPort passwordVerifier, AccessTokenIssuer jwtTokens,
-                                  OpaqueTokenPort tokenHashing, SessionPolicy policy) {
+                                  OpaqueTokenPort tokenHashing, SessionPolicy policy,
+                                  AuditApplicationService audit) {
         this.persistence = persistence;
         this.passwordVerifier = passwordVerifier;
         this.jwtTokens = jwtTokens;
         this.tokenHashing = tokenHashing;
         this.policy = policy;
+        this.audit = audit;
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = BusinessException.class)
     public AuthenticationResult login(LoginRequest request) {
         String username = request.username().trim().toLowerCase(Locale.ROOT);
-        var user = persistence.findUserByUsername(username).orElseThrow(AuthApplicationService::invalidCredentials);
+        var found = persistence.findUserByUsername(username);
+        if (found.isEmpty()) {
+            audit.record(null, null, "LOGIN_FAILED", "AUTHENTICATION", null, Map.of(),
+                    Map.of("username", username, "reason", "INVALID_CREDENTIALS"));
+            throw invalidCredentials();
+        }
+        var user = found.get();
         var now = Instant.now();
         user.unlockIfExpired(now);
         if (user.isTemporarilyLocked(now)) {
+            audit.record(user.getId(), null, "LOGIN_FAILED", "AUTHENTICATION", user.getId(), Map.of(),
+                    Map.of("username", username, "reason", "TEMPORARILY_LOCKED"));
             throw new BusinessException("AUTH_TEMPORARILY_LOCKED", "La cuenta está bloqueada temporalmente.", ErrorCategory.UNAUTHORIZED);
         }
         if (user.getStatus() != UserStatus.ACTIVE || !passwordVerifier.matches(request.password(), user.getPasswordHash())) {
             user.registerFailedAttempt(MAXIMUM_FAILED_ATTEMPTS, now.plus(LOCK_DURATION));
             persistence.saveUser(user);
+            audit.record(user.getId(), null, "LOGIN_FAILED", "AUTHENTICATION", user.getId(), Map.of(),
+                    Map.of("username", username, "reason", "INVALID_CREDENTIALS"));
             throw invalidCredentials();
         }
         user.registerSuccessfulLogin();
@@ -107,6 +121,8 @@ public class AuthApplicationService {
                 .ifPresent(session -> {
                     session.revoke("LOGOUT", null);
                     persistence.saveSession(session);
+                    audit.record(session.getUserId(), session.getDeviceId(), "LOGOUT", "AUTHENTICATION",
+                            session.getUserId(), Map.of(), Map.of("reason", "USER_REQUEST"));
                 });
     }
 
