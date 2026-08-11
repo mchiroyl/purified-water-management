@@ -175,6 +175,13 @@ de ruta 100→92, bodega 0→13 y cero registros de merma.
 Entregables: conciliación física/financiera, diferencias y cierre inmutable.  
 Verificación: escenarios antifraude y bloqueo por operaciones offline.
 
+Estado: **completada**. Calcula exclusivamente desde carga, correcciones, ventas, pagos,
+devoluciones recibidas y mermas aprobadas del servidor. El Outbox local y los conflictos conocidos
+se muestran como bloqueos; el cierre solo corresponde a administrador/supervisor y transforma la
+carga a `SETTLED`. La prueba PostgreSQL confirmó 100−60−38−2=0 físicamente, Q600−Q400=Q200 de
+diferencia monetaria aunque exista merma, cierre HTTP 409 con Outbox pendiente y rechazo de cambios
+directos después del cierre.
+
 ### FASE 24 — Autorizaciones/Incidencias
 
 Entregables: solicitudes, decisiones, expiración, incidencias y segregación.  
@@ -282,4 +289,5 @@ Verificación: tests backend/frontend/integración/E2E, Docker build, Compose, h
 | 20 | Completada | Cliente ocasional y provisional offline con UUID estable, Outbox, revisión humana, detección de duplicados, aprobación/rechazo/fusión inmutable y restricciones de crédito/precio; venta histórica preservada en PostgreSQL temporal. |
 | 21 | Completada | Merma offline, revisión segregada/parcial, alertas, movimiento `WASTE_OUT` y prueba PostgreSQL antifraude. |
 | 22 | Completada | Producto no vendido y devolución de cliente separados de merma; recepción física, movimientos y diferencia verificados en PostgreSQL. |
-| 23–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |
+| 23 | Completada | Conciliación física/financiera oficial, efectivo inmutable, bloqueo offline, cierre y carga `SETTLED` verificados. |
+| 24–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |

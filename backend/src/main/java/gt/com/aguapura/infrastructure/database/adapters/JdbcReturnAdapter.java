@@ -44,6 +44,7 @@ public class JdbcReturnAdapter implements ReturnPort {
                     ORDER BY ra.valid_from DESC LIMIT 1) current_assignment ON true
                 JOIN seller s ON s.id=current_assignment.seller_id AND s.status='ACTIVE'
                 WHERE r.id=:id AND r.status='ACTIVE'
+                  AND EXISTS(SELECT 1 FROM route_load rl WHERE rl.route_id=r.id AND rl.status='STARTED')
                 """).param("id", routeId).query((rs, row) -> new RouteContext(
                 rs.getObject("route_id", UUID.class), rs.getString("route_code"), rs.getString("route_name"),
                 rs.getObject("route_location_id", UUID.class), rs.getObject("seller_id", UUID.class),

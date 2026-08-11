@@ -16,7 +16,7 @@ const dateInZone = (timezone = 'America/Guatemala') => {
     .formatToParts(new Date()).reduce<Record<string, string>>((result, part) => ({ ...result, [part.type]: part.value }), {});
   return `${parts.year}-${parts.month}-${parts.day}`;
 };
-const statusLabel: Record<string, string> = { PREPARED: 'Preparada', WAREHOUSE_CONFIRMED: 'Entregada por bodega', RECEIVED: 'Recibida', STARTED: 'Recorrido iniciado' };
+const statusLabel: Record<string, string> = { PREPARED: 'Preparada', WAREHOUSE_CONFIRMED: 'Entregada por bodega', RECEIVED: 'Recibida', STARTED: 'Recorrido iniciado', SETTLED: 'Liquidada' };
 
 export function RouteLoadsPage({ canPrepare, canConfirmWarehouse, canReceive, canStart, canCorrect }: {
   canPrepare: boolean; canConfirmWarehouse: boolean; canReceive: boolean; canStart: boolean; canCorrect: boolean;

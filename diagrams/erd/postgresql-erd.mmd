@@ -533,22 +533,32 @@ erDiagram
 
     CASH_DELIVERY {
         UUID id PK
-        UUID route_run_id FK
+        UUID route_load_id FK
         NUMERIC amount
         UUID delivered_by FK
+        UUID delivered_device_id FK
         UUID received_by FK
+        UUID received_device_id FK
+        VARCHAR notes
         TIMESTAMPTZ delivered_at
     }
 
     SETTLEMENT {
         UUID id PK
-        UUID route_run_id UK, FK
+        UUID route_load_id UK, FK
+        UUID route_id FK
         VARCHAR status
+        NUMERIC sales_total
         NUMERIC expected_cash
         NUMERIC delivered_cash
+        NUMERIC verified_transfers
+        NUMERIC applied_credit
         NUMERIC monetary_difference
         NUMERIC physical_difference_total
+        TEXT blocking_reasons
         UUID closed_by FK
+        UUID closed_device_id FK
+        VARCHAR close_notes
         TIMESTAMPTZ calculated_at
         TIMESTAMPTZ closed_at
         BIGINT version
@@ -561,6 +571,7 @@ erDiagram
         NUMERIC loaded_units
         NUMERIC sold_units
         NUMERIC returned_good_units
+        NUMERIC customer_return_units
         NUMERIC approved_waste_units
         NUMERIC physical_difference
     }
@@ -745,8 +756,9 @@ erDiagram
     WASTE ||--o{ WASTE_EVIDENCE : proves
     DEVICE ||--o{ WASTE_EVIDENCE : captures
     WASTE ||--o{ WASTE_REVIEW : reviewed
-    ROUTE_RUN ||--o{ CASH_DELIVERY : receives
-    ROUTE_RUN ||--o| SETTLEMENT : closes
+    ROUTE_LOAD ||--o{ CASH_DELIVERY : receives
+    ROUTE_LOAD ||--o| SETTLEMENT : closes
+    ROUTE ||--o{ SETTLEMENT : reconciles
     SETTLEMENT ||--|{ SETTLEMENT_ITEM : reconciles
     PRODUCT ||--o{ SETTLEMENT_ITEM : reconciled
     ROUTE_RUN ||--o{ INCIDENT : has

@@ -17,6 +17,7 @@ export function AppShell() {
   const canVerifyTransfers = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR'].includes(role));
   const canSeeWastes = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
   const canSeeReturns = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
+  const canSeeSettlements = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
   const company = useQuery({
     queryKey: ['company-configuration'],
     queryFn: () => apiRequest<{ commercialName: string; logoUrl?: string; version: number }>('/company-configuration')
@@ -33,6 +34,7 @@ export function AppShell() {
     {canVerifyTransfers && <NavLink to="/transfers">Transferencias</NavLink>}
     {canSeeWastes && <NavLink to="/wastes">Mermas</NavLink>}
     {canSeeReturns && <NavLink to="/returns">Devoluciones</NavLink>}
+    {canSeeSettlements && <NavLink to="/settlements">Liquidaciones</NavLink>}
     <NavLink to="/pending">Pendientes</NavLink>
     {isAdmin && <NavLink to="/administration">Usuarios</NavLink>}
     {isAdmin && <NavLink to="/company">Configuración</NavLink>}

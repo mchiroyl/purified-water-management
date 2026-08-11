@@ -41,6 +41,7 @@ public class JdbcSalesAdapter implements SalesPort {
                 JOIN customer c ON c.id=cr.customer_id AND c.status='ACTIVE'
                   AND c.registration_state IN ('ACTIVE','PENDING_REVIEW')
                 WHERE r.id=:routeId AND r.status='ACTIVE'
+                  AND EXISTS(SELECT 1 FROM route_load rl WHERE rl.route_id=r.id AND rl.status='STARTED')
                 FOR UPDATE OF c
                 """).param("routeId", routeId).param("customerId", customerId)
                 .query((rs, row) -> new SaleContext(rs.getObject("route_id", UUID.class),

@@ -13,6 +13,7 @@ import { SalesPage } from '../features/sales/SalesPage';
 import { TransfersPage } from '../features/payments/TransfersPage';
 import { WastePage } from '../features/waste/WastePage';
 import { ReturnsPage } from '../features/returns/ReturnsPage';
+import { SettlementPage } from '../features/settlements/SettlementPage';
 import { PendingOperationsPage } from '../offline/PendingOperationsPage';
 import { AppShell } from './AppShell';
 import { DashboardPage } from './DashboardPage';
@@ -32,6 +33,7 @@ export function App() {
   const canVerifyTransfers = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR'].includes(role));
   const canSeeWastes = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
   const canSeeReturns = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
+  const canSeeSettlements = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
   const isWarehouse = user.roles.includes('BODEGA');
   const isSeller = user.roles.includes('VENDEDOR');
   const canReviewProvisional = isAdmin || user.roles.includes('SUPERVISOR');
@@ -53,6 +55,7 @@ export function App() {
         <Route path="transfers" element={canVerifyTransfers ? <TransfersPage /> : <Navigate to="/" replace />} />
         <Route path="wastes" element={canSeeWastes ? <WastePage canReport canReview={isAdmin || isWarehouse || user.roles.includes('SUPERVISOR')} canManageCatalog={isAdmin} deviceId={user.deviceId} /> : <Navigate to="/" replace />} />
         <Route path="returns" element={canSeeReturns ? <ReturnsPage canReport canReceive={isAdmin || isWarehouse || user.roles.includes('SUPERVISOR')} deviceId={user.deviceId} /> : <Navigate to="/" replace />} />
+        <Route path="settlements" element={canSeeSettlements ? <SettlementPage canClose={isAdmin || user.roles.includes('SUPERVISOR')} canReceiveCash={isAdmin || user.roles.includes('SUPERVISOR')} /> : <Navigate to="/" replace />} />
         <Route path="pending" element={<PendingOperationsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
