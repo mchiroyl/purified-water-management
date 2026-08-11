@@ -14,7 +14,8 @@ public interface SalesPort {
     List<SaleView> findSales(Optional<UUID> sellerUserId);
     Optional<SaleView> findSale(UUID id, Optional<UUID> sellerUserId);
 
-    record SaleContext(UUID routeId, UUID inventoryLocationId, UUID sellerId) {
+    record SaleContext(UUID routeId, UUID inventoryLocationId, UUID sellerId, String customerType,
+                       boolean creditAllowed, BigDecimal creditLimit, BigDecimal currentBalance) {
     }
 
     record PresentationView(UUID presentationId, String presentationCode, String presentationName,
@@ -24,12 +25,16 @@ public interface SalesPort {
 
     record NewSale(UUID id, UUID clientReference, UUID routeId, UUID inventoryLocationId,
                    UUID sellerId, UUID customerId, BigDecimal subtotal, BigDecimal total,
-                   UUID createdBy, UUID deviceId, List<NewSaleItem> items) {
+                   UUID createdBy, UUID deviceId, List<NewSaleItem> items, List<NewPayment> payments) {
     }
 
     record NewSaleItem(UUID id, UUID productId, UUID presentationId, BigDecimal presentationQuantity,
                        BigDecimal quantityBaseUnits, BigDecimal unitPrice, BigDecimal lineTotal,
                        String priceSource, UUID priceVersionId, UUID priceTierId, UUID specialPriceId) {
+    }
+
+    record NewPayment(UUID id, String method, BigDecimal amount, String status, String reference,
+                      String bank, String evidenceReference) {
     }
 
     record SaleView(UUID id, UUID clientReference, String documentNumber, UUID routeId,
@@ -38,7 +43,7 @@ public interface SalesPort {
                     String status, BigDecimal subtotal, BigDecimal total, String currencyCode,
                     String companyName, String companyTaxId, String companyAddress, String documentLegend,
                     UUID createdBy, String createdByUsername, UUID deviceId, Instant createdAt,
-                    List<SaleItemView> items) {
+                    List<SaleItemView> items, List<PaymentView> payments) {
     }
 
     record SaleItemView(UUID id, UUID productId, String productCode, String productName,
@@ -46,5 +51,11 @@ public interface SalesPort {
                         BigDecimal presentationQuantity, BigDecimal quantityBaseUnits,
                         BigDecimal unitPrice, BigDecimal lineTotal, String priceSource,
                         UUID priceVersionId, UUID priceTierId, UUID specialPriceId) {
+    }
+
+    record PaymentView(UUID id, String method, BigDecimal amount, String status, String reference,
+                       String bank, String evidenceReference, UUID registeredBy, String registeredByUsername,
+                       UUID verifiedBy, String verifiedByUsername, Instant verifiedAt, String rejectionReason,
+                       Instant createdAt) {
     }
 }

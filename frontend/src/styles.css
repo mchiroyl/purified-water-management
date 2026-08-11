@@ -119,6 +119,16 @@ h2 { margin-top: 0; }
 .sale-item-editor { display: grid; gap: .65rem; padding: .8rem; border: 1px solid var(--line); border-radius: .75rem; background: #f8fcfd; align-items: end; }
 .sale-line > span { color: inherit; }
 .sale-total { display: flex; justify-content: space-between; padding-top: .8rem; border-top: 2px solid var(--line); font-size: 1.1rem; }
+.payment-editor { display: grid; gap: .65rem; padding: .8rem; border: 1px solid var(--line); border-radius: .75rem; background: #f8fcfd; align-items: end; }
+.add-payment { margin-top: .75rem; }
+.credit-available, .status-note { color: var(--primary-dark); font-weight: 700; }
+.payment-summary { display: grid; gap: .25rem; color: var(--muted); font-size: .9rem; }
+.transfer-grid { display: grid; gap: 1rem; margin-top: 1rem; }
+.transfer-card { display: grid; gap: .65rem; }
+.transfer-card .section-heading > div span { display: block; color: var(--muted); margin-top: .25rem; }
+.transfer-amount { color: var(--primary-dark); font-size: 1.35rem; }
+.transfer-decision { display: grid; gap: .65rem; align-items: end; padding-top: .7rem; border-top: 1px solid var(--line); }
+.status.rejected { background: #fff0ee; color: var(--danger); }
 
 @media (min-width: 800px) {
   .app-shell { grid-template-areas: "header header" "aside main"; grid-template-columns: 240px 1fr; grid-template-rows: auto 1fr; }
@@ -143,6 +153,9 @@ h2 { margin-top: 0; }
   .correction-form h3 { grid-column: 1 / -1; }
   .sales-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sale-item-editor { grid-template-columns: minmax(0, 2fr) minmax(120px, .7fr) auto; }
+  .payment-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .transfer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .transfer-decision { grid-template-columns: minmax(0, 1fr) auto auto; }
 }
 
 @media (max-width: 600px) {

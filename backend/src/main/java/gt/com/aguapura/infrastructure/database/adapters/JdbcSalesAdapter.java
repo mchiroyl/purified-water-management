@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -25,7 +26,8 @@ public class JdbcSalesAdapter implements SalesPort {
     @Override
     public Optional<SaleContext> findSaleContext(UUID routeId, UUID customerId) {
         return jdbc.sql("""
-                SELECT r.id route_id,il.id inventory_location_id,ra.seller_id
+                SELECT r.id route_id,il.id inventory_location_id,ra.seller_id,c.customer_type,
+                       c.credit_allowed,c.credit_limit,c.current_balance
                 FROM route r
                 JOIN inventory_location il ON il.route_id=r.id AND il.active AND il.location_type='ROUTE'
                 JOIN LATERAL (
@@ -38,10 +40,13 @@ public class JdbcSalesAdapter implements SalesPort {
                   AND cr.valid_from<=current_date AND (cr.valid_to IS NULL OR cr.valid_to>=current_date)
                 JOIN customer c ON c.id=cr.customer_id AND c.status='ACTIVE'
                 WHERE r.id=:routeId AND r.status='ACTIVE'
+                FOR UPDATE OF c
                 """).param("routeId", routeId).param("customerId", customerId)
                 .query((rs, row) -> new SaleContext(rs.getObject("route_id", UUID.class),
                         rs.getObject("inventory_location_id", UUID.class),
-                        rs.getObject("seller_id", UUID.class))).optional();
+                        rs.getObject("seller_id", UUID.class), rs.getString("customer_type"),
+                        rs.getBoolean("credit_allowed"), rs.getBigDecimal("credit_limit"),
+                        rs.getBigDecimal("current_balance"))).optional();
     }
 
     @Override
@@ -111,6 +116,37 @@ public class JdbcSalesAdapter implements SalesPort {
                     .param("priceTierId", row.priceTierId(), Types.OTHER)
                     .param("specialPriceId", row.specialPriceId(), Types.OTHER).update();
         }
+        for (var payment : item.payments()) {
+            jdbc.sql("""
+                    INSERT INTO payment(id,sale_id,payment_method,amount,status,reference,bank,evidence_reference,
+                        registered_by,device_id)
+                    VALUES (:id,:saleId,:method,:amount,:status,:reference,:bank,:evidence,:registeredBy,:deviceId)
+                    """).param("id", payment.id()).param("saleId", item.id()).param("method", payment.method())
+                    .param("amount", payment.amount()).param("status", payment.status())
+                    .param("reference", payment.reference()).param("bank", payment.bank())
+                    .param("evidence", payment.evidenceReference()).param("registeredBy", item.createdBy())
+                    .param("deviceId", item.deviceId()).update();
+            if ("CREDIT".equals(payment.method())) {
+                var balanceAfter = jdbc.sql("""
+                        UPDATE customer SET current_balance=current_balance+:amount,updated_at=now()
+                        WHERE id=:customerId AND customer_type='PERMANENT' AND credit_allowed
+                          AND current_balance+:amount<=credit_limit
+                        RETURNING current_balance
+                        """).param("amount", payment.amount()).param("customerId", item.customerId())
+                        .query(BigDecimal.class).optional().orElseThrow(() -> new BusinessException(
+                                "CREDIT_LIMIT_EXCEEDED", "El crédito excede el límite disponible del cliente.",
+                                ErrorCategory.VALIDATION));
+                jdbc.sql("""
+                        INSERT INTO credit_account_entry(id,customer_id,sale_id,payment_id,entry_type,amount,
+                            balance_after,created_by,device_id)
+                        VALUES (:id,:customerId,:saleId,:paymentId,'SALE_CHARGE',:amount,:balanceAfter,
+                            :createdBy,:deviceId)
+                        """).param("id", UUID.randomUUID()).param("customerId", item.customerId())
+                        .param("saleId", item.id()).param("paymentId", payment.id())
+                        .param("amount", payment.amount()).param("balanceAfter", balanceAfter)
+                        .param("createdBy", item.createdBy()).param("deviceId", item.deviceId()).update();
+            }
+        }
         return findSale(item.id(), Optional.empty()).orElseThrow();
     }
 
@@ -147,11 +183,27 @@ public class JdbcSalesAdapter implements SalesPort {
                 rs.getBigDecimal("line_total"), rs.getString("price_source"),
                 rs.getObject("price_version_id", UUID.class), rs.getObject("price_tier_id", UUID.class),
                 rs.getObject("special_price_id", UUID.class))).list();
+        var payments = jdbc.sql("""
+                SELECT pay.id,pay.payment_method,pay.amount,pay.status,pay.reference,pay.bank,
+                       pay.evidence_reference,pay.registered_by,registrar.username registered_by_username,
+                       pay.verified_by,verifier.username verified_by_username,pay.verified_at,
+                       pay.rejection_reason,pay.created_at
+                FROM payment pay JOIN app_user registrar ON registrar.id=pay.registered_by
+                LEFT JOIN app_user verifier ON verifier.id=pay.verified_by
+                WHERE pay.sale_id=:id ORDER BY pay.created_at,pay.payment_method
+                """).param("id", sale.id()).query((rs, row) -> new PaymentView(
+                rs.getObject("id", UUID.class), rs.getString("payment_method"), rs.getBigDecimal("amount"),
+                rs.getString("status"), rs.getString("reference"), rs.getString("bank"),
+                rs.getString("evidence_reference"), rs.getObject("registered_by", UUID.class),
+                rs.getString("registered_by_username"), rs.getObject("verified_by", UUID.class),
+                rs.getString("verified_by_username"), instant(rs, "verified_at"),
+                rs.getString("rejection_reason"), instant(rs, "created_at"))).list();
         return new SaleView(sale.id(), sale.clientReference(), sale.documentNumber(), sale.routeId(),
                 sale.routeCode(), sale.routeName(), sale.inventoryLocationId(), sale.sellerId(), sale.sellerName(),
                 sale.customerId(), sale.customerCode(), sale.customerName(), sale.status(), sale.subtotal(),
                 sale.total(), sale.currencyCode(), sale.companyName(), sale.companyTaxId(), sale.companyAddress(),
-                sale.documentLegend(), sale.createdBy(), sale.createdByUsername(), sale.deviceId(), sale.createdAt(), items);
+                sale.documentLegend(), sale.createdBy(), sale.createdByUsername(), sale.deviceId(), sale.createdAt(),
+                items, payments);
     }
 
     private String saleSelect() {
@@ -176,7 +228,7 @@ public class JdbcSalesAdapter implements SalesPort {
                 rs.getString("currency_code"), rs.getString("company_name"), rs.getString("company_tax_id"),
                 rs.getString("company_address"), rs.getString("document_legend"),
                 rs.getObject("created_by", UUID.class), rs.getString("created_by_username"),
-                rs.getObject("device_id", UUID.class), instant(rs, "created_at"), List.of());
+                rs.getObject("device_id", UUID.class), instant(rs, "created_at"), List.of(), List.of());
     }
 
     private Instant instant(ResultSet rs, String column) throws SQLException {

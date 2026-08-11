@@ -14,6 +14,7 @@ export function AppShell() {
   const canSeeInventory = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
   const canSeeLoads = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
   const canSeeSales = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'VENDEDOR'].includes(role));
+  const canVerifyTransfers = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR'].includes(role));
   const company = useQuery({
     queryKey: ['company-configuration'],
     queryFn: () => apiRequest<{ commercialName: string; logoUrl?: string; version: number }>('/company-configuration')
@@ -27,6 +28,7 @@ export function AppShell() {
     {canSeeInventory && <NavLink to="/inventory">Inventario</NavLink>}
     {canSeeLoads && <NavLink to="/loads">Cargas</NavLink>}
     {canSeeSales && <NavLink to="/sales">Ventas</NavLink>}
+    {canVerifyTransfers && <NavLink to="/transfers">Transferencias</NavLink>}
     {isAdmin && <NavLink to="/administration">Usuarios</NavLink>}
     {isAdmin && <NavLink to="/company">Configuración</NavLink>}
   </>;

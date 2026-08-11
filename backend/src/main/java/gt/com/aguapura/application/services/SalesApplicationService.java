@@ -6,6 +6,7 @@ import gt.com.aguapura.application.dto.sales.SaleResponse;
 import gt.com.aguapura.application.ports.SalesPort;
 import gt.com.aguapura.domain.exceptions.BusinessException;
 import gt.com.aguapura.domain.exceptions.ErrorCategory;
+import gt.com.aguapura.domain.payments.PaymentPolicy;
 import gt.com.aguapura.domain.sales.SaleLineCalculator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +17,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -60,10 +62,21 @@ public class SalesApplicationService {
                     price.priceTierId(), price.specialPriceId()));
         }
         subtotal = subtotal.setScale(2, RoundingMode.HALF_UP);
+        var requestedPayments = request.payments().stream().map(payment -> new PaymentPolicy.Request(
+                payment.method(), payment.amount(), payment.reference(), payment.bank(), payment.evidenceReference()))
+                .toList();
+        var allocations = PaymentPolicy.allocate(subtotal, requestedPayments);
+        BigDecimal creditAmount = allocations.stream().filter(payment -> "CREDIT".equals(payment.method()))
+                .map(PaymentPolicy.Allocation::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        PaymentPolicy.validateCredit(context.customerType(), context.creditAllowed(), context.creditLimit(),
+                context.currentBalance(), creditAmount);
+        var payments = allocations.stream().map(payment -> new SalesPort.NewPayment(UUID.randomUUID(),
+                payment.method(), payment.amount(), payment.status(), payment.reference(), payment.bank(),
+                payment.evidenceReference())).toList();
         UUID saleId = UUID.randomUUID();
         var sale = persistence.createSale(new SalesPort.NewSale(saleId, request.clientReference(), request.routeId(),
                 context.inventoryLocationId(), context.sellerId(), request.customerId(), subtotal, subtotal,
-                actorId, deviceId, items));
+                actorId, deviceId, items, payments));
         items.stream().sorted((left, right) -> left.productId().compareTo(right.productId())).forEach(item ->
                 inventory.consume(context.inventoryLocationId(), item.productId(), item.quantityBaseUnits(),
                         "SALE_OUT", "Venta " + sale.documentNumber(), "SALE", saleId, actorId, deviceId));
@@ -98,12 +111,27 @@ public class SalesApplicationService {
                 row.presentationName(), row.presentationQuantity(), row.quantityBaseUnits(), row.unitPrice(),
                 row.lineTotal(), row.priceSource(), row.priceVersionId(), row.priceTierId(), row.specialPriceId()))
                 .toList();
+        var payments = item.payments().stream().map(row -> new SaleResponse.PaymentResponse(row.id(), row.method(),
+                row.amount(), row.status(), row.reference(), row.bank(), row.evidenceReference(), row.registeredBy(),
+                row.registeredByUsername(), row.verifiedBy(), row.verifiedByUsername(), row.verifiedAt(),
+                row.rejectionReason(), row.createdAt())).toList();
+        BigDecimal verified = paymentTotal(item, "CONFIRMED", "VERIFIED");
+        BigDecimal pending = paymentTotal(item, "PENDING_VERIFICATION");
+        BigDecimal rejected = paymentTotal(item, "REJECTED");
+        BigDecimal credit = paymentTotal(item, "APPLIED");
         return new SaleResponse(item.id(), item.clientReference(), item.documentNumber(), item.routeId(),
                 item.routeCode(), item.routeName(), item.sellerId(), item.sellerName(), item.customerId(),
                 item.customerCode(), item.customerName(), item.status(), item.subtotal(), item.total(),
                 item.currencyCode(), item.companyName(), item.companyTaxId(), item.companyAddress(),
                 item.documentLegend(), item.createdBy(), item.createdByUsername(), item.deviceId(),
-                item.createdAt(), items);
+                item.createdAt(), items, payments, verified, pending, rejected, credit);
+    }
+
+    private BigDecimal paymentTotal(SalesPort.SaleView sale, String... statuses) {
+        var accepted = Set.of(statuses);
+        return sale.payments().stream().filter(payment -> accepted.contains(payment.status()))
+                .map(SalesPort.PaymentView::amount).reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
     }
 
     private BusinessException validation(String code, String message) {

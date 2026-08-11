@@ -29,12 +29,24 @@ public record SaleResponse(
         String createdByUsername,
         UUID deviceId,
         Instant createdAt,
-        List<ItemResponse> items
+        List<ItemResponse> items,
+        List<PaymentResponse> payments,
+        BigDecimal verifiedPaidAmount,
+        BigDecimal pendingTransferAmount,
+        BigDecimal rejectedTransferAmount,
+        BigDecimal creditAmount
 ) {
     public record ItemResponse(UUID id, UUID productId, String productCode, String productName,
                                UUID presentationId, String presentationCode, String presentationName,
                                BigDecimal presentationQuantity, BigDecimal quantityBaseUnits,
                                BigDecimal unitPrice, BigDecimal lineTotal, String priceSource,
                                UUID priceVersionId, UUID priceTierId, UUID specialPriceId) {
+    }
+
+    public record PaymentResponse(UUID id, String method, BigDecimal amount, String status,
+                                  String reference, String bank, String evidenceReference,
+                                  UUID registeredBy, String registeredByUsername, UUID verifiedBy,
+                                  String verifiedByUsername, Instant verifiedAt, String rejectionReason,
+                                  Instant createdAt) {
     }
 }

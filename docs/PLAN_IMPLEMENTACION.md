@@ -260,5 +260,6 @@ Verificación: tests backend/frontend/integración/E2E, Docker build, Compose, h
 | 10 | Completada | Clientes, rutas, vehículos y asignaciones históricas con aislamiento de vendedor, API, interfaz y prueba transaccional. |
 | 11 | Completada | Ubicaciones de bodega/ruta, saldos por producto y libro inmutable; concurrencia, stock negativo e inmutabilidad verificados en PostgreSQL temporal. |
 | 12 | Completada | Carga e ítems inmutables, confirmación separada bodega/vendedor con dispositivos, transferencia física, inicio y corrección compensatoria verificados. |
-| 13 | En progreso | Venta online transaccional con precio de servidor, inventario, numeración e inmutabilidad. |
-| 11–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla. |
+| 13 | Completada | Venta online transaccional con precio, numeración y totales de servidor; rollback, propiedad, inventario e inmutabilidad verificados. |
+| 14 | Completada | Efectivo, transferencia y crédito integrados a la venta; límite concurrente, segregación de revisión, rollback y libros inmutables verificados. |
+| 15–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |

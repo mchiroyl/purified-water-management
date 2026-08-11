@@ -9,6 +9,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -43,6 +44,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorResponse> integrity(DataIntegrityViolationException exception, HttpServletRequest request) {
         log.warn("Violación de integridad. correlationId={}", correlation(request));
         return response(HttpStatus.CONFLICT, "DATA_CONFLICT", "La operación entra en conflicto con datos existentes.", request, null);
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiErrorResponse> accessDenied(AccessDeniedException exception,
+                                                          HttpServletRequest request) {
+        return response(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "No tiene permiso para realizar esta operación.",
+                request, null);
     }
 
     @ExceptionHandler(Exception.class)
