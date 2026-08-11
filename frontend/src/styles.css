@@ -96,6 +96,13 @@ h2 { margin-top: 0; }
 .route-card-title span:not(.status) { display: block; color: var(--muted); font-size: .85rem; }
 .route-card p { color: var(--muted); line-height: 1.55; }
 .assignment-form { display: grid; gap: .55rem; }
+.inline-form { display: grid; gap: .75rem; align-items: end; }
+.inline-form h2 { margin: 0; }
+.tier-editor { display: grid; gap: .65rem; margin-top: 1rem; }
+.tier-row { display: grid; gap: .6rem; padding: .8rem; border: 1px solid var(--line); border-radius: .75rem; background: #f8fcfd; align-items: end; }
+.pricing-list { display: grid; gap: .8rem; }
+.version-block { margin-top: .8rem; padding-top: .8rem; border-top: 1px solid var(--line); }
+.tier-summary { display: block; padding: .35rem 0; color: var(--muted); }
 
 @media (min-width: 800px) {
   .app-shell { grid-template-areas: "header header" "aside main"; grid-template-columns: 240px 1fr; grid-template-rows: auto 1fr; }
@@ -110,6 +117,10 @@ h2 { margin-top: 0; }
   .presentation-row { grid-template-columns: 1fr 1.4fr 1fr 1fr auto; align-items: end; }
   .dual-panels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .route-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .inline-form { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .inline-form h2, .inline-form .wide { grid-column: 1 / -1; }
+  .tier-row { grid-template-columns: 2fr 1fr 1fr 1fr auto; }
+  .pricing-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 600px) {

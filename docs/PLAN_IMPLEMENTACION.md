@@ -256,6 +256,7 @@ Verificación: tests backend/frontend/integración/E2E, Docker build, Compose, h
 | 6 | Completada | Login, JWT, Argon2id, refresh rotativo, revocación, cookie y control de origen verificados. |
 | 7 | Completada | Administración de usuarios, perfiles de vendedor, dispositivos, RBAC y formulario único de empresa con logotipo y numeración verificados. |
 | 8 | Completada | Productos, presentaciones, unidades y conversiones versionadas con API, interfaz, activación lógica y pruebas. |
-| 9 | En progreso | Listas, tramos de mayoreo, precios especiales y descuentos controlados por el servidor. |
+| 9 | Completada | Listas y versiones inmutables, tramos de mayoreo, precios especiales y descuentos autorizados; cálculo del servidor verificado con PostgreSQL y UI. |
 | 10 | Completada | Clientes, rutas, vehículos y asignaciones históricas con aislamiento de vendedor, API, interfaz y prueba transaccional. |
+| 11 | En progreso | Ubicaciones, balances y libro inmutable de movimientos con prevención de existencias negativas. |
 | 11–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla. |

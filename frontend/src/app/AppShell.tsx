@@ -10,6 +10,7 @@ export function AppShell() {
   const canCatalog = user?.roles.some(role => ['ADMINISTRADOR', 'BODEGA', 'SUPERVISOR'].includes(role));
   const canSeeCustomers = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'VENDEDOR'].includes(role));
   const canSeeRoutes = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
+  const canSeePricing = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'VENDEDOR'].includes(role));
   const company = useQuery({
     queryKey: ['company-configuration'],
     queryFn: () => apiRequest<{ commercialName: string; logoUrl?: string; version: number }>('/company-configuration')
@@ -19,6 +20,7 @@ export function AppShell() {
     {canCatalog && <NavLink to="/products">Productos</NavLink>}
     {canSeeCustomers && <NavLink to="/customers">Clientes</NavLink>}
     {canSeeRoutes && <NavLink to="/routes">Rutas</NavLink>}
+    {canSeePricing && <NavLink to="/pricing">Precios</NavLink>}
     {isAdmin && <NavLink to="/administration">Usuarios</NavLink>}
     {isAdmin && <NavLink to="/company">Configuración</NavLink>}
   </>;
