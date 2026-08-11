@@ -11,7 +11,7 @@ import java.util.UUID;
 public interface PricingPort {
     boolean priceListCodeExists(String code);
     boolean presentationExists(UUID presentationId);
-    boolean customerExists(UUID customerId);
+    boolean customerEligibleForBenefits(UUID customerId);
     PriceListView createPriceList(NewPriceList item);
     List<PriceListView> findPriceLists();
     int nextVersionNumber(UUID priceListId);

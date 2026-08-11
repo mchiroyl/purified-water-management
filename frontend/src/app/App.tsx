@@ -30,6 +30,7 @@ export function App() {
   const canVerifyTransfers = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR'].includes(role));
   const isWarehouse = user.roles.includes('BODEGA');
   const isSeller = user.roles.includes('VENDEDOR');
+  const canReviewProvisional = isAdmin || user.roles.includes('SUPERVISOR');
   return (
     <Routes>
       <Route element={<AppShell />}>
@@ -37,7 +38,9 @@ export function App() {
         <Route path="company" element={<CompanyConfigurationPage />} />
         <Route path="products" element={<ProductCatalogPage />} />
         <Route path="administration" element={isAdmin ? <AdministrationPage /> : <Navigate to="/" replace />} />
-        <Route path="customers" element={canSeeCustomers ? <CustomersPage canManage={isAdmin} /> : <Navigate to="/" replace />} />
+        <Route path="customers" element={canSeeCustomers ? <CustomersPage canManage={isAdmin}
+          canCreateRouteCustomer={isAdmin || isSeller} canReviewProvisional={canReviewProvisional}
+          deviceId={user.deviceId} /> : <Navigate to="/" replace />} />
         <Route path="routes" element={canSeeRoutes ? <RoutesPage canManage={isAdmin} /> : <Navigate to="/" replace />} />
         <Route path="pricing" element={canSeePricing ? <PricingPage canManage={isAdmin} canApprove={isAdmin || user.roles.includes('SUPERVISOR')} canRequestDiscount={user.roles.includes('VENDEDOR')} /> : <Navigate to="/" replace />} />
         <Route path="inventory" element={canSeeInventory ? <InventoryPage canManage={canManageInventory} /> : <Navigate to="/" replace />} />

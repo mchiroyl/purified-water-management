@@ -267,4 +267,5 @@ Verificación: tests backend/frontend/integración/E2E, Docker build, Compose, h
 | 17 | Completada | ConnectionManager con UNKNOWN/CHECKING/OFFLINE/DEGRADED/ONLINE, timeout, cooldown, deduplicación, lifecycle, backoff, comprobación manual y endpoint `no-store`; frontend, backend y despliegue verificados. |
 | 18 | Completada | SyncEngine independiente con Outbox IndexedDB, dependencias, batches, resultados parciales, estados visibles, recuperación, backoff+jitter, lifecycle, botón manual y Background Sync progresivo verificados. |
 | 19 | Completada | Idempotencia por dispositivo/operación, hash canónico, resultados persistidos, dependencias, reintentos transaccionales y lote HTTP; cinco reenvíos producen una sola fila y un solo efecto. |
-| 20–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |
+| 20 | Completada | Cliente ocasional y provisional offline con UUID estable, Outbox, revisión humana, detección de duplicados, aprobación/rechazo/fusión inmutable y restricciones de crédito/precio; venta histórica preservada en PostgreSQL temporal. |
+| 21–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |

@@ -97,7 +97,7 @@ public class AuthApplicationService {
         persistence.saveSession(existing);
 
         var access = jwtTokens.issue(user, device.getId());
-        return new AuthenticationResult(toResponse(user, access), newRawToken);
+        return new AuthenticationResult(toResponse(user, device.getId(), access), newRawToken);
     }
 
     @Transactional
@@ -116,12 +116,14 @@ public class AuthApplicationService {
         persistence.createSession(user.getId(), deviceId, familyId,
                 tokenHashing.sha256(rawRefreshToken), now, now.plus(policy.refreshTokenDuration()));
         var access = jwtTokens.issue(user, deviceId);
-        return new AuthenticationResult(toResponse(user, access), rawRefreshToken);
+        return new AuthenticationResult(toResponse(user, deviceId, access), rawRefreshToken);
     }
 
-    private AuthResponse toResponse(AuthenticationPersistencePort.AuthUser user, AccessTokenIssuer.IssuedAccessToken access) {
+    private AuthResponse toResponse(AuthenticationPersistencePort.AuthUser user, UUID deviceId,
+                                    AccessTokenIssuer.IssuedAccessToken access) {
         Set<String> roles = user.getRoleCodes();
-        var responseUser = new SessionUserResponse(user.getId(), user.getUsername(), user.getUsername(), roles, user.isMustChangePassword());
+        var responseUser = new SessionUserResponse(user.getId(), user.getUsername(), user.getUsername(), deviceId,
+                roles, user.isMustChangePassword());
         return new AuthResponse(access.value(), access.expiresAt(), responseUser);
     }
 

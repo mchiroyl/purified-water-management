@@ -1,13 +1,32 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { getMobileDatabase } from '../../offline/SyncContext';
+import type { ProvisionalCustomerRecord } from '../../offline/mobileDatabase';
 import { apiRequest } from '../../services/apiClient';
-import { localDate, type Customer, type Route } from './types';
+import { queueProvisionalCustomer } from './provisionalCustomerOffline';
+import { localDate, type Customer, type ProvisionalReview, type Route } from './types';
 
-export function CustomersPage({ canManage }: { canManage: boolean }) {
+type CustomersPageProps = {
+  canManage: boolean;
+  canCreateRouteCustomer?: boolean;
+  canReviewProvisional?: boolean;
+  deviceId?: string;
+};
+
+const emptyRouteCustomer = { routeId: '', name: '', phone: '', whatsapp: '', addressReference: '' };
+
+export function CustomersPage({ canManage, canCreateRouteCustomer = false,
+  canReviewProvisional = false, deviceId = '' }: CustomersPageProps) {
   const queryClient = useQueryClient();
   const customers = useQuery({ queryKey: ['customers'], queryFn: () => apiRequest<Customer[]>('/customers') });
-  const routes = useQuery({ queryKey: ['routes'], queryFn: () => apiRequest<Route[]>('/routes'), enabled: canManage });
+  const routes = useQuery({ queryKey: ['routes'], queryFn: () => apiRequest<Route[]>('/routes'), enabled: canManage || canCreateRouteCustomer });
+  const reviews = useQuery({ queryKey: ['customers', 'provisional-reviews'],
+    queryFn: () => apiRequest<ProvisionalReview[]>('/customers/provisional-reviews'), enabled: canReviewProvisional });
   const [form, setForm] = useState({ code: '', name: '', contactName: '', phone: '', whatsapp: '', addressReference: '', customerType: 'PERMANENT', creditAllowed: false, creditLimit: 0 });
+  const [routeCustomer, setRouteCustomer] = useState(emptyRouteCustomer);
+  const [localCustomers, setLocalCustomers] = useState<ProvisionalCustomerRecord[]>([]);
+  const [localMessage, setLocalMessage] = useState('');
+  const [reviewForms, setReviewForms] = useState<Record<string, { targetCustomerId: string; reason: string }>>({});
   const [assignments, setAssignments] = useState<Record<string, { routeId: string; validFrom: string }>>({});
   const create = useMutation({
     mutationFn: () => apiRequest<Customer>('/customers', { method: 'POST', body: JSON.stringify(form) }),
@@ -21,6 +40,50 @@ export function CustomersPage({ canManage }: { canManage: boolean }) {
       apiRequest<Route>(`/customers/${customerId}/route-assignment`, { method: 'POST', body: JSON.stringify({ routeId, validFrom }) }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['customers'] })
   });
+  const createOccasional = useMutation({
+    mutationFn: () => apiRequest<Customer>('/customers/occasional', { method: 'POST', body: JSON.stringify(routeCustomer) }),
+    onSuccess: () => {
+      setRouteCustomer(emptyRouteCustomer);
+      void queryClient.invalidateQueries({ queryKey: ['customers'] });
+    }
+  });
+  const decideReview = useMutation({
+    mutationFn: ({ customerId, decision }: { customerId: string; decision: 'APPROVED' | 'REJECTED' | 'MERGED' }) => {
+      const values = reviewForms[customerId] ?? { targetCustomerId: '', reason: '' };
+      return apiRequest<Customer>(`/customers/${customerId}/registration-decision`, {
+        method: 'POST',
+        body: JSON.stringify({ decision, targetCustomerId: decision === 'MERGED' ? values.targetCustomerId : null,
+          reason: values.reason }),
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['customers'] });
+      void queryClient.invalidateQueries({ queryKey: ['customers', 'provisional-reviews'] });
+    },
+  });
+  const loadLocalCustomers = useCallback(async () => {
+    if (!canCreateRouteCustomer) return;
+    const database = await getMobileDatabase();
+    const values = await database.getAll('provisionalCustomers');
+    setLocalCustomers(values.sort((left, right) => right.createdAtLocal.localeCompare(left.createdAtLocal)));
+  }, [canCreateRouteCustomer]);
+  useEffect(() => { void loadLocalCustomers(); }, [loadLocalCustomers]);
+
+  const saveProvisional = async () => {
+    const selectedRoute = routes.data?.find(route => route.id === routeCustomer.routeId);
+    if (!deviceId || !selectedRoute?.sellerId) {
+      setLocalMessage('La ruta debe tener vendedor asignado y la sesión debe identificar el dispositivo.');
+      return;
+    }
+    try {
+      await queueProvisionalCustomer({ ...routeCustomer, sellerId: selectedRoute.sellerId, deviceId });
+      setRouteCustomer(emptyRouteCustomer);
+      setLocalMessage('Cliente guardado en el teléfono; se enviará automáticamente al recuperar conexión.');
+      await loadLocalCustomers();
+    } catch {
+      setLocalMessage('No fue posible guardar el cliente en el teléfono.');
+    }
+  };
   const submit = (event: FormEvent) => { event.preventDefault(); create.mutate(); };
 
   return <main>
@@ -41,6 +104,50 @@ export function CustomersPage({ canManage }: { canManage: boolean }) {
       <button className="primary" disabled={create.isPending}>{create.isPending ? 'Guardando…' : 'Guardar cliente'}</button>
     </form>}
 
+    {canCreateRouteCustomer && <section className="panel section-panel">
+      <div className="section-heading"><div><h2>Cliente encontrado en ruta</h2><span>Ocasional o provisional</span></div></div>
+      <p className="muted">El ocasional compra sin registro permanente. El provisional se guarda primero en este teléfono y queda pendiente de revisión.</p>
+      <div className="form-grid compact-form">
+        <label>Ruta<select required value={routeCustomer.routeId} onChange={event => setRouteCustomer({ ...routeCustomer, routeId: event.target.value })}>
+          <option value="">Seleccionar ruta</option>{routes.data?.map(route => <option value={route.id} key={route.id}>{route.code} · {route.name}</option>)}</select></label>
+        <label>Nombre<input required value={routeCustomer.name} onChange={event => setRouteCustomer({ ...routeCustomer, name: event.target.value })} /></label>
+        <label>Teléfono<input value={routeCustomer.phone} onChange={event => setRouteCustomer({ ...routeCustomer, phone: event.target.value })} /></label>
+        <label>WhatsApp<input value={routeCustomer.whatsapp} onChange={event => setRouteCustomer({ ...routeCustomer, whatsapp: event.target.value })} /></label>
+        <label className="wide">Dirección o referencia<textarea required value={routeCustomer.addressReference} onChange={event => setRouteCustomer({ ...routeCustomer, addressReference: event.target.value })} /></label>
+        <div className="row-actions wide">
+          <button type="button" className="primary" disabled={!routeCustomer.routeId || !routeCustomer.name.trim() || !routeCustomer.addressReference.trim()} onClick={() => void saveProvisional()}>Guardar provisional offline</button>
+          <button type="button" className="secondary" disabled={!routeCustomer.routeId || !routeCustomer.name.trim() || !routeCustomer.addressReference.trim() || createOccasional.isPending} onClick={() => createOccasional.mutate()}>Registrar ocasional</button>
+        </div>
+      </div>
+      {localMessage && <div className="alert">{localMessage}</div>}
+      {createOccasional.error && <div className="alert error">{createOccasional.error.message}</div>}
+      {localCustomers.length > 0 && <div className="data-list"><h3>Provisionales guardados en el teléfono</h3>{localCustomers.map(customer =>
+        <article className="data-row" key={customer.localCustomerId}><div><strong>{customer.name}</strong><span>{customer.addressReference}</span></div>
+          <span className={`status ${customer.syncStatus === 'SYNCED' ? 'active' : 'inactive'}`}>{customer.syncStatus === 'SYNCED' ? 'Enviado' : 'Pendiente'}</span></article>)}</div>}
+    </section>}
+
+    {canReviewProvisional && <section className="panel section-panel">
+      <div className="section-heading"><h2>Revisión de clientes provisionales</h2><span>{reviews.data?.length ?? 0} pendientes</span></div>
+      {reviews.error && <div className="alert error">{reviews.error.message}</div>}
+      <div className="data-list">{reviews.data?.map(review => {
+        const values = reviewForms[review.customer.id] ?? { targetCustomerId: '', reason: '' };
+        const permanentCustomers = customers.data?.filter(item => item.customerType === 'PERMANENT' && item.registrationState === 'ACTIVE') ?? [];
+        return <article className="data-row customer-review" key={review.customer.id}>
+          <div><strong>{review.customer.name}</strong><span>{review.customer.phone || 'Sin teléfono'} · {review.customer.routeName ?? 'Sin ruta'}</span>
+            <small>{review.duplicateCandidates.length ? `Posibles duplicados: ${review.duplicateCandidates.map(item => `${item.code} ${item.name}`).join(', ')}` : 'Sin coincidencias automáticas'}</small></div>
+          <div className="inline-assignment">
+            <select aria-label={`Cliente definitivo para ${review.customer.name}`} value={values.targetCustomerId} onChange={event => setReviewForms({ ...reviewForms, [review.customer.id]: { ...values, targetCustomerId: event.target.value } })}>
+              <option value="">Cliente definitivo para fusionar</option>{permanentCustomers.map(item => <option value={item.id} key={item.id}>{item.code} · {item.name}</option>)}</select>
+            <input aria-label={`Motivo para ${review.customer.name}`} placeholder="Motivo para rechazo o fusión" value={values.reason} onChange={event => setReviewForms({ ...reviewForms, [review.customer.id]: { ...values, reason: event.target.value } })} />
+            <button className="primary" disabled={decideReview.isPending} onClick={() => decideReview.mutate({ customerId: review.customer.id, decision: 'APPROVED' })}>Aprobar</button>
+            <button className="secondary" disabled={!values.reason.trim() || decideReview.isPending} onClick={() => decideReview.mutate({ customerId: review.customer.id, decision: 'REJECTED' })}>Rechazar</button>
+            <button className="secondary" disabled={!values.targetCustomerId || !values.reason.trim() || decideReview.isPending} onClick={() => decideReview.mutate({ customerId: review.customer.id, decision: 'MERGED' })}>Fusionar</button>
+          </div>
+        </article>;
+      })}</div>
+      {decideReview.error && <div className="alert error">{decideReview.error.message}</div>}
+    </section>}
+
     <section className="panel section-panel">
       <div className="section-heading"><h2>Clientes registrados</h2><span>{customers.data?.length ?? 0} clientes</span></div>
       {customers.isLoading && <p>Cargando clientes…</p>}
@@ -50,7 +157,7 @@ export function CustomersPage({ canManage }: { canManage: boolean }) {
         return <article className="data-row customer-row" key={customer.id}>
           <div><strong>{customer.name}</strong><span>{customer.code} · {customer.contactName || 'Sin contacto'} · {customer.phone || 'Sin teléfono'}</span>
             <small>{customer.routeName ? `${customer.routeName} · ${customer.sellerName ?? 'Sin vendedor'}` : 'Sin ruta asignada'} · Saldo Q{customer.currentBalance.toFixed(2)}</small></div>
-          <span className={`status ${customer.status === 'ACTIVE' ? 'active' : 'inactive'}`}>{customer.status === 'ACTIVE' ? 'Activo' : 'Inactivo'}</span>
+          <span className={`status ${customer.status === 'ACTIVE' ? 'active' : 'inactive'}`}>{customer.registrationState === 'PENDING_REVIEW' ? 'Pendiente de revisión' : customer.status === 'ACTIVE' ? 'Activo' : 'Inactivo'}</span>
           {canManage && <div className="inline-assignment">
             <select aria-label={`Ruta de ${customer.name}`} value={selection.routeId} onChange={event => setAssignments({ ...assignments, [customer.id]: { ...selection, routeId: event.target.value } })}>
               <option value="">Seleccionar ruta</option>{routes.data?.map(route => <option value={route.id} key={route.id}>{route.code} · {route.name}</option>)}

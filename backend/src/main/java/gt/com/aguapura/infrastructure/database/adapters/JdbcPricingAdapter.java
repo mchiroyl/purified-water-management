@@ -24,7 +24,12 @@ public class JdbcPricingAdapter implements PricingPort {
 
     @Override public boolean priceListCodeExists(String code) { return exists("SELECT EXISTS(SELECT 1 FROM price_list WHERE code=:value)", code); }
     @Override public boolean presentationExists(UUID id) { return exists("SELECT EXISTS(SELECT 1 FROM product_presentation WHERE id=:value AND active)", id); }
-    @Override public boolean customerExists(UUID id) { return exists("SELECT EXISTS(SELECT 1 FROM customer WHERE id=:value AND status='ACTIVE')", id); }
+    @Override public boolean customerEligibleForBenefits(UUID id) {
+        return exists("""
+                SELECT EXISTS(SELECT 1 FROM customer WHERE id=:value AND customer_type='PERMANENT'
+                    AND status='ACTIVE' AND registration_state='ACTIVE')
+                """, id);
+    }
 
     @Override
     public PriceListView createPriceList(NewPriceList item) {
@@ -121,10 +126,12 @@ public class JdbcPricingAdapter implements PricingPort {
     @Override
     public Optional<PricePolicy.SpecialPrice> findSpecialPrice(UUID customerId, UUID presentationId, Instant at) {
         return jdbc.sql("""
-                SELECT id,unit_price FROM customer_special_price
-                WHERE customer_id=:customerId AND product_presentation_id=:presentationId AND status='ACTIVE'
-                  AND valid_from<=:at AND (valid_to IS NULL OR valid_to>:at)
-                ORDER BY valid_from DESC LIMIT 1
+                SELECT sp.id,sp.unit_price FROM customer_special_price sp
+                JOIN customer c ON c.id=sp.customer_id AND c.customer_type='PERMANENT'
+                  AND c.status='ACTIVE' AND c.registration_state='ACTIVE'
+                WHERE sp.customer_id=:customerId AND sp.product_presentation_id=:presentationId AND sp.status='ACTIVE'
+                  AND sp.valid_from<=:at AND (sp.valid_to IS NULL OR sp.valid_to>:at)
+                ORDER BY sp.valid_from DESC LIMIT 1
                 """).param("customerId", customerId).param("presentationId", presentationId)
                 .param("at", timestamp(at), Types.TIMESTAMP_WITH_TIMEZONE)
                 .query((rs, row) -> new PricePolicy.SpecialPrice(rs.getObject("id", UUID.class), rs.getBigDecimal("unit_price"))).optional();

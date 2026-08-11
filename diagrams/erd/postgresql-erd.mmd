@@ -200,6 +200,16 @@ erDiagram
         TIMESTAMPTZ merged_at
     }
 
+    CUSTOMER_REGISTRATION_REVIEW {
+        UUID id PK
+        UUID customer_id UK, FK
+        VARCHAR decision
+        UUID target_customer_id FK
+        TEXT reason
+        UUID reviewed_by FK
+        TIMESTAMPTZ reviewed_at
+    }
+
     UNIT_OF_MEASURE {
         UUID id PK
         VARCHAR code UK
@@ -650,6 +660,10 @@ erDiagram
     ROUTE ||--o{ CUSTOMER_ROUTE : contains
     CUSTOMER ||--o{ CUSTOMER_MERGE : source
     CUSTOMER ||--o{ CUSTOMER_MERGE : target
+    APP_USER ||--o{ CUSTOMER_MERGE : decides
+    CUSTOMER ||--o| CUSTOMER_REGISTRATION_REVIEW : reviewed
+    CUSTOMER o|--o{ CUSTOMER_REGISTRATION_REVIEW : merge_target
+    APP_USER ||--o{ CUSTOMER_REGISTRATION_REVIEW : reviews
     UNIT_OF_MEASURE ||--o{ PRODUCT : base_unit
     PRODUCT ||--o{ PRODUCT_PRESENTATION : offers
     PRODUCT_PRESENTATION ||--o{ PRESENTATION_CONVERSION : converts_from

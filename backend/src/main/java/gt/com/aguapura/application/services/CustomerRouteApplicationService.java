@@ -2,13 +2,13 @@ package gt.com.aguapura.application.services;
 
 import gt.com.aguapura.application.dto.route.*;
 import gt.com.aguapura.application.ports.CustomerRoutePort;
+import gt.com.aguapura.domain.customers.CustomerIdentityNormalizer;
 import gt.com.aguapura.domain.exceptions.BusinessException;
 import gt.com.aguapura.domain.exceptions.ErrorCategory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.text.Normalizer;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -24,9 +24,9 @@ public class CustomerRouteApplicationService {
     @Transactional
     public CustomerResponse createCustomer(CreateCustomerRequest request, UUID actorId) {
         String code = request.code().trim().toUpperCase(Locale.ROOT);
-        String normalizedName = normalizeName(request.name());
-        String normalizedPhone = normalizePhone(request.phone());
-        String normalizedWhatsapp = normalizePhone(request.whatsapp());
+        String normalizedName = CustomerIdentityNormalizer.name(request.name());
+        String normalizedPhone = CustomerIdentityNormalizer.phone(request.phone());
+        String normalizedWhatsapp = CustomerIdentityNormalizer.phone(request.whatsapp());
         if (persistence.customerCodeExists(code)) {
             throw conflict("CUSTOMER_CODE_EXISTS", "El código de cliente ya está registrado.");
         }
@@ -41,8 +41,10 @@ public class CustomerRouteApplicationService {
         boolean creditAllowed = request.creditAllowed() && "PERMANENT".equals(type);
         BigDecimal limit = creditAllowed ? request.creditLimit() : BigDecimal.ZERO;
         var created = persistence.createCustomer(new CustomerRoutePort.NewCustomer(code, request.name().trim(),
-                normalizedName, safe(request.contactName()), safe(request.phone()), normalizedPhone,
-                safe(request.whatsapp()), normalizedWhatsapp, request.addressReference().trim(), type,
+                normalizedName, CustomerIdentityNormalizer.safe(request.contactName()),
+                CustomerIdentityNormalizer.safe(request.phone()), normalizedPhone,
+                CustomerIdentityNormalizer.safe(request.whatsapp()), normalizedWhatsapp,
+                request.addressReference().trim(), type,
                 creditAllowed, limit, actorId));
         return customer(created);
     }
@@ -63,7 +65,8 @@ public class CustomerRouteApplicationService {
     public RouteResponse createRoute(CreateRouteRequest request) {
         String code = request.code().trim().toUpperCase(Locale.ROOT);
         if (persistence.routeCodeExists(code)) throw conflict("ROUTE_CODE_EXISTS", "El código de ruta ya está registrado.");
-        return route(persistence.createRoute(new CustomerRoutePort.NewRoute(code, request.name().trim(), safe(request.description()))));
+        return route(persistence.createRoute(new CustomerRoutePort.NewRoute(code, request.name().trim(),
+                CustomerIdentityNormalizer.safe(request.description()))));
     }
 
     @Transactional(readOnly = true)
@@ -83,7 +86,8 @@ public class CustomerRouteApplicationService {
         String code = request.code().trim().toUpperCase(Locale.ROOT);
         if (persistence.vehicleCodeExists(code)) throw conflict("VEHICLE_CODE_EXISTS", "El código de vehículo ya está registrado.");
         var item = persistence.createVehicle(new CustomerRoutePort.NewVehicle(code,
-                safe(request.licensePlate()).toUpperCase(Locale.ROOT), safe(request.description())));
+                CustomerIdentityNormalizer.safe(request.licensePlate()).toUpperCase(Locale.ROOT),
+                CustomerIdentityNormalizer.safe(request.description())));
         return vehicle(item);
     }
 
@@ -118,12 +122,6 @@ public class CustomerRouteApplicationService {
         return new VehicleResponse(item.id(), item.code(), item.licensePlate(), item.description(), item.status(), item.createdAt());
     }
 
-    private String normalizeName(String value) {
-        return Normalizer.normalize(value.trim().toLowerCase(Locale.ROOT), Normalizer.Form.NFD)
-                .replaceAll("\\p{M}", "").replaceAll("[^a-z0-9 ]", " ").replaceAll("\\s+", " ").trim();
-    }
-    private String normalizePhone(String value) { return safe(value).replaceAll("\\D", ""); }
-    private String safe(String value) { return value == null ? "" : value.trim(); }
     private BusinessException validation(String code, String message) { return new BusinessException(code, message, ErrorCategory.VALIDATION); }
     private BusinessException conflict(String code, String message) { return new BusinessException(code, message, ErrorCategory.CONFLICT); }
 }

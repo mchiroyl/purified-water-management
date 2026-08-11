@@ -13,7 +13,7 @@ describe('SessionProvider', () => {
   it('restaura la sesión desde la cookie refresh al cargar la aplicación', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
       accessToken: 'access-token', accessTokenExpiresAt: '2026-08-10T10:00:00Z',
-      user: { id: 'u1', username: 'admin', displayName: 'Administrador', roles: ['ADMINISTRADOR'], mustChangePassword: false }
+      user: { id: 'u1', username: 'admin', displayName: 'Administrador', deviceId: 'd1', roles: ['ADMINISTRADOR'], mustChangePassword: false }
     }), { status: 200, headers: { 'Content-Type': 'application/json' } })));
 
     render(<SessionProvider><SessionProbe /></SessionProvider>);

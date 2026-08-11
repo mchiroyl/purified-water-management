@@ -52,7 +52,7 @@ public class PricingApplicationService {
 
     @Transactional
     public SpecialPriceResponse createSpecialPrice(CreateSpecialPriceRequest request, UUID actorId) {
-        ensureCustomer(request.customerId());
+        ensureCustomerEligible(request.customerId());
         ensurePresentation(request.presentationId());
         if (request.validTo() != null && !request.validTo().isAfter(request.validFrom())) {
             throw validation("INVALID_SPECIAL_PRICE_DATES", "La fecha final debe ser posterior a la fecha inicial.");
@@ -84,7 +84,7 @@ public class PricingApplicationService {
 
     @Transactional
     public DiscountResponse requestDiscount(CreateDiscountRequest request, UUID actorId) {
-        ensureCustomer(request.customerId());
+        ensureCustomerEligible(request.customerId());
         if (!request.expiresAt().isAfter(Instant.now())) {
             throw validation("INVALID_DISCOUNT_EXPIRY", "La solicitud debe tener una vigencia futura.");
         }
@@ -153,8 +153,11 @@ public class PricingApplicationService {
     private void ensurePresentation(UUID id) {
         if (!persistence.presentationExists(id)) throw notFound("PRESENTATION_NOT_FOUND", "No se encontró la presentación.");
     }
-    private void ensureCustomer(UUID id) {
-        if (!persistence.customerExists(id)) throw notFound("CUSTOMER_NOT_FOUND", "No se encontró el cliente.");
+    private void ensureCustomerEligible(UUID id) {
+        if (!persistence.customerEligibleForBenefits(id)) {
+            throw validation("CUSTOMER_COMMERCIAL_BENEFIT_FORBIDDEN",
+                    "Solo un cliente permanente activo puede recibir precio especial o descuento manual.");
+        }
     }
 
     private PriceListResponse priceList(PricingPort.PriceListView item) {

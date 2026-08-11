@@ -7,6 +7,7 @@ public record SessionUserResponse(
         UUID id,
         String username,
         String displayName,
+        UUID deviceId,
         Set<String> roles,
         boolean mustChangePassword
 ) {

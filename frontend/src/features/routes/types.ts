@@ -11,6 +11,8 @@ export type Route = {
 };
 export type Vehicle = { id: string; code: string; licensePlate?: string; description: string; status: string; createdAt: string };
 export type Seller = { id: string; code: string; displayName: string; status: string };
+export type DuplicateCandidate = { id: string; code: string; name: string; phone: string; whatsapp: string };
+export type ProvisionalReview = { customer: Customer; duplicateCandidates: DuplicateCandidate[] };
 
 export function localDate(): string {
   const now = new Date();
