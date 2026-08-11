@@ -355,4 +355,5 @@ Verificación: tests backend/frontend/integración/E2E, Docker build, Compose, h
 | 32 | Completada | Playwright ejecuta en Docker y base aislada los 28 pasos: configuración, catálogo, precios, vendedor, ruta, carga, venta online/offline, persistencia PWA, sincronización idempotente, revisiones, devolución, liquidación sin diferencias, PDF interno, Web Share, bloqueo FEL y controles HTTP. |
 | 33 | Completada | Diagramas de contexto, arquitectura, componentes, casos de uso, operación, seguridad y sincronización actualizados; ERD PostgreSQL reconciliado 1:1 con las 54 tablas Flyway V1–V18 y ERD IndexedDB con sus 26 stores v2. |
 | 34 | Completada | Manual de usuario en Markdown y PDF con 11 capturas reales generadas por la aceptación E2E; PDF de 17 páginas renderizado y revisado visualmente. |
-| 35–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |
+| 35 | Completada | Manual técnico creado con stack versionado, arquitectura, seguridad, esquema, invariantes, IndexedDB, sincronización, archivos/FEL, auditoría, pruebas y despliegue. |
+| 36–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |
