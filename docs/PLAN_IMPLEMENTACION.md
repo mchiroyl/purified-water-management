@@ -198,6 +198,12 @@ HTTP 403 para el vendedor en decisiones y cuatro eventos de auditoría.
 Entregables: solicitud/aprobación y transacciones compensatorias.  
 Verificación: venta original permanece y efectos se revierten una sola vez.
 
+Estado: **completada**. El vendedor solicita únicamente sobre sus ventas y nunca decide su propia
+solicitud; administrador o supervisor aprueban o rechazan. La aprobación conserva venta y pago,
+crea `payment_reversal`, devuelve existencias con `VOID_IN`, revierte crédito cuando corresponde y
+excluye la venta anulada de la liquidación. PostgreSQL temporal confirmó migración 16, HTTP 403 para
+autoaprobación, HTTP 409 para repetición o ruta liquidada, saldo 90→100 y un único efecto de cada tipo.
+
 ### FASE 26 — Comprobantes PDF + FEL opcional
 
 Entregables: PDF con configuración empresarial; FEL bloqueado sin proveedor y puerto de adaptación.  

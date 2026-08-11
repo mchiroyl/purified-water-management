@@ -19,6 +19,7 @@ export function AppShell() {
   const canSeeReturns = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
   const canSeeSettlements = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
   const canSeeOperationsControl = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
+  const canSeeAnnulments = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'VENDEDOR'].includes(role));
   const company = useQuery({
     queryKey: ['company-configuration'],
     queryFn: () => apiRequest<{ commercialName: string; logoUrl?: string; version: number }>('/company-configuration')
@@ -37,6 +38,7 @@ export function AppShell() {
     {canSeeReturns && <NavLink to="/returns">Devoluciones</NavLink>}
     {canSeeSettlements && <NavLink to="/settlements">Liquidaciones</NavLink>}
     {canSeeOperationsControl && <NavLink to="/operations-control">Control operativo</NavLink>}
+    {canSeeAnnulments && <NavLink to="/annulments">Anulaciones</NavLink>}
     <NavLink to="/pending">Pendientes</NavLink>
     {isAdmin && <NavLink to="/administration">Usuarios</NavLink>}
     {isAdmin && <NavLink to="/company">Configuración</NavLink>}

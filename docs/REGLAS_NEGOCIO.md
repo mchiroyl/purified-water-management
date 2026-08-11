@@ -47,6 +47,8 @@ Fuente: `docs/ERS_SRS.md` y `PROMPT_MAESTRO_SISTEMA_AGUA_PURA.md`.
 - **RB-026:** Venta, ítems, pago y movimientos se guardan en una transacción ACID.
 - **RB-027:** Una venta confirmada es inmutable y no se elimina.
 - **RB-028:** Una corrección usa solicitud de anulación y efectos compensatorios.
+- **RB-028A:** Una anulación aprobada conserva la venta y el pago originales, registra sus reversiones y repone inventario exactamente una vez.
+- **RB-028B:** Una venta no puede anularse después de que la carga de su ruta queda liquidada.
 - **RB-029:** La referencia local UUID se conserva después de asignar número oficial.
 - **RB-030:** Transferencia permanece pendiente hasta revisión de un usuario autorizado distinto del vendedor.
 - **RB-031:** Una transferencia rechazada no cuenta como pago verificado.

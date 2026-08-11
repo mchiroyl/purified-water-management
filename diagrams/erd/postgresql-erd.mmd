@@ -616,11 +616,25 @@ erDiagram
         UUID id PK
         UUID sale_id FK
         UUID requested_by FK
+        UUID requested_device_id FK
         UUID decided_by FK
+        UUID decided_device_id FK
         VARCHAR status
         TEXT reason
+        TEXT decision_notes
         TIMESTAMPTZ requested_at
         TIMESTAMPTZ decided_at
+    }
+
+    PAYMENT_REVERSAL {
+        UUID id PK
+        UUID annulment_request_id FK
+        UUID payment_id FK
+        VARCHAR payment_method
+        NUMERIC amount
+        UUID reversed_by FK
+        UUID reversed_device_id FK
+        TIMESTAMPTZ reversed_at
     }
 
     SYNC_OPERATION {
@@ -780,6 +794,13 @@ erDiagram
     APP_USER ||--o{ AUTHORIZATION : requests
     APP_USER o|--o{ AUTHORIZATION : decides
     SALE ||--o{ ANNULMENT_REQUEST : requests
+    APP_USER ||--o{ ANNULMENT_REQUEST : requests
+    APP_USER o|--o{ ANNULMENT_REQUEST : decides
+    DEVICE ||--o{ ANNULMENT_REQUEST : records
+    ANNULMENT_REQUEST ||--o{ PAYMENT_REVERSAL : compensates
+    PAYMENT ||--o| PAYMENT_REVERSAL : reverses
+    APP_USER ||--o{ PAYMENT_REVERSAL : applies
+    DEVICE ||--o{ PAYMENT_REVERSAL : records
     DEVICE ||--o{ SYNC_OPERATION : submits
     APP_USER ||--o{ SYNC_OPERATION : creates
     SALE ||--o{ RECEIPT_DOCUMENT : documents

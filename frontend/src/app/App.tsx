@@ -15,6 +15,7 @@ import { WastePage } from '../features/waste/WastePage';
 import { ReturnsPage } from '../features/returns/ReturnsPage';
 import { SettlementPage } from '../features/settlements/SettlementPage';
 import { OperationsControlPage } from '../features/control/OperationsControlPage';
+import { AnnulmentsPage } from '../features/annulments/AnnulmentsPage';
 import { PendingOperationsPage } from '../offline/PendingOperationsPage';
 import { AppShell } from './AppShell';
 import { DashboardPage } from './DashboardPage';
@@ -36,6 +37,7 @@ export function App() {
   const canSeeReturns = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
   const canSeeSettlements = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
   const canSeeOperationsControl = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
+  const canSeeAnnulments = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'VENDEDOR'].includes(role));
   const isWarehouse = user.roles.includes('BODEGA');
   const isSeller = user.roles.includes('VENDEDOR');
   const canReviewProvisional = isAdmin || user.roles.includes('SUPERVISOR');
@@ -59,6 +61,7 @@ export function App() {
         <Route path="returns" element={canSeeReturns ? <ReturnsPage canReport canReceive={isAdmin || isWarehouse || user.roles.includes('SUPERVISOR')} deviceId={user.deviceId} /> : <Navigate to="/" replace />} />
         <Route path="settlements" element={canSeeSettlements ? <SettlementPage canClose={isAdmin || user.roles.includes('SUPERVISOR')} canReceiveCash={isAdmin || user.roles.includes('SUPERVISOR')} /> : <Navigate to="/" replace />} />
         <Route path="operations-control" element={canSeeOperationsControl ? <OperationsControlPage canDecide={isAdmin || user.roles.includes('SUPERVISOR')} /> : <Navigate to="/" replace />} />
+        <Route path="annulments" element={canSeeAnnulments ? <AnnulmentsPage canRequest canDecide={isAdmin || user.roles.includes('SUPERVISOR')} /> : <Navigate to="/" replace />} />
         <Route path="pending" element={<PendingOperationsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

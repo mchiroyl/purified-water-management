@@ -54,6 +54,7 @@ public class JdbcSettlementAdapter implements SettlementPort {
                         WHERE rlc.route_load_id=rl.id AND rlc.product_id=p.id),0) loaded_units,
                     COALESCE((SELECT SUM(si.quantity_base_units) FROM sale_item si JOIN sale sale ON sale.id=si.sale_id
                         WHERE sale.route_id=rl.route_id AND si.product_id=p.id AND sale.status='CONFIRMED'
+                          AND NOT EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=sale.id AND ar.status='APPROVED')
                           AND sale.created_at>=rl.started_at AND sale.created_at<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now())),0) sold_units,
                     COALESCE((SELECT SUM(ri.received_base_units) FROM return_item ri JOIN customer_return cr ON cr.id=ri.return_id
                         WHERE cr.route_id=rl.route_id AND ri.product_id=p.id AND cr.return_type='UNSOLD_GOOD'
@@ -77,16 +78,20 @@ public class JdbcSettlementAdapter implements SettlementPort {
         var financial = jdbc.sql("""
                 SELECT
                   COALESCE((SELECT SUM(sale.total) FROM sale WHERE sale.route_id=rl.route_id AND sale.status='CONFIRMED'
+                    AND NOT EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=sale.id AND ar.status='APPROVED')
                     AND sale.created_at>=rl.started_at AND sale.created_at<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now())),0) sales_total,
                   COALESCE((SELECT SUM(pay.amount) FROM payment pay JOIN sale sale ON sale.id=pay.sale_id
                     WHERE sale.route_id=rl.route_id AND pay.payment_method='CASH' AND pay.status='CONFIRMED'
+                      AND NOT EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=sale.id AND ar.status='APPROVED')
                       AND sale.created_at>=rl.started_at AND sale.created_at<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now())),0) expected_cash,
                   COALESCE((SELECT SUM(cd.amount) FROM cash_delivery cd WHERE cd.route_load_id=rl.id),0) delivered_cash,
                   COALESCE((SELECT SUM(pay.amount) FROM payment pay JOIN sale sale ON sale.id=pay.sale_id
                     WHERE sale.route_id=rl.route_id AND pay.payment_method='TRANSFER' AND pay.status='VERIFIED'
+                      AND NOT EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=sale.id AND ar.status='APPROVED')
                       AND sale.created_at>=rl.started_at AND sale.created_at<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now())),0) verified_transfers,
                   COALESCE((SELECT SUM(pay.amount) FROM payment pay JOIN sale sale ON sale.id=pay.sale_id
                     WHERE sale.route_id=rl.route_id AND pay.payment_method='CREDIT' AND pay.status='APPLIED'
+                      AND NOT EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=sale.id AND ar.status='APPROVED')
                       AND sale.created_at>=rl.started_at AND sale.created_at<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now())),0) applied_credit
                 FROM route_load rl WHERE rl.id=:id
                 """).param("id", routeLoadId).query((rs, row) -> new FinancialSource(
@@ -104,6 +109,7 @@ public class JdbcSettlementAdapter implements SettlementPort {
         addBlocker(result, loadId, "TRANSFER_PENDING", """
                 SELECT count(*) FROM payment p JOIN sale s ON s.id=p.sale_id JOIN route_load rl ON rl.route_id=s.route_id
                 WHERE rl.id=:id AND p.payment_method='TRANSFER' AND p.status='PENDING_VERIFICATION' AND s.created_at>=rl.started_at
+                AND NOT EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=s.id AND ar.status='APPROVED')
                 """);
         addBlocker(result, loadId, "WASTE_PENDING", """
                 SELECT count(*) FROM waste w JOIN route_load rl ON rl.route_id=w.route_id WHERE rl.id=:id
