@@ -194,10 +194,14 @@ export type LocalReturnRecord = {
   localReturnId: string;
   serverReturnId?: string | null;
   routeRunId: string;
-  customerId: string;
+  sellerId: string;
+  deviceId: string;
+  returnType: 'UNSOLD_GOOD' | 'CUSTOMER_RETURN';
+  customerId?: string | null;
   localSaleId?: string | null;
   clientOperationId: string;
   status: string;
+  reason: string;
   syncStatus: SyncStatus;
   reportedAtLocal: string;
 };
@@ -522,6 +526,21 @@ export function createMobileRepositories(db: MobileDatabase) {
         for (const item of items) await transaction.objectStore('localWasteItems').put(item);
         for (const item of evidence) await transaction.objectStore('localWasteEvidence').put(item);
         for (const file of files) await transaction.objectStore('fileCache').put(file);
+        await transaction.objectStore('outboxOperations').add(outbox);
+        await transaction.done;
+      } catch (error) {
+        return abortAndRethrow(transaction, error);
+      }
+    },
+    async saveReturnWithOutbox(
+      item: LocalReturnRecord,
+      items: LocalReturnItemRecord[],
+      outbox: OutboxRecord,
+    ) {
+      const transaction = db.transaction(['localReturns', 'localReturnItems', 'outboxOperations'], 'readwrite');
+      try {
+        await transaction.objectStore('localReturns').put(item);
+        for (const detail of items) await transaction.objectStore('localReturnItems').put(detail);
         await transaction.objectStore('outboxOperations').add(outbox);
         await transaction.done;
       } catch (error) {

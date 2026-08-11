@@ -124,6 +124,24 @@ describe('SyncEngine', () => {
     db.close();
   });
 
+  it('marca la devolución como pendiente de recepción física tras sincronizar', async () => {
+    const db = await openMobileDatabase(newDatabaseName('return'));
+    const repositories = createMobileRepositories(db);
+    await repositories.localReturns.put({ localReturnId: 'return-1', routeRunId: 'route-1',
+      sellerId: 'seller-1', deviceId: 'device-1', returnType: 'UNSOLD_GOOD', customerId: null,
+      clientOperationId: 'return-1', status: 'LOCAL_PENDING', reason: 'Producto no vendido',
+      syncStatus: 'PENDING', reportedAtLocal: '2026-08-10T20:00:00-06:00' });
+    await repositories.outboxOperations.put({ ...operation('return-1'), entityType: 'RETURN', aggregateLocalId: 'return-1' });
+    const engine = new SyncEngine({ database: async () => db, checkConnection: async () => 'ONLINE',
+      transport: { send: async () => [{ clientOperationId: 'return-1', status: 'ACCEPTED', serverEntityId: 'server-return-1' }] } });
+
+    await engine.sync();
+
+    expect(await repositories.localReturns.get('return-1')).toMatchObject({ status: 'PENDING_RECEIPT',
+      syncStatus: 'SYNCED', serverReturnId: 'server-return-1' });
+    db.close();
+  });
+
   it('convierte un fallo de transporte en reintento y no reenvía antes de tiempo', async () => {
     let now = Date.parse('2026-08-11T02:00:00Z');
     const db = await openMobileDatabase(newDatabaseName('retry'));

@@ -440,22 +440,34 @@ erDiagram
 
     CUSTOMER_RETURN {
         UUID id PK
-        UUID route_run_id FK
+        UUID client_reference UK
+        VARCHAR return_type
+        UUID route_id FK
+        UUID route_location_id FK
         UUID customer_id FK
         UUID sale_id FK
+        UUID seller_id FK
         UUID reported_by FK
+        UUID device_id FK
+        VARCHAR reason
         UUID received_by FK
+        UUID received_device_id FK
+        UUID warehouse_location_id FK
         VARCHAR status
-        TIMESTAMPTZ reported_at
+        TIMESTAMPTZ reported_at_local
+        TIMESTAMPTZ received_at_server
         TIMESTAMPTZ received_at
+        VARCHAR receipt_notes
     }
 
     RETURN_ITEM {
         UUID id PK
         UUID return_id FK
         UUID presentation_id FK
+        UUID product_id FK
         NUMERIC presentation_quantity
-        NUMERIC quantity_base_units
+        NUMERIC reported_base_units
+        NUMERIC received_base_units
         VARCHAR condition
     }
 
@@ -711,11 +723,17 @@ erDiagram
     CREDIT_ACCOUNT ||--o{ CREDIT_MOVEMENT : posts
     SALE o|--o{ CREDIT_MOVEMENT : charges
     PAYMENT o|--o{ CREDIT_MOVEMENT : settles
-    ROUTE_RUN ||--o{ CUSTOMER_RETURN : receives
+    ROUTE ||--o{ CUSTOMER_RETURN : reports
+    INVENTORY_LOCATION ||--o{ CUSTOMER_RETURN : route_stock
+    INVENTORY_LOCATION o|--o{ CUSTOMER_RETURN : receives_in_warehouse
+    SELLER ||--o{ CUSTOMER_RETURN : declares
+    APP_USER ||--o{ CUSTOMER_RETURN : reports
+    DEVICE ||--o{ CUSTOMER_RETURN : captures
     CUSTOMER o|--o{ CUSTOMER_RETURN : returns
     SALE o|--o{ CUSTOMER_RETURN : references
     CUSTOMER_RETURN ||--|{ RETURN_ITEM : contains
     PRODUCT_PRESENTATION ||--o{ RETURN_ITEM : returned_as
+    PRODUCT ||--o{ RETURN_ITEM : returned_product
     ROUTE ||--o{ WASTE : reports
     INVENTORY_LOCATION ||--o{ WASTE : affects
     SELLER ||--o{ WASTE : declares

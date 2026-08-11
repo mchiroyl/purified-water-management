@@ -116,6 +116,19 @@ public class InventoryApplicationService {
                 referenceId, actorId, deviceId), current.version());
     }
 
+    @Transactional
+    public void receive(UUID locationId, UUID productId, BigDecimal quantity, String movementType,
+                        String reason, String referenceType, UUID referenceId, UUID actorId, UUID deviceId) {
+        if (quantity == null || quantity.signum() <= 0) {
+            throw validation("INVENTORY_RECEIPT_QUANTITY", "La cantidad recibida debe ser mayor que cero.");
+        }
+        var current = persistence.lockBalance(locationId, productId);
+        var balanceAfter = InventoryStockPolicy.balanceAfter(current.quantityBaseUnits(), quantity);
+        persistence.storeMovement(new InventoryPort.NewMovement(UUID.randomUUID(), locationId, productId,
+                movementType, quantity, current.quantityBaseUnits(), balanceAfter, reason, referenceType,
+                referenceId, actorId, deviceId), current.version());
+    }
+
     @Transactional(readOnly = true)
     public List<InventoryMovementResponse> findMovements(UUID locationId, UUID userId, boolean restrictedToSeller) {
         Optional<UUID> seller = restrictedToSeller ? Optional.of(userId) : Optional.empty();

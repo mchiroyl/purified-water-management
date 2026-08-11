@@ -163,6 +163,13 @@ movimiento exclusivo `WASTE_OUT`, rechazo HTTP 403 al vendedor y cero mutaciones
 Entregables: devolución de cliente y recepción de producto bueno separadas de merma.  
 Verificación: movimientos y estados correctos.
 
+Estado: **completada**. Separa `UNSOLD_GOOD` de `CUSTOMER_RETURN`, admite captura offline y
+recepción física total, parcial o rechazada por bodega/supervisión. El producto no vendido mueve
+existencia de ruta a bodega mediante `RETURN_OUT`/`RETURN_IN`; la devolución del cliente solamente
+ingresa a bodega con `RETURN_IN`. PostgreSQL temporal verificó migración 13, rechazo HTTP 403 al
+vendedor, estados `PARTIALLY_RECEIVED` y `RECEIVED`, diferencia pendiente de 2 unidades, inventario
+de ruta 100→92, bodega 0→13 y cero registros de merma.
+
 ### FASE 23 — Liquidaciones
 
 Entregables: conciliación física/financiera, diferencias y cierre inmutable.  
@@ -273,4 +280,6 @@ Verificación: tests backend/frontend/integración/E2E, Docker build, Compose, h
 | 18 | Completada | SyncEngine independiente con Outbox IndexedDB, dependencias, batches, resultados parciales, estados visibles, recuperación, backoff+jitter, lifecycle, botón manual y Background Sync progresivo verificados. |
 | 19 | Completada | Idempotencia por dispositivo/operación, hash canónico, resultados persistidos, dependencias, reintentos transaccionales y lote HTTP; cinco reenvíos producen una sola fila y un solo efecto. |
 | 20 | Completada | Cliente ocasional y provisional offline con UUID estable, Outbox, revisión humana, detección de duplicados, aprobación/rechazo/fusión inmutable y restricciones de crédito/precio; venta histórica preservada en PostgreSQL temporal. |
-| 21–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |
+| 21 | Completada | Merma offline, revisión segregada/parcial, alertas, movimiento `WASTE_OUT` y prueba PostgreSQL antifraude. |
+| 22 | Completada | Producto no vendido y devolución de cliente separados de merma; recepción física, movimientos y diferencia verificados en PostgreSQL. |
+| 23–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |

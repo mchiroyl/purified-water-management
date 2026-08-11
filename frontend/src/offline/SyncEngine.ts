@@ -283,7 +283,8 @@ export class SyncEngine {
     } else if (operation.entityType === 'RETURN') {
       const store = transaction.objectStore('localReturns');
       const value = await store.get(operation.aggregateLocalId);
-      if (value) await store.put({ ...value, syncStatus, serverReturnId: serverEntityId ?? value.serverReturnId });
+      if (value) await store.put({ ...value, syncStatus, serverReturnId: serverEntityId ?? value.serverReturnId,
+        status: syncStatus === 'SYNCED' ? 'PENDING_RECEIPT' : value.status });
     }
   }
 
