@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useSession } from '../features/auth/SessionContext';
 import { LoginPage } from '../features/auth/LoginPage';
+import { PasswordChangePage } from '../features/auth/PasswordChangePage';
 import { CompanyConfigurationPage } from '../features/company/CompanyConfigurationPage';
 import { FelConfigurationPage } from '../features/company/FelConfigurationPage';
 import { ProductCatalogPage } from '../features/catalog/ProductCatalogPage';
@@ -27,6 +28,7 @@ export function App() {
   const { user, initializing } = useSession();
   if (initializing) return <main className="auth-page"><section className="auth-card"><p>Restaurando sesión…</p></section></main>;
   if (!user) return <LoginPage />;
+  if (user.mustChangePassword) return <PasswordChangePage />;
   const isAdmin = user.roles.includes('ADMINISTRADOR');
   const canSeeCustomers = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'VENDEDOR'].includes(role));
   const canSeeRoutes = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));

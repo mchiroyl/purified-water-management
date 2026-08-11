@@ -1,0 +1,18 @@
+server:
+  forward-headers-strategy: native
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+app:
+  security:
+    cookie-secure: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

@@ -39,4 +39,7 @@ public class JpaAuthenticationAdapter implements AuthenticationPersistencePort {
     }
     public void saveSession(AuthSession session) { sessions.save((RefreshSessionJpaEntity) session); }
     public void revokeFamily(UUID familyId, Instant revokedAt, String reason) { sessions.revokeFamily(familyId, revokedAt, reason); }
+    public void revokeUserSessions(UUID userId, Instant revokedAt, String reason) {
+        sessions.revokeUserSessions(userId, revokedAt, reason);
+    }
 }

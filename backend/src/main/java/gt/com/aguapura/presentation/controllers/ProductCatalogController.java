@@ -4,10 +4,13 @@ import gt.com.aguapura.application.dto.catalog.CreateProductRequest;
 import gt.com.aguapura.application.dto.catalog.ProductResponse;
 import gt.com.aguapura.application.dto.catalog.UpdatePresentationConversionRequest;
 import gt.com.aguapura.application.services.ProductCatalogApplicationService;
+import gt.com.aguapura.application.services.AuditApplicationService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -20,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PutMapping;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -28,9 +32,11 @@ import java.util.UUID;
 public class ProductCatalogController {
 
     private final ProductCatalogApplicationService service;
+    private final AuditApplicationService audit;
 
-    public ProductCatalogController(ProductCatalogApplicationService service) {
+    public ProductCatalogController(ProductCatalogApplicationService service, AuditApplicationService audit) {
         this.service = service;
+        this.audit = audit;
     }
 
     @GetMapping
@@ -41,30 +47,48 @@ public class ProductCatalogController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','BODEGA')")
-    public ProductResponse create(@Valid @RequestBody CreateProductRequest request) {
-        return service.create(request);
+    public ProductResponse create(@Valid @RequestBody CreateProductRequest request, @AuthenticationPrincipal Jwt jwt) {
+        var result = service.create(request);
+        audit.record(actor(jwt), device(jwt), "CREATE_PRODUCT", "PRODUCT", result.id(), Map.of(),
+                Map.of("code", result.code(), "name", result.name(), "active", result.active()));
+        return result;
     }
 
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','BODEGA')")
-    public ProductResponse setActive(@PathVariable UUID id, @Valid @RequestBody StatusRequest request) {
-        return service.setActive(id, request.active());
+    public ProductResponse setActive(@PathVariable UUID id, @Valid @RequestBody StatusRequest request,
+                                     @AuthenticationPrincipal Jwt jwt) {
+        var result = service.setActive(id, request.active());
+        audit.record(actor(jwt), device(jwt), "PRODUCT_STATUS_CHANGE", "PRODUCT", id, Map.of(),
+                Map.of("active", result.active()));
+        return result;
     }
 
     @PutMapping("/{productId}/presentations/{presentationId}/conversion")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','BODEGA')")
     public ProductResponse updateConversion(@PathVariable UUID productId, @PathVariable UUID presentationId,
-                                            @Valid @RequestBody UpdatePresentationConversionRequest request) {
-        return service.updateConversion(productId, presentationId, request);
+                                            @Valid @RequestBody UpdatePresentationConversionRequest request,
+                                            @AuthenticationPrincipal Jwt jwt) {
+        var result = service.updateConversion(productId, presentationId, request);
+        audit.record(actor(jwt), device(jwt), "PRESENTATION_CONVERSION_CHANGE", "PRESENTATION", presentationId,
+                Map.of(), Map.of("productId", productId, "conversionFactor", request.conversionFactor()));
+        return result;
     }
 
     @PatchMapping("/{productId}/presentations/{presentationId}/status")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','BODEGA')")
     public ProductResponse setPresentationActive(@PathVariable UUID productId, @PathVariable UUID presentationId,
-                                                 @Valid @RequestBody StatusRequest request) {
-        return service.setPresentationActive(productId, presentationId, request.active());
+                                                 @Valid @RequestBody StatusRequest request,
+                                                 @AuthenticationPrincipal Jwt jwt) {
+        var result = service.setPresentationActive(productId, presentationId, request.active());
+        audit.record(actor(jwt), device(jwt), "PRESENTATION_STATUS_CHANGE", "PRESENTATION", presentationId,
+                Map.of(), Map.of("productId", productId, "active", request.active()));
+        return result;
     }
 
     public record StatusRequest(@NotNull Boolean active) {
     }
+
+    private UUID actor(Jwt jwt) { return UUID.fromString(jwt.getClaimAsString("userId")); }
+    private UUID device(Jwt jwt) { return UUID.fromString(jwt.getClaimAsString("deviceId")); }
 }

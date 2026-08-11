@@ -2,11 +2,13 @@ package gt.com.aguapura.application.services;
 
 import gt.com.aguapura.application.dto.auth.AuthResponse;
 import gt.com.aguapura.application.dto.auth.AuthenticationResult;
+import gt.com.aguapura.application.dto.auth.ChangePasswordRequest;
 import gt.com.aguapura.application.dto.auth.LoginRequest;
 import gt.com.aguapura.application.dto.auth.SessionUserResponse;
 import gt.com.aguapura.application.ports.AccessTokenIssuer;
 import gt.com.aguapura.application.ports.AuthenticationPersistencePort;
 import gt.com.aguapura.application.ports.OpaqueTokenPort;
+import gt.com.aguapura.application.ports.PasswordHashingPort;
 import gt.com.aguapura.application.ports.PasswordVerificationPort;
 import gt.com.aguapura.application.ports.SessionPolicy;
 import gt.com.aguapura.domain.enums.DeviceStatus;
@@ -35,17 +37,19 @@ public class AuthApplicationService {
     private final OpaqueTokenPort tokenHashing;
     private final SessionPolicy policy;
     private final AuditApplicationService audit;
+    private final PasswordHashingPort passwordHashing;
 
     public AuthApplicationService(AuthenticationPersistencePort persistence,
                                   PasswordVerificationPort passwordVerifier, AccessTokenIssuer jwtTokens,
                                   OpaqueTokenPort tokenHashing, SessionPolicy policy,
-                                  AuditApplicationService audit) {
+                                  AuditApplicationService audit, PasswordHashingPort passwordHashing) {
         this.persistence = persistence;
         this.passwordVerifier = passwordVerifier;
         this.jwtTokens = jwtTokens;
         this.tokenHashing = tokenHashing;
         this.policy = policy;
         this.audit = audit;
+        this.passwordHashing = passwordHashing;
     }
 
     @Transactional(noRollbackFor = BusinessException.class)
@@ -63,9 +67,14 @@ public class AuthApplicationService {
         if (user.isTemporarilyLocked(now)) {
             audit.record(user.getId(), null, "LOGIN_FAILED", "AUTHENTICATION", user.getId(), Map.of(),
                     Map.of("username", username, "reason", "TEMPORARILY_LOCKED"));
-            throw new BusinessException("AUTH_TEMPORARILY_LOCKED", "La cuenta está bloqueada temporalmente.", ErrorCategory.UNAUTHORIZED);
+            throw invalidCredentials();
         }
-        if (user.getStatus() != UserStatus.ACTIVE || !passwordVerifier.matches(request.password(), user.getPasswordHash())) {
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            audit.record(user.getId(), null, "LOGIN_FAILED", "AUTHENTICATION", user.getId(), Map.of(),
+                    Map.of("username", username, "reason", "ACCOUNT_UNAVAILABLE"));
+            throw invalidCredentials();
+        }
+        if (!passwordVerifier.matches(request.password(), user.getPasswordHash())) {
             user.registerFailedAttempt(MAXIMUM_FAILED_ATTEMPTS, now.plus(LOCK_DURATION));
             persistence.saveUser(user);
             audit.record(user.getId(), null, "LOGIN_FAILED", "AUTHENTICATION", user.getId(), Map.of(),
@@ -124,6 +133,24 @@ public class AuthApplicationService {
                     audit.record(session.getUserId(), session.getDeviceId(), "LOGOUT", "AUTHENTICATION",
                             session.getUserId(), Map.of(), Map.of("reason", "USER_REQUEST"));
                 });
+    }
+
+    @Transactional
+    public void changePassword(UUID userId, ChangePasswordRequest request) {
+        var user = persistence.findUserById(userId).orElseThrow(AuthApplicationService::invalidCredentials);
+        if (user.getStatus() != UserStatus.ACTIVE
+                || !passwordVerifier.matches(request.currentPassword(), user.getPasswordHash())) {
+            throw invalidCredentials();
+        }
+        if (passwordVerifier.matches(request.newPassword(), user.getPasswordHash())) {
+            throw new BusinessException("PASSWORD_REUSE", "La nueva contrasena debe ser diferente.", ErrorCategory.VALIDATION);
+        }
+        user.changePassword(passwordHashing.encode(request.newPassword()));
+        persistence.saveUser(user);
+        Instant now = Instant.now();
+        persistence.revokeUserSessions(userId, now, "PASSWORD_CHANGED");
+        audit.record(userId, null, "PASSWORD_CHANGED", "AUTHENTICATION", userId, Map.of(),
+                Map.of("sessionsRevoked", true));
     }
 
     private AuthenticationResult issueSession(AuthenticationPersistencePort.AuthUser user, UUID deviceId, UUID familyId) {

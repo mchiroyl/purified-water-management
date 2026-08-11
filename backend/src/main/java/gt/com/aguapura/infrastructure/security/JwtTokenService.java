@@ -38,6 +38,7 @@ public class JwtTokenService implements AccessTokenIssuer {
                 .claim("userId", user.getId().toString())
                 .claim("deviceId", deviceId.toString())
                 .claim("roles", roles)
+                .claim("mustChangePassword", user.isMustChangePassword())
                 .build();
         var header = JwsHeader.with(MacAlgorithm.HS256).build();
         var token = encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();

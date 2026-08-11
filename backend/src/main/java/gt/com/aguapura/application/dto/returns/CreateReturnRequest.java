@@ -21,7 +21,7 @@ public record CreateReturnRequest(
         UUID saleId,
         @NotBlank @Size(max = 500) String reason,
         @NotNull Instant reportedAtLocal,
-        @NotEmpty @Valid List<Item> items) {
+        @NotEmpty @Size(max = 100) @Valid List<Item> items) {
     public record Item(@NotNull UUID presentationId,
                        @NotNull @DecimalMin(value = "0.0001") BigDecimal presentationQuantity) {
     }

@@ -21,6 +21,7 @@ public interface AuthenticationPersistencePort {
                               Instant issuedAt, Instant expiresAt);
     void saveSession(AuthSession session);
     void revokeFamily(UUID familyId, Instant revokedAt, String reason);
+    void revokeUserSessions(UUID userId, Instant revokedAt, String reason);
 
     interface AuthUser {
         UUID getId();
@@ -33,6 +34,7 @@ public interface AuthenticationPersistencePort {
         void registerSuccessfulLogin();
         boolean isTemporarilyLocked(Instant now);
         void unlockIfExpired(Instant now);
+        void changePassword(String newPasswordHash);
     }
 
     interface AuthDevice {

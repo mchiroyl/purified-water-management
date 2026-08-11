@@ -70,12 +70,24 @@ public class AuthorizationIncidentApplicationService {
         if (request.routeId() != null && restrictedToSeller && !persistence.sellerOwnsRoute(actorId, request.routeId())) {
             throw forbidden("INCIDENT_ROUTE_FORBIDDEN", "La ruta no pertenece al vendedor.");
         }
+        if (request.settlementId() != null && restrictedToSeller
+                && !persistence.sellerOwnsResource(actorId, "SETTLEMENT", request.settlementId())) {
+            throw forbidden("INCIDENT_SETTLEMENT_FORBIDDEN", "La liquidación no pertenece al vendedor.");
+        }
         if (request.settlementId() != null && request.routeId() != null
                 && !persistence.settlementBelongsToRoute(request.settlementId(), request.routeId())) {
             throw validation("INCIDENT_SETTLEMENT_ROUTE", "La liquidación no corresponde a la ruta.");
         }
+        String referenceType = blankToNull(request.referenceType());
+        if (referenceType != null && !persistence.resourceExists(referenceType, request.referenceId())) {
+            throw validation("INCIDENT_REFERENCE_INVALID", "La referencia de la incidencia no existe o no es válida.");
+        }
+        if (referenceType != null && restrictedToSeller
+                && !persistence.sellerOwnsResource(actorId, referenceType, request.referenceId())) {
+            throw forbidden("INCIDENT_REFERENCE_FORBIDDEN", "La referencia no pertenece al vendedor.");
+        }
         return incident(persistence.createIncident(new AuthorizationIncidentPort.NewIncident(UUID.randomUUID(),
-                request.routeId(), request.settlementId(), blankToNull(request.referenceType()), request.referenceId(),
+                request.routeId(), request.settlementId(), referenceType, request.referenceId(),
                 request.incidentType(), request.severity(), request.description().trim(), actorId, deviceId)));
     }
 

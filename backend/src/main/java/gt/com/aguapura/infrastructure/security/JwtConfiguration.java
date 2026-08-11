@@ -11,6 +11,7 @@ import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 
@@ -34,6 +35,10 @@ public class JwtConfiguration {
         if (decoded.length < 32) {
             throw new IllegalStateException("JWT_SECRET_BASE64 debe contener al menos 32 bytes");
         }
+        String printable = new String(decoded, java.nio.charset.StandardCharsets.UTF_8).toLowerCase(java.util.Locale.ROOT);
+        if (printable.contains("change-this") || printable.contains("development-secret")) {
+            throw new IllegalStateException("JWT_SECRET_BASE64 no puede usar un secreto conocido o de ejemplo");
+        }
         return new SecretKeySpec(decoded, "HmacSHA256");
     }
 
@@ -43,9 +48,11 @@ public class JwtConfiguration {
     }
 
     @Bean
-    JwtDecoder jwtDecoder(SecretKey secretKey, SecurityProperties properties) {
+    JwtDecoder jwtDecoder(SecretKey secretKey, SecurityProperties properties,
+                          ActivePrincipalJwtValidator activePrincipalValidator) {
         var decoder = NimbusJwtDecoder.withSecretKey(secretKey).macAlgorithm(MacAlgorithm.HS256).build();
-        decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(properties.issuer()));
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
+                JwtValidators.createDefaultWithIssuer(properties.issuer()), activePrincipalValidator));
         return decoder;
     }
 }

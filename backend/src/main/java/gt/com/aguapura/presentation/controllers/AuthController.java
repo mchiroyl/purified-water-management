@@ -1,6 +1,7 @@
 package gt.com.aguapura.presentation.controllers;
 
 import gt.com.aguapura.application.dto.auth.AuthResponse;
+import gt.com.aguapura.application.dto.auth.ChangePasswordRequest;
 import gt.com.aguapura.application.dto.auth.LoginRequest;
 import gt.com.aguapura.application.services.AuthApplicationService;
 import gt.com.aguapura.application.services.AuditApplicationService;
@@ -9,6 +10,8 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -52,6 +55,16 @@ public class AuthController {
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(@CookieValue(name = REFRESH_COOKIE, required = false) String refreshToken) {
         service.logout(refreshToken);
+        var expired = ResponseCookie.from(REFRESH_COOKIE, "")
+                .httpOnly(true).secure(properties.cookieSecure()).sameSite("Strict")
+                .path("/api/auth").maxAge(0).build();
+        return ResponseEntity.noContent().header(HttpHeaders.SET_COOKIE, expired.toString()).build();
+    }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<Void> changePassword(@Valid @RequestBody ChangePasswordRequest request,
+                                               @AuthenticationPrincipal Jwt jwt) {
+        service.changePassword(java.util.UUID.fromString(jwt.getClaimAsString("userId")), request);
         var expired = ResponseCookie.from(REFRESH_COOKIE, "")
                 .httpOnly(true).secure(properties.cookieSecure()).sameSite("Strict")
                 .path("/api/auth").maxAge(0).build();

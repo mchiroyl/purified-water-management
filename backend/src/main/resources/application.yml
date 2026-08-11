@@ -4,7 +4,7 @@ spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/agua_pura}
     username: ${SPRING_DATASOURCE_USERNAME:agua_pura_app}
-    password: ${SPRING_DATASOURCE_PASSWORD:change-this-database-password}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     hikari:
       maximum-pool-size: 10
       minimum-idle: 2
@@ -56,15 +56,20 @@ springdoc:
 app:
   security:
     issuer: ${JWT_ISSUER:agua-pura-local}
-    secret-base64: ${JWT_SECRET_BASE64:Y2hhbmdlLXRoaXMtZGV2ZWxvcG1lbnQtc2VjcmV0LWtleS0xMjM0NTY3ODkw}
+    secret-base64: ${JWT_SECRET_BASE64}
     access-token-minutes: ${ACCESS_TOKEN_MINUTES:15}
     refresh-token-days: ${REFRESH_TOKEN_DAYS:7}
     cookie-secure: ${COOKIE_SECURE:false}
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+  traffic:
+    enabled: ${TRAFFIC_GUARD_ENABLED:true}
+    login-requests-per-minute: ${LOGIN_REQUESTS_PER_MINUTE:10}
+    api-requests-per-minute: ${API_REQUESTS_PER_MINUTE:600}
+    max-json-bytes: ${MAX_JSON_BYTES:2097152}
   bootstrap:
     username: ${BOOTSTRAP_ADMIN_USERNAME:admin}
     email: ${BOOTSTRAP_ADMIN_EMAIL:admin@example.invalid}
-    password: ${BOOTSTRAP_ADMIN_PASSWORD:replace-with-a-long-random-password}
+    password: ${BOOTSTRAP_ADMIN_PASSWORD}
     force-password-change: ${BOOTSTRAP_ADMIN_FORCE_PASSWORD_CHANGE:true}
   storage:
     path: ${STORAGE_PATH:./storage}

@@ -13,7 +13,7 @@ import java.util.UUID;
 
 public record ConfirmReturnReceiptRequest(
         @NotNull UUID warehouseLocationId,
-        @NotEmpty @Valid List<ItemReceipt> items,
+        @NotEmpty @Size(max = 100) @Valid List<ItemReceipt> items,
         @NotBlank @Size(max = 500) String notes) {
     public record ItemReceipt(@NotNull UUID itemId,
                               @NotNull @DecimalMin("0") BigDecimal receivedBaseUnits) {

@@ -18,8 +18,8 @@ public record CreateWasteRequest(
         @NotNull UUID routeId,
         @NotBlank @Size(max = 500) String reason,
         @NotNull Instant occurredAtLocal,
-        @NotEmpty @Valid List<Item> items,
-        @NotNull @Valid List<Evidence> evidence) {
+        @NotEmpty @Size(max = 100) @Valid List<Item> items,
+        @NotNull @Size(max = 100) @Valid List<Evidence> evidence) {
 
     public record Item(
             @NotNull UUID wasteTypeId,

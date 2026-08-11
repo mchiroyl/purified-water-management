@@ -135,6 +135,11 @@ public class UserJpaEntity implements AuthenticationPersistencePort.AuthUser {
     }
 
     public void registerFailedAttempt(int maximumAttempts, Instant lockUntil) {
+        if (status == UserStatus.INACTIVE) {
+            failedAttempts = 0;
+            lockedUntil = null;
+            return;
+        }
         failedAttempts++;
         if (failedAttempts >= maximumAttempts) {
             status = UserStatus.LOCKED;
@@ -158,5 +163,13 @@ public class UserJpaEntity implements AuthenticationPersistencePort.AuthUser {
         if (status == UserStatus.LOCKED && lockedUntil != null && !lockedUntil.isAfter(now)) {
             registerSuccessfulLogin();
         }
+    }
+
+    @Override
+    public void changePassword(String newPasswordHash) {
+        passwordHash = newPasswordHash;
+        mustChangePassword = false;
+        failedAttempts = 0;
+        lockedUntil = null;
     }
 }

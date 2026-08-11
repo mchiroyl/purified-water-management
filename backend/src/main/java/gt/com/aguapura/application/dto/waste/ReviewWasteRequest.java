@@ -14,7 +14,7 @@ import java.util.UUID;
 
 public record ReviewWasteRequest(
         @NotBlank @Pattern(regexp = "APPROVE|REJECT") String decision,
-        @NotEmpty @Valid List<ItemApproval> items,
+        @NotEmpty @Size(max = 100) @Valid List<ItemApproval> items,
         @NotBlank @Size(max = 500) String notes) {
     public record ItemApproval(@NotNull UUID itemId,
                                @NotNull @DecimalMin(value = "0") BigDecimal approvedBaseUnits) {

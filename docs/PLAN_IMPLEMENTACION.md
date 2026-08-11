@@ -351,4 +351,5 @@ Verificación: tests backend/frontend/integración/E2E, Docker build, Compose, h
 | 28 | Completada | Dashboard oficial por zona empresarial, alcance por rol, pendientes y alertas verificados en API y UI. |
 | 29 | Completada | Reportes paginados/exportables de ventas, mermas y liquidaciones con filtros y alcance por rol. |
 | 30 | Completada | Auditoría inmutable, filtrable, correlacionada y sanitizada con cobertura de eventos críticos. |
-| 31–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |
+| 31 | Completada | Escaneo de seguridad y remediación: secretos obligatorios/rotados, puertos internos no publicados, rate limiting, límites JSON, cambio obligatorio de contraseña, revocación JWT inmediata, refresh serializado, aislamiento IndexedDB, TLS productivo y auditoría ampliada; pruebas y contenedores saludables. |
+| 32–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |

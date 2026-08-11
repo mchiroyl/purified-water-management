@@ -585,3 +585,31 @@ export async function replaceRoutePackage(db: MobileDatabase, routePackage: Rout
   for (const value of routePackage.routeInventory) await transaction.objectStore('routeInventory').put(value);
   await transaction.done;
 }
+
+const SESSION_OWNER_KEY = 'session-owner';
+
+export async function clearMobileData(db?: MobileDatabase): Promise<void> {
+  const database = db ?? await openMobileDatabase();
+  const names = Array.from(database.objectStoreNames) as MobileStoreName[];
+  const transaction = database.transaction(names, 'readwrite');
+  for (const name of names) await transaction.objectStore(name).clear();
+  await transaction.done;
+}
+
+export async function prepareMobileDataForSession(
+  userId: string,
+  deviceId: string,
+  db?: MobileDatabase,
+): Promise<void> {
+  const database = db ?? await openMobileDatabase();
+  const existing = await database.get('appMetadata', SESSION_OWNER_KEY);
+  const owner = existing?.value as { userId?: string; deviceId?: string } | undefined;
+  if (owner && (owner.userId !== userId || owner.deviceId !== deviceId)) {
+    await clearMobileData(database);
+  }
+  await database.put('appMetadata', {
+    key: SESSION_OWNER_KEY,
+    value: { userId, deviceId },
+    updatedAt: new Date().toISOString(),
+  });
+}

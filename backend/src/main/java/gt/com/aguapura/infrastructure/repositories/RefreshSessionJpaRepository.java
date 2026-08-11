@@ -2,6 +2,7 @@ package gt.com.aguapura.infrastructure.repositories;
 
 import gt.com.aguapura.infrastructure.database.entities.RefreshSessionJpaEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
@@ -10,6 +11,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface RefreshSessionJpaRepository extends JpaRepository<RefreshSessionJpaEntity, UUID> {
+    @Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     Optional<RefreshSessionJpaEntity> findByTokenHash(String tokenHash);
 
     @Modifying
@@ -19,4 +21,8 @@ public interface RefreshSessionJpaRepository extends JpaRepository<RefreshSessio
     @Modifying
     @Query("update RefreshSessionJpaEntity s set s.revokedAt = :revokedAt, s.revokeReason = :reason where s.userId = :userId and s.deviceId = :deviceId and s.revokedAt is null")
     int revokeDeviceSessions(UUID userId, UUID deviceId, Instant revokedAt, String reason);
+
+    @Modifying
+    @Query("update RefreshSessionJpaEntity s set s.revokedAt = :revokedAt, s.revokeReason = :reason where s.userId = :userId and s.revokedAt is null")
+    int revokeUserSessions(UUID userId, Instant revokedAt, String reason);
 }
