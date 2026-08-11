@@ -101,6 +101,11 @@ h2 { margin-top: 0; }
 .tier-editor { display: grid; gap: .65rem; margin-top: 1rem; }
 .tier-row { display: grid; gap: .6rem; padding: .8rem; border: 1px solid var(--line); border-radius: .75rem; background: #f8fcfd; align-items: end; }
 .pricing-list { display: grid; gap: .8rem; }
+.inventory-grid { display: grid; gap: 1rem; }
+.movement-row > div { display: grid; gap: .2rem; }
+.movement-row > div:last-child { text-align: right; }
+.positive { color: #087a54; }
+.negative { color: #b23a48; }
 .version-block { margin-top: .8rem; padding-top: .8rem; border-top: 1px solid var(--line); }
 .tier-summary { display: block; padding: .35rem 0; color: var(--muted); }
 
@@ -121,6 +126,7 @@ h2 { margin-top: 0; }
   .inline-form h2, .inline-form .wide { grid-column: 1 / -1; }
   .tier-row { grid-template-columns: 2fr 1fr 1fr 1fr auto; }
   .pricing-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .inventory-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 600px) {
