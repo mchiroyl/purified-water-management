@@ -9,6 +9,7 @@ import { RoutesPage } from '../features/routes/RoutesPage';
 import { PricingPage } from '../features/pricing/PricingPage';
 import { InventoryPage } from '../features/inventory/InventoryPage';
 import { RouteLoadsPage } from '../features/loading/RouteLoadsPage';
+import { SalesPage } from '../features/sales/SalesPage';
 import { AppShell } from './AppShell';
 import { DashboardPage } from './DashboardPage';
 
@@ -23,6 +24,7 @@ export function App() {
   const canSeeInventory = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
   const canManageInventory = user.roles.some(role => ['ADMINISTRADOR', 'BODEGA'].includes(role));
   const canSeeLoads = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
+  const canSeeSales = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'VENDEDOR'].includes(role));
   const isWarehouse = user.roles.includes('BODEGA');
   const isSeller = user.roles.includes('VENDEDOR');
   return (
@@ -37,6 +39,7 @@ export function App() {
         <Route path="pricing" element={canSeePricing ? <PricingPage canManage={isAdmin} canApprove={isAdmin || user.roles.includes('SUPERVISOR')} canRequestDiscount={user.roles.includes('VENDEDOR')} /> : <Navigate to="/" replace />} />
         <Route path="inventory" element={canSeeInventory ? <InventoryPage canManage={canManageInventory} /> : <Navigate to="/" replace />} />
         <Route path="loads" element={canSeeLoads ? <RouteLoadsPage canPrepare={isAdmin || isWarehouse} canConfirmWarehouse={isAdmin || isWarehouse} canReceive={isAdmin || isSeller} canStart={isAdmin || isSeller} canCorrect={isAdmin || isWarehouse} /> : <Navigate to="/" replace />} />
+        <Route path="sales" element={canSeeSales ? <SalesPage canSell={isAdmin || isSeller} /> : <Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
