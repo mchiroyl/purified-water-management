@@ -1,5 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Agua Pura">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Sistema Agua Pura</title>
   <rect width="512" height="512" rx="112" fill="#087e8b"/>
-  <path d="M256 76C199 160 132 236 132 319c0 69 55 125 124 125s124-56 124-125c0-83-67-159-124-243Z" fill="#e7fbff"/>
-  <path d="M190 330c10 33 36 52 70 52 35 0 61-19 72-52" fill="none" stroke="#53c8d6" stroke-width="28" stroke-linecap="round"/>
+  <path d="M256 70C205 147 137 222 137 311c0 69 53 125 119 125s119-56 119-125c0-89-68-164-119-241Z" fill="#e8fbfd"/>
+  <path d="M194 324c9 31 31 50 63 57" fill="none" stroke="#65d6df" stroke-linecap="round" stroke-width="28"/>
 </svg>

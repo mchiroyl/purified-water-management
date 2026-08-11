@@ -9,15 +9,18 @@ export default defineConfig({
       registerType: 'prompt',
       includeAssets: ['icons/icon.svg'],
       manifest: {
+        id: '/',
         name: 'Sistema Agua Pura',
         short_name: 'Agua Pura',
         description: 'Control digital de ventas, rutas, inventario y liquidaciones',
         theme_color: '#087e8b',
         background_color: '#f4fbfc',
         display: 'standalone',
+        orientation: 'any',
         start_url: '/',
         scope: '/',
         lang: 'es-GT',
+        categories: ['business', 'productivity'],
         icons: [
           {
             src: '/icons/icon.svg',
@@ -28,14 +31,19 @@ export default defineConfig({
         ]
       },
       workbox: {
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: false,
         navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api\//, /^\/actuator\//],
         runtimeCaching: [
           {
             urlPattern: ({ request }) => request.destination === 'document',
             handler: 'NetworkFirst',
             options: {
               cacheName: 'app-pages',
-              networkTimeoutSeconds: 4
+              networkTimeoutSeconds: 4,
+              expiration: { maxEntries: 20, maxAgeSeconds: 24 * 60 * 60 }
             }
           }
         ]

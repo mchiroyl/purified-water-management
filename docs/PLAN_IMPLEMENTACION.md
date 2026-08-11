@@ -262,4 +262,5 @@ Verificación: tests backend/frontend/integración/E2E, Docker build, Compose, h
 | 12 | Completada | Carga e ítems inmutables, confirmación separada bodega/vendedor con dispositivos, transferencia física, inicio y corrección compensatoria verificados. |
 | 13 | Completada | Venta online transaccional con precio, numeración y totales de servidor; rollback, propiedad, inventario e inmutabilidad verificados. |
 | 14 | Completada | Efectivo, transferencia y crédito integrados a la venta; límite concurrente, segregación de revisión, rollback y libros inmutables verificados. |
-| 15–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |
+| 15 | Completada | PWA instalable con manifiesto, icono, precaché, fallback de navegación, aviso offline y actualización segura; pruebas, build, cabeceras HTTP y despliegue verificados. |
+| 16–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |
