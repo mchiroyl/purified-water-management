@@ -57,6 +57,9 @@ h2 { margin-top: 0; }
 .metric-grid article, .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 1rem; padding: 1rem; box-shadow: 0 8px 24px rgba(18,76,84,.05); }
 .metric-grid span { display: block; color: var(--muted); font-size: .8rem; }
 .metric-grid strong { display: block; margin-top: .4rem; font-size: 1.2rem; }
+.dashboard-pending, .dashboard-alerts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .75rem; }
+.dashboard-pending span { padding: .85rem 1rem; border-radius: .75rem; background: #e6f4f6; font-weight: 700; }
+.dashboard-alerts .alert { display: flex; justify-content: space-between; align-items: center; margin: 0; }
 .form-grid { display: grid; gap: 1rem; }
 .wide { grid-column: 1 / -1; }
 .catalog-form { margin: 1.5rem 0; }

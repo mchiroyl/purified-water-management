@@ -95,3 +95,10 @@ Fuente: `docs/ERS_SRS.md` y `PROMPT_MAESTRO_SISTEMA_AGUA_PURA.md`.
 - **RB-057:** Web Share se usa únicamente cuando el navegador confirma soporte para compartir el archivo PDF.
 - **RB-058:** El fallback descarga el PDF y usa el enlace público `wa.me`; no integra APIs privadas de WhatsApp.
 - **RB-059:** Un comprobante oficial descargado puede almacenarse en IndexedDB y una descarga solicitada offline queda pendiente sin inventar un documento local.
+
+## Dashboard y alertas
+
+- **RB-060:** El día operativo se calcula con la zona horaria configurada para la empresa, no con la zona del navegador ni de la base de datos.
+- **RB-061:** El dashboard excluye ventas con anulación aprobada y no acepta totales calculados por el frontend.
+- **RB-062:** Un vendedor solo consulta métricas de sus rutas y sus propias operaciones pendientes.
+- **RB-063:** Las alertas del dashboard se derivan de diferencias y pendientes autoritativos del servidor.

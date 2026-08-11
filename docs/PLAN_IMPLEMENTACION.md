@@ -235,6 +235,14 @@ cancelación segura, descarga, enlace WhatsApp, hash SHA-256, caché y pendiente
 Entregables: indicadores operativos, diferencias y pendientes.  
 Verificación: cifras derivan de datos oficiales y respetan permisos.
 
+Estado: **completada**. El endpoint `GET /api/dashboard` calcula el día operativo con la zona
+horaria de la configuración empresarial y obtiene ventas no anuladas, pagos, entregas de efectivo,
+diferencias, mermas, rutas, clientes provisionales y operaciones pendientes directamente de
+PostgreSQL. El vendedor queda limitado a sus rutas y operaciones; los demás roles autorizados ven
+el ámbito operativo correspondiente. La interfaz reemplaza cifras simuladas por métricas oficiales,
+pendientes y alertas. Las pruebas validan el corte horario; el endpoint real respondió con
+`America/Guatemala` y `GTQ` sobre el despliegue saludable.
+
 ### FASE 29 — Reportes
 
 Entregables: filtros, paginación y exportaciones autorizadas.  
@@ -319,4 +327,8 @@ Verificación: tests backend/frontend/integración/E2E, Docker build, Compose, h
 | 22 | Completada | Producto no vendido y devolución de cliente separados de merma; recepción física, movimientos y diferencia verificados en PostgreSQL. |
 | 23 | Completada | Conciliación física/financiera oficial, efectivo inmutable, bloqueo offline, cierre y carga `SETTLED` verificados. |
 | 24 | Completada | Solicitudes con vigencia, decisiones segregadas, incidencias, permisos por recurso y auditoría verificados. |
-| 25–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |
+| 25 | Completada | Anulación segregada con reversos compensatorios exactos y venta original inmutable. |
+| 26 | Completada | PDF interno inmutable, identidad histórica, descarga autorizada y FEL protegido sin proveedor real. |
+| 27 | Completada | Web Share, fallback WhatsApp y caché/pendiente de comprobante en IndexedDB verificados. |
+| 28 | Completada | Dashboard oficial por zona empresarial, alcance por rol, pendientes y alertas verificados en API y UI. |
+| 29–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |

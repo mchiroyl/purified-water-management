@@ -17,7 +17,7 @@
 | RF-SET | 23 | settlements | CU-013 | Escenarios físicos/monetarios |
 | RF-SYN | 16–20 | storage, sync | CU-012 | Persistencia + idempotencia |
 | RF-DOC, RF-FEL | 26, 27 | receipts, fel | CU-014 | PDF + share + bloqueo FEL |
-| RF-REP, RF-ALT | 28, 29 | dashboard, reports | Consultar indicadores | Consultas + permisos |
+| RF-REP, RF-ALT | 28, 29 | dashboard, reports | Consultar indicadores | `GET /api/dashboard`, `DashboardDateRangeTest`, `DashboardPage.test.tsx`, consultas + permisos |
 | RF-AUD | 30 | audit | Consultar auditoría | Eventos + exclusión secretos |
 | DAT-001–012 | 5, 16, 33, 37 | persistence | Migrar/respaldar | Flyway + IndexedDB + restore |
 | RNF-001–012 | 3, 4, 15, 31–39 | plataforma | Instalación/operación | Build + Docker + E2E |
