@@ -48,3 +48,27 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
 
   return response.json() as Promise<T>;
 }
+
+export async function apiBlob(path: string, init: RequestInit = {}): Promise<Blob> {
+  const headers = new Headers(init.headers);
+  headers.set('Accept', 'application/pdf');
+  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, { ...init, headers, credentials: 'include' });
+  } catch (error) {
+    window.dispatchEvent(new CustomEvent('agua-pura:request-failure'));
+    throw error;
+  }
+  if (!response.ok) {
+    const fallback: ApiErrorPayload = {
+      code: 'HTTP_ERROR',
+      message: 'No fue posible obtener el comprobante.',
+      correlationId: response.headers.get('X-Correlation-Id') ?? 'unknown',
+      timestamp: new Date().toISOString()
+    };
+    const payload = await response.json().catch(() => fallback) as ApiErrorPayload;
+    throw new ApiError(response.status, payload);
+  }
+  return response.blob();
+}

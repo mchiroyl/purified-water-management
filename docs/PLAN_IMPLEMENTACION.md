@@ -209,6 +209,15 @@ autoaprobación, HTTP 409 para repetición o ruta liquidada, saldo 90→100 y un
 Entregables: PDF con configuración empresarial; FEL bloqueado sin proveedor y puerto de adaptación.  
 Verificación: comprobante interno no se presenta como DTE y no se filtran credenciales.
 
+Estado: **completada**. Cada venta conserva la identidad empresarial histórica y genera como máximo
+un `receipt_document` PDF inmutable, descargable por usuarios autorizados y protegido por propiedad
+para el vendedor. El documento muestra empresa, venta, fecha en zona configurada, cliente, vendedor,
+detalle, descuentos aplicados, pagos, totales y la leyenda visible `NO ES DTE FEL CERTIFICADO`.
+FEL posee configuración y puerto independientes, no expone referencias secretas y devuelve HTTP 409
+si se intenta activar sin adaptador real y credenciales validadas. PostgreSQL temporal confirmó
+migración 17, generación idempotente, bloqueo BOLA 404 y cero documentos FEL simulados; el PDF fue
+renderizado a PNG y revisado sin solapamientos ni recortes.
+
 ### FASE 27 — Compartir WhatsApp
 
 Entregables: Web Share API, descarga y mensaje fallback.  

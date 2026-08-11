@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, vi } from 'vitest';
 import { SalesPage } from './SalesPage';
 
@@ -9,6 +9,11 @@ describe('SalesPage', () => {
   it('muestra el número, precios y total calculados por el servidor', async () => {
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const path = input.toString();
+      if (path.endsWith('/sales/sale-1/receipt')) {
+        return Promise.resolve(new Response(new Blob(['%PDF receipt'], { type: 'application/pdf' }), {
+          status: 200, headers: { 'Content-Type': 'application/pdf', 'X-Document-Type': 'INTERNAL_RECEIPT' }
+        }));
+      }
       const value = path.endsWith('/sales') ? [{
         id: 'sale-1', clientReference: 'reference-1', documentNumber: 'V-00000042',
         routeId: 'route-1', routeCode: 'R-01', routeName: 'Ruta norte',
@@ -36,5 +41,14 @@ describe('SalesPage', () => {
     expect(await screen.findByText('V-00000042')).toBeInTheDocument();
     expect(screen.getByText(/Botella 600 ml.*2.*Q8.50/i)).toBeInTheDocument();
     expect(screen.getAllByText('Q17.00')).toHaveLength(3);
+    const createUrl = vi.fn(() => 'blob:receipt');
+    const revokeUrl = vi.fn();
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createUrl });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeUrl });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    fireEvent.click(screen.getByRole('button', { name: 'Descargar PDF' }));
+    await waitFor(() => expect(createUrl).toHaveBeenCalled());
+    expect(click).toHaveBeenCalled();
+    expect(revokeUrl).toHaveBeenCalledWith('blob:receipt');
   });
 });

@@ -34,17 +34,16 @@ erDiagram
     FEL_DOCUMENT {
         UUID id PK
         UUID sale_id FK
-        UUID configuration_id FK
+        UUID fel_configuration_id FK
+        VARCHAR provider_code
+        VARCHAR environment
         VARCHAR status
-        VARCHAR provider_request_id
-        VARCHAR authorization_id
-        VARCHAR series
-        VARCHAR document_number
-        TEXT request_digest
-        JSONB response_metadata
+        VARCHAR request_reference
+        VARCHAR response_reference
         UUID certified_file_id FK
-        TEXT last_error
-        TIMESTAMPTZ requested_at
+        VARCHAR error_code
+        VARCHAR error_message
+        TIMESTAMPTZ created_at
         TIMESTAMPTZ certified_at
     }
 
@@ -375,6 +374,16 @@ erDiagram
         NUMERIC subtotal
         NUMERIC discount_total
         NUMERIC total
+        VARCHAR company_name
+        VARCHAR company_legal_name
+        VARCHAR company_tax_id
+        VARCHAR company_address
+        VARCHAR company_phone
+        VARCHAR company_whatsapp
+        VARCHAR company_email
+        VARCHAR company_timezone
+        UUID company_logo_file_id FK
+        TEXT document_legend
         TIMESTAMPTZ occurred_at_local
         TIMESTAMPTZ received_at_server
         TIMESTAMPTZ created_at
@@ -663,9 +672,10 @@ erDiagram
         UUID id PK
         UUID sale_id FK
         UUID file_id FK
-        VARCHAR document_type
+        VARCHAR document_kind
         VARCHAR document_number
-        VARCHAR status
+        UUID generated_by FK
+        UUID generated_device_id FK
         TIMESTAMPTZ generated_at
     }
 
@@ -805,6 +815,8 @@ erDiagram
     APP_USER ||--o{ SYNC_OPERATION : creates
     SALE ||--o{ RECEIPT_DOCUMENT : documents
     FILE_OBJECT ||--o{ RECEIPT_DOCUMENT : stores
+    APP_USER ||--o{ RECEIPT_DOCUMENT : generates
+    DEVICE ||--o{ RECEIPT_DOCUMENT : records
     SALE ||--o{ FEL_DOCUMENT : certifies
     FEL_CONFIGURATION ||--o{ FEL_DOCUMENT : uses
     FILE_OBJECT o|--o{ FEL_DOCUMENT : certified_file

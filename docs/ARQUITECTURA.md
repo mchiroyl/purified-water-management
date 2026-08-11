@@ -9,6 +9,8 @@ Monolito modular Spring Boot y PWA React. El backend es una sola unidad de despl
 - `domain`: entidades, valores, reglas, contratos y excepciones sin dependencias web/JPA.
 - `application`: casos de uso, comandos, consultas y DTO internos.
 - `infrastructure`: JPA, seguridad, storage, PDF, sincronización y configuración.
+- Los comprobantes internos se generan con Apache PDFBox y se conservan como archivos inmutables mediante `file_object` y `receipt_document`.
+- FEL depende de un puerto de proveedor real. Sin adaptador instalado y credenciales validadas, la capa de aplicación impide activarlo.
 - `presentation`: controladores REST, validación de entrada y manejo de errores.
 
 ## Componentes frontend

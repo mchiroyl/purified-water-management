@@ -22,6 +22,7 @@
         <springdoc.version>3.0.3</springdoc.version>
         <testcontainers.version>2.0.2</testcontainers.version>
         <bouncycastle.version>1.84</bouncycastle.version>
+        <pdfbox.version>3.0.8</pdfbox.version>
     </properties>
 
     <dependencies>
@@ -71,6 +72,11 @@
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcprov-jdk18on</artifactId>
             <version>${bouncycastle.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>${pdfbox.version}</version>
         </dependency>
 
         <dependency>

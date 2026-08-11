@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { useSession } from '../features/auth/SessionContext';
 import { LoginPage } from '../features/auth/LoginPage';
 import { CompanyConfigurationPage } from '../features/company/CompanyConfigurationPage';
+import { FelConfigurationPage } from '../features/company/FelConfigurationPage';
 import { ProductCatalogPage } from '../features/catalog/ProductCatalogPage';
 import { AdministrationPage } from '../features/administration/AdministrationPage';
 import { CustomersPage } from '../features/routes/CustomersPage';
@@ -45,7 +46,8 @@ export function App() {
     <Routes>
       <Route element={<AppShell />}>
         <Route index element={<DashboardPage />} />
-        <Route path="company" element={<CompanyConfigurationPage />} />
+        <Route path="company" element={isAdmin ? <CompanyConfigurationPage /> : <Navigate to="/" replace />} />
+        <Route path="fel-configuration" element={isAdmin ? <FelConfigurationPage /> : <Navigate to="/" replace />} />
         <Route path="products" element={<ProductCatalogPage />} />
         <Route path="administration" element={isAdmin ? <AdministrationPage /> : <Navigate to="/" replace />} />
         <Route path="customers" element={canSeeCustomers ? <CustomersPage canManage={isAdmin}

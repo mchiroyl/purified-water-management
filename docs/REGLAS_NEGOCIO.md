@@ -85,3 +85,10 @@ Fuente: `docs/ERS_SRS.md` y `PROMPT_MAESTRO_SISTEMA_AGUA_PURA.md`.
 - **RB-050:** Toda acción crítica registra actor, entidad, fecha servidor, dispositivo y correlación.
 - **RB-051:** Auditoría y logs excluyen contraseñas, tokens, claves y credenciales FEL.
 - **RB-052:** Fechas locales se conservan para trazabilidad, pero la hora oficial es la del servidor.
+
+## Comprobantes y FEL
+
+- **RB-053:** El comprobante interno usa la identidad empresarial capturada con la venta y permanece estable aunque la configuración cambie después.
+- **RB-054:** Cada venta posee como máximo un PDF interno almacenado; repetir la solicitud devuelve el mismo documento.
+- **RB-055:** El PDF interno declara de forma visible que no es un DTE FEL certificado.
+- **RB-056:** FEL no se activa sin un adaptador de certificador real instalado y credenciales validadas exclusivamente en backend.

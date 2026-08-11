@@ -41,7 +41,8 @@ export function AppShell() {
     {canSeeAnnulments && <NavLink to="/annulments">Anulaciones</NavLink>}
     <NavLink to="/pending">Pendientes</NavLink>
     {isAdmin && <NavLink to="/administration">Usuarios</NavLink>}
-    {isAdmin && <NavLink to="/company">Configuración</NavLink>}
+    {isAdmin && <NavLink to="/company">Datos de la empresa</NavLink>}
+    {isAdmin && <NavLink to="/fel-configuration">FEL opcional</NavLink>}
   </>;
 
   return (

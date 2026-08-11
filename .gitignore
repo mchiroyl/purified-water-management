@@ -28,6 +28,7 @@ data/
 storage/
 backups/*.dump
 backups/*.sql
+tmp/
 
 # Generated diagram exports
 diagrams/**/*.png

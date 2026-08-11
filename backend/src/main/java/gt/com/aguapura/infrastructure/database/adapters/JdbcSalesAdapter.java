@@ -78,10 +78,13 @@ public class JdbcSalesAdapter implements SalesPort {
     @Override
     public SaleView createSale(NewSale item) {
         var company = jdbc.sql("""
-                SELECT id,commercial_name,tax_id,address,currency_code,receipt_prefix,next_receipt_number,document_legend
+                SELECT id,commercial_name,legal_name,tax_id,address,phone,whatsapp,email,timezone,logo_file_id,
+                       currency_code,receipt_prefix,next_receipt_number,document_legend
                 FROM company_configuration ORDER BY created_at LIMIT 1 FOR UPDATE
                 """).query((rs, row) -> new CompanyNumber(rs.getObject("id", UUID.class),
-                rs.getString("commercial_name"), rs.getString("tax_id"), rs.getString("address"),
+                rs.getString("commercial_name"), rs.getString("legal_name"), rs.getString("tax_id"),
+                rs.getString("address"), rs.getString("phone"), rs.getString("whatsapp"), rs.getString("email"),
+                rs.getString("timezone"), rs.getObject("logo_file_id", UUID.class),
                 rs.getString("currency_code"), rs.getString("receipt_prefix"),
                 rs.getLong("next_receipt_number"), rs.getString("document_legend"))).optional()
                 .orElseThrow(() -> new BusinessException("COMPANY_CONFIGURATION_REQUIRED",
@@ -93,16 +96,21 @@ public class JdbcSalesAdapter implements SalesPort {
         jdbc.sql("""
                 INSERT INTO sale(id,client_reference,document_number,receipt_sequence_number,route_id,
                     inventory_location_id,seller_id,customer_id,subtotal,total,currency_code,company_name,
-                    company_tax_id,company_address,document_legend,created_by,device_id)
+                    company_tax_id,company_address,company_legal_name,company_phone,company_whatsapp,company_email,
+                    company_timezone,company_logo_file_id,document_legend,created_by,device_id)
                 VALUES (:id,:clientReference,:documentNumber,:sequence,:routeId,:locationId,:sellerId,:customerId,
-                    :subtotal,:total,:currency,:companyName,:companyTaxId,:companyAddress,:legend,:createdBy,:deviceId)
+                    :subtotal,:total,:currency,:companyName,:companyTaxId,:companyAddress,:legalName,:phone,:whatsapp,
+                    :email,:timezone,:logoFileId,:legend,:createdBy,:deviceId)
                 """).param("id", item.id()).param("clientReference", item.clientReference())
                 .param("documentNumber", documentNumber).param("sequence", company.nextNumber())
                 .param("routeId", item.routeId()).param("locationId", item.inventoryLocationId())
                 .param("sellerId", item.sellerId()).param("customerId", item.customerId())
                 .param("subtotal", item.subtotal()).param("total", item.total()).param("currency", company.currencyCode())
                 .param("companyName", company.commercialName()).param("companyTaxId", company.taxId())
-                .param("companyAddress", company.address()).param("legend", company.documentLegend())
+                .param("companyAddress", company.address()).param("legalName", company.legalName())
+                .param("phone", company.phone()).param("whatsapp", company.whatsapp()).param("email", company.email())
+                .param("timezone", company.timezone()).param("logoFileId", company.logoFileId(), Types.OTHER)
+                .param("legend", company.documentLegend())
                 .param("createdBy", item.createdBy()).param("deviceId", item.deviceId()).update();
         for (var row : item.items()) {
             jdbc.sql("""
@@ -238,7 +246,8 @@ public class JdbcSalesAdapter implements SalesPort {
         return value == null ? null : value.toInstant();
     }
 
-    private record CompanyNumber(UUID id, String commercialName, String taxId, String address,
+    private record CompanyNumber(UUID id, String commercialName, String legalName, String taxId, String address,
+                                 String phone, String whatsapp, String email, String timezone, UUID logoFileId,
                                  String currencyCode, String receiptPrefix, long nextNumber,
                                  String documentLegend) {
     }
