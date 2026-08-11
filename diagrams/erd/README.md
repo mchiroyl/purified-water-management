@@ -46,6 +46,16 @@ IndexedDB no es una base relacional y no aplica claves foráneas. El diagrama us
 
 Los nombres anteriores serán los nombres canónicos de object stores. Los nombres `IDB_*` del diagrama son etiquetas visuales equivalentes.
 
+### Implementación vigente
+
+La fuente ejecutable es `frontend/src/offline/mobileDatabase.ts`. La base `agua-pura-mobile` está en versión 2 y crea los 26 object stores canónicos de esta tabla.
+
+- Versión 1: contexto autorizado, configuración empresarial, paquete de ruta, clientes, catálogo, precios, carga e inventario.
+- Versión 2: agregados locales, Outbox, resultados de sincronización, archivos y comprobantes.
+- Los índices booleanos `active` usan internamente `activeIndex` (`0`/`1`) porque los booleanos no son claves válidas de IndexedDB.
+- Los importes y cantidades se conservan como texto decimal para evitar pérdida de precisión binaria.
+- La migración v1→v2, la persistencia tras reapertura y el rollback multi-store están cubiertos por pruebas automatizadas.
+
 ## Transacción local obligatoria
 
 Al confirmar una operación offline, su agregado local, detalles, cambio de inventario local y entrada `outboxOperations` deben guardarse en una sola transacción IndexedDB. Si cualquier escritura falla, ninguna parte queda confirmada.
