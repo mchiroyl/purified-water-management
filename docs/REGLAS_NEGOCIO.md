@@ -102,3 +102,10 @@ Fuente: `docs/ERS_SRS.md` y `PROMPT_MAESTRO_SISTEMA_AGUA_PURA.md`.
 - **RB-061:** El dashboard excluye ventas con anulación aprobada y no acepta totales calculados por el frontend.
 - **RB-062:** Un vendedor solo consulta métricas de sus rutas y sus propias operaciones pendientes.
 - **RB-063:** Las alertas del dashboard se derivan de diferencias y pendientes autoritativos del servidor.
+
+## Reportes
+
+- **RB-064:** Todo rango de reporte usa fechas locales inclusivas en la zona empresarial y no puede superar 366 días.
+- **RB-065:** Los filtros y la exportación aplican exactamente el mismo alcance de autorización en el servidor.
+- **RB-066:** La exportación se rechaza si supera 20,000 filas; no se entrega un archivo silenciosamente incompleto.
+- **RB-067:** Toda celda CSV potencialmente interpretada como fórmula se neutraliza antes de descargarla.

@@ -40,6 +40,7 @@ export function AppShell() {
     {canSeeOperationsControl && <NavLink to="/operations-control">Control operativo</NavLink>}
     {canSeeAnnulments && <NavLink to="/annulments">Anulaciones</NavLink>}
     <NavLink to="/pending">Pendientes</NavLink>
+    <NavLink to="/reports">Reportes</NavLink>
     {isAdmin && <NavLink to="/administration">Usuarios</NavLink>}
     {isAdmin && <NavLink to="/company">Datos de la empresa</NavLink>}
     {isAdmin && <NavLink to="/fel-configuration">FEL opcional</NavLink>}

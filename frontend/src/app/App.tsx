@@ -18,6 +18,7 @@ import { SettlementPage } from '../features/settlements/SettlementPage';
 import { OperationsControlPage } from '../features/control/OperationsControlPage';
 import { AnnulmentsPage } from '../features/annulments/AnnulmentsPage';
 import { PendingOperationsPage } from '../offline/PendingOperationsPage';
+import { ReportsPage } from '../features/reports/ReportsPage';
 import { AppShell } from './AppShell';
 import { DashboardPage } from './DashboardPage';
 
@@ -65,6 +66,7 @@ export function App() {
         <Route path="operations-control" element={canSeeOperationsControl ? <OperationsControlPage canDecide={isAdmin || user.roles.includes('SUPERVISOR')} /> : <Navigate to="/" replace />} />
         <Route path="annulments" element={canSeeAnnulments ? <AnnulmentsPage canRequest canDecide={isAdmin || user.roles.includes('SUPERVISOR')} /> : <Navigate to="/" replace />} />
         <Route path="pending" element={<PendingOperationsPage />} />
+        <Route path="reports" element={<ReportsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

@@ -248,6 +248,14 @@ pendientes y alertas. Las pruebas validan el corte horario; el endpoint real res
 Entregables: filtros, paginación y exportaciones autorizadas.  
 Verificación: resultados por vendedor, ruta, fecha, producto, pago y diferencia.
 
+Estado: **completada**. El módulo de reportes ofrece ventas por ítem, mermas y liquidaciones con
+rango inclusivo según la zona horaria empresarial, paginación, filtros textuales parametrizados y
+filtros específicos de forma de pago y diferencias. Los tres reportes se exportan como CSV UTF-8
+con límite explícito y protección contra inyección de fórmulas de hoja de cálculo. La interfaz
+adaptable permite filtrar, paginar y descargar. El servidor aplica el alcance del vendedor antes de
+consultar y exportar. Las consultas reales de los tres reportes y la descarga CSV respondieron HTTP
+200 aun usando una cadena de prueba SQLi como filtro, sin alterar la consulta.
+
 ### FASE 30 — Auditoría
 
 Entregables: eventos requeridos, before/after seguro y correlationId.  
@@ -331,4 +339,5 @@ Verificación: tests backend/frontend/integración/E2E, Docker build, Compose, h
 | 26 | Completada | PDF interno inmutable, identidad histórica, descarga autorizada y FEL protegido sin proveedor real. |
 | 27 | Completada | Web Share, fallback WhatsApp y caché/pendiente de comprobante en IndexedDB verificados. |
 | 28 | Completada | Dashboard oficial por zona empresarial, alcance por rol, pendientes y alertas verificados en API y UI. |
-| 29–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |
+| 29 | Completada | Reportes paginados/exportables de ventas, mermas y liquidaciones con filtros y alcance por rol. |
+| 30–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |

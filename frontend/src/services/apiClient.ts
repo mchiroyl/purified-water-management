@@ -50,8 +50,12 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
 }
 
 export async function apiBlob(path: string, init: RequestInit = {}): Promise<Blob> {
+  return apiFile(path, 'application/pdf', init);
+}
+
+export async function apiFile(path: string, accept = 'application/octet-stream', init: RequestInit = {}): Promise<Blob> {
   const headers = new Headers(init.headers);
-  headers.set('Accept', 'application/pdf');
+  headers.set('Accept', accept);
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
   let response: Response;
   try {
@@ -63,7 +67,7 @@ export async function apiBlob(path: string, init: RequestInit = {}): Promise<Blo
   if (!response.ok) {
     const fallback: ApiErrorPayload = {
       code: 'HTTP_ERROR',
-      message: 'No fue posible obtener el comprobante.',
+      message: 'No fue posible obtener el archivo solicitado.',
       correlationId: response.headers.get('X-Correlation-Id') ?? 'unknown',
       timestamp: new Date().toISOString()
     };
