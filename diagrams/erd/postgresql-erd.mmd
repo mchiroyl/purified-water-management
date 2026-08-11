@@ -578,13 +578,21 @@ erDiagram
 
     INCIDENT {
         UUID id PK
-        UUID route_run_id FK
+        UUID route_id FK
+        UUID settlement_id FK
+        VARCHAR reference_type
+        UUID reference_id
         UUID reported_by FK
+        UUID reported_device_id FK
+        UUID handled_by FK
+        UUID handled_device_id FK
         VARCHAR incident_type
         VARCHAR severity
         VARCHAR status
         TEXT description
+        TEXT resolution_notes
         TIMESTAMPTZ created_at
+        TIMESTAMPTZ handled_at
     }
 
     AUTHORIZATION {
@@ -593,10 +601,14 @@ erDiagram
         VARCHAR entity_type
         UUID entity_id
         UUID requested_by FK
+        UUID requested_device_id FK
         UUID decided_by FK
+        UUID decided_device_id FK
         VARCHAR status
         TEXT reason
+        TEXT decision_notes
         TIMESTAMPTZ expires_at
+        TIMESTAMPTZ created_at
         TIMESTAMPTZ decided_at
     }
 
@@ -761,7 +773,12 @@ erDiagram
     ROUTE ||--o{ SETTLEMENT : reconciles
     SETTLEMENT ||--|{ SETTLEMENT_ITEM : reconciles
     PRODUCT ||--o{ SETTLEMENT_ITEM : reconciled
-    ROUTE_RUN ||--o{ INCIDENT : has
+    ROUTE ||--o{ INCIDENT : has
+    SETTLEMENT o|--o{ INCIDENT : explains
+    APP_USER ||--o{ INCIDENT : reports
+    APP_USER o|--o{ INCIDENT : handles
+    APP_USER ||--o{ AUTHORIZATION : requests
+    APP_USER o|--o{ AUTHORIZATION : decides
     SALE ||--o{ ANNULMENT_REQUEST : requests
     DEVICE ||--o{ SYNC_OPERATION : submits
     APP_USER ||--o{ SYNC_OPERATION : creates

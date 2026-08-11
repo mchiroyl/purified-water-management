@@ -187,6 +187,12 @@ directos después del cierre.
 Entregables: solicitudes, decisiones, expiración, incidencias y segregación.  
 Verificación: permisos, vigencia y auditoría.
 
+Estado: **completada**. Las autorizaciones validan existencia y propiedad del recurso, tienen
+vigencia máxima de siete días, expiran automáticamente y no permiten decisión propia. Las
+incidencias conservan contexto, severidad y estados de investigación/resolución con revisor
+distinto. PostgreSQL temporal confirmó aprobación y resolución por revisor, vencimiento automático,
+HTTP 403 para el vendedor en decisiones y cuatro eventos de auditoría.
+
 ### FASE 25 — Anulaciones
 
 Entregables: solicitud/aprobación y transacciones compensatorias.  
@@ -290,4 +296,5 @@ Verificación: tests backend/frontend/integración/E2E, Docker build, Compose, h
 | 21 | Completada | Merma offline, revisión segregada/parcial, alertas, movimiento `WASTE_OUT` y prueba PostgreSQL antifraude. |
 | 22 | Completada | Producto no vendido y devolución de cliente separados de merma; recepción física, movimientos y diferencia verificados en PostgreSQL. |
 | 23 | Completada | Conciliación física/financiera oficial, efectivo inmutable, bloqueo offline, cierre y carga `SETTLED` verificados. |
-| 24–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |
+| 24 | Completada | Solicitudes con vigencia, decisiones segregadas, incidencias, permisos por recurso y auditoría verificados. |
+| 25–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |
