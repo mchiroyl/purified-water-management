@@ -16,6 +16,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.math.BigDecimal;
 
 @Service
 public class InventoryApplicationService {
@@ -69,6 +70,37 @@ public class InventoryApplicationService {
                 type, request.quantityDelta(), current.quantityBaseUnits(), balanceAfter, request.reason().trim(),
                 "MANUAL_ADJUSTMENT", null, actorId, deviceId);
         return movement(persistence.storeMovement(movement, current.version()));
+    }
+
+    @Transactional
+    public void transfer(UUID sourceLocationId, UUID targetLocationId, UUID productId, BigDecimal quantity,
+                         String outgoingType, String incomingType, String reason, String referenceType,
+                         UUID referenceId, UUID actorId, UUID deviceId) {
+        if (sourceLocationId.equals(targetLocationId)) {
+            throw validation("INVENTORY_SAME_LOCATION", "El origen y el destino deben ser distintos.");
+        }
+        if (quantity == null || quantity.signum() <= 0) {
+            throw validation("INVENTORY_TRANSFER_QUANTITY", "La cantidad transferida debe ser mayor que cero.");
+        }
+        InventoryPort.BalanceView first;
+        InventoryPort.BalanceView second;
+        if (sourceLocationId.toString().compareTo(targetLocationId.toString()) < 0) {
+            first = persistence.lockBalance(sourceLocationId, productId);
+            second = persistence.lockBalance(targetLocationId, productId);
+        } else {
+            first = persistence.lockBalance(targetLocationId, productId);
+            second = persistence.lockBalance(sourceLocationId, productId);
+        }
+        var source = first.locationId().equals(sourceLocationId) ? first : second;
+        var target = first.locationId().equals(targetLocationId) ? first : second;
+        var sourceAfter = InventoryStockPolicy.balanceAfter(source.quantityBaseUnits(), quantity.negate());
+        var targetAfter = InventoryStockPolicy.balanceAfter(target.quantityBaseUnits(), quantity);
+        persistence.storeMovement(new InventoryPort.NewMovement(UUID.randomUUID(), sourceLocationId, productId,
+                outgoingType, quantity.negate(), source.quantityBaseUnits(), sourceAfter, reason, referenceType,
+                referenceId, actorId, deviceId), source.version());
+        persistence.storeMovement(new InventoryPort.NewMovement(UUID.randomUUID(), targetLocationId, productId,
+                incomingType, quantity, target.quantityBaseUnits(), targetAfter, reason, referenceType,
+                referenceId, actorId, deviceId), target.version());
     }
 
     @Transactional(readOnly = true)

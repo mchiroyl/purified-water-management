@@ -8,6 +8,7 @@ import { CustomersPage } from '../features/routes/CustomersPage';
 import { RoutesPage } from '../features/routes/RoutesPage';
 import { PricingPage } from '../features/pricing/PricingPage';
 import { InventoryPage } from '../features/inventory/InventoryPage';
+import { RouteLoadsPage } from '../features/loading/RouteLoadsPage';
 import { AppShell } from './AppShell';
 import { DashboardPage } from './DashboardPage';
 
@@ -21,6 +22,9 @@ export function App() {
   const canSeePricing = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'VENDEDOR'].includes(role));
   const canSeeInventory = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
   const canManageInventory = user.roles.some(role => ['ADMINISTRADOR', 'BODEGA'].includes(role));
+  const canSeeLoads = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
+  const isWarehouse = user.roles.includes('BODEGA');
+  const isSeller = user.roles.includes('VENDEDOR');
   return (
     <Routes>
       <Route element={<AppShell />}>
@@ -32,6 +36,7 @@ export function App() {
         <Route path="routes" element={canSeeRoutes ? <RoutesPage canManage={isAdmin} /> : <Navigate to="/" replace />} />
         <Route path="pricing" element={canSeePricing ? <PricingPage canManage={isAdmin} canApprove={isAdmin || user.roles.includes('SUPERVISOR')} canRequestDiscount={user.roles.includes('VENDEDOR')} /> : <Navigate to="/" replace />} />
         <Route path="inventory" element={canSeeInventory ? <InventoryPage canManage={canManageInventory} /> : <Navigate to="/" replace />} />
+        <Route path="loads" element={canSeeLoads ? <RouteLoadsPage canPrepare={isAdmin || isWarehouse} canConfirmWarehouse={isAdmin || isWarehouse} canReceive={isAdmin || isSeller} canStart={isAdmin || isSeller} canCorrect={isAdmin || isWarehouse} /> : <Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
