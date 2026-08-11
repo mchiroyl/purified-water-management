@@ -265,4 +265,5 @@ Verificación: tests backend/frontend/integración/E2E, Docker build, Compose, h
 | 15 | Completada | PWA instalable con manifiesto, icono, precaché, fallback de navegación, aviso offline y actualización segura; pruebas, build, cabeceras HTTP y despliegue verificados. |
 | 16 | Completada | IndexedDB móvil v2 con 26 stores canónicos, índices, repositorios, transacciones multi-store, migración v1→v2, persistencia tras reinicio y ERD lógico verificados. |
 | 17 | Completada | ConnectionManager con UNKNOWN/CHECKING/OFFLINE/DEGRADED/ONLINE, timeout, cooldown, deduplicación, lifecycle, backoff, comprobación manual y endpoint `no-store`; frontend, backend y despliegue verificados. |
-| 18–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |
+| 18 | Completada | SyncEngine independiente con Outbox IndexedDB, dependencias, batches, resultados parciales, estados visibles, recuperación, backoff+jitter, lifecycle, botón manual y Background Sync progresivo verificados. |
+| 19–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |

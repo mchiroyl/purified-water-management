@@ -6,6 +6,7 @@ import { App } from './app/App';
 import { SessionProvider } from './features/auth/SessionContext';
 import { ConnectionProvider } from './features/connectivity/ConnectionContext';
 import { PwaLifecycle } from './pwa/PwaLifecycle';
+import { SyncProvider } from './offline/SyncContext';
 import './styles.css';
 
 const queryClient = new QueryClient({
@@ -22,10 +23,12 @@ createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <ConnectionProvider>
-          <SessionProvider>
-            <App />
-            <PwaLifecycle />
-          </SessionProvider>
+          <SyncProvider>
+            <SessionProvider>
+              <App />
+              <PwaLifecycle />
+            </SessionProvider>
+          </SyncProvider>
         </ConnectionProvider>
       </BrowserRouter>
     </QueryClientProvider>

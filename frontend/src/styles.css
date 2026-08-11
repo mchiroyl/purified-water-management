@@ -132,6 +132,13 @@ h2 { margin-top: 0; }
 .transfer-amount { color: var(--primary-dark); font-size: 1.35rem; }
 .transfer-decision { display: grid; gap: .65rem; align-items: end; padding-top: .7rem; border-top: 1px solid var(--line); }
 .status.rejected { background: #fff0ee; color: var(--danger); }
+.status.pending, .status.failed_retryable { background: #fff7d6; color: #9a6700; }
+.status.syncing { background: #e3f7f9; color: var(--primary-dark); }
+.status.synced { background: #ecfdf3; color: var(--success); }
+.status.conflict { background: #fff4e8; color: #b54708; }
+.sync-operation-list { display: grid; gap: 1rem; margin-top: 1rem; }
+.sync-operation { display: grid; gap: .6rem; }
+.sync-operation code { overflow-wrap: anywhere; color: var(--muted); }
 .pwa-lifecycle { position: fixed; z-index: 20; right: 1rem; bottom: 1rem; width: min(430px, calc(100vw - 2rem)); display: grid; gap: .5rem; }
 .pwa-lifecycle > div { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .65rem; padding: .75rem; border: 1px solid var(--line); border-radius: .8rem; background: white; box-shadow: 0 14px 38px rgba(18,76,84,.18); }
 .pwa-lifecycle span { flex: 1 1 190px; }

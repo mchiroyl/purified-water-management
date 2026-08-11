@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'prompt',
-      includeAssets: ['icons/icon.svg'],
+      includeAssets: ['icons/icon.svg', 'sync-listener.js'],
       manifest: {
         id: '/',
         name: 'Sistema Agua Pura',
@@ -31,6 +31,7 @@ export default defineConfig({
         ]
       },
       workbox: {
+        importScripts: ['/sync-listener.js'],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: false,

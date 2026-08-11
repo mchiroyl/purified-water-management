@@ -79,7 +79,9 @@ export class ConnectionManager {
   subscribe = (listener: (snapshot: ConnectionSnapshot) => void) => {
     this.listeners.add(listener);
     listener(this.snapshot);
-    return () => this.listeners.delete(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
   };
 
   start() {

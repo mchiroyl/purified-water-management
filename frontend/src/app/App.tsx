@@ -11,6 +11,7 @@ import { InventoryPage } from '../features/inventory/InventoryPage';
 import { RouteLoadsPage } from '../features/loading/RouteLoadsPage';
 import { SalesPage } from '../features/sales/SalesPage';
 import { TransfersPage } from '../features/payments/TransfersPage';
+import { PendingOperationsPage } from '../offline/PendingOperationsPage';
 import { AppShell } from './AppShell';
 import { DashboardPage } from './DashboardPage';
 
@@ -43,6 +44,7 @@ export function App() {
         <Route path="loads" element={canSeeLoads ? <RouteLoadsPage canPrepare={isAdmin || isWarehouse} canConfirmWarehouse={isAdmin || isWarehouse} canReceive={isAdmin || isSeller} canStart={isAdmin || isSeller} canCorrect={isAdmin || isWarehouse} /> : <Navigate to="/" replace />} />
         <Route path="sales" element={canSeeSales ? <SalesPage canSell={isAdmin || isSeller} /> : <Navigate to="/" replace />} />
         <Route path="transfers" element={canVerifyTransfers ? <TransfersPage /> : <Navigate to="/" replace />} />
+        <Route path="pending" element={<PendingOperationsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

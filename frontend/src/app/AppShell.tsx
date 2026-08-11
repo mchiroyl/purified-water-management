@@ -29,6 +29,7 @@ export function AppShell() {
     {canSeeLoads && <NavLink to="/loads">Cargas</NavLink>}
     {canSeeSales && <NavLink to="/sales">Ventas</NavLink>}
     {canVerifyTransfers && <NavLink to="/transfers">Transferencias</NavLink>}
+    <NavLink to="/pending">Pendientes</NavLink>
     {isAdmin && <NavLink to="/administration">Usuarios</NavLink>}
     {isAdmin && <NavLink to="/company">Configuración</NavLink>}
   </>;
