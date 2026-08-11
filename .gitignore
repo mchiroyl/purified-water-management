@@ -6,6 +6,10 @@
 backend/target/
 *.log
 
+# Python tooling
+__pycache__/
+*.pyc
+
 # Node / frontend
 frontend/node_modules/
 frontend/dist/

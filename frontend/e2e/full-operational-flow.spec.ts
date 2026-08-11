@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext, type APIResponse } from '@playwright/test';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 
 type Auth = { accessToken: string; user: { id: string; deviceId: string; mustChangePassword: boolean } };
 type Json = Record<string, any>;
@@ -23,9 +25,12 @@ function authorized(token: string, data?: unknown) {
   return { headers: { Authorization: `Bearer ${token}` }, ...(data === undefined ? {} : { data }) };
 }
 
-test('flujo completo 1-28, offline, idempotencia, antifraude, PDF y FEL', async ({ request, page, context }) => {
+test('flujo completo 1-28, offline, idempotencia, antifraude, PDF y FEL', async ({ request, page, context, browser }) => {
   test.setTimeout(180_000);
   const suffix = Date.now().toString().slice(-7);
+  const manualAssets = path.resolve(process.cwd(), '../docs/assets/manual');
+  const captureManual = process.env.E2E_CAPTURE_MANUAL === '1';
+  if (captureManual) fs.mkdirSync(manualAssets, { recursive: true });
 
   // 1. Administrador inicia sesion y configura una sola identidad empresarial.
   const admin = await login(request, 'admin', adminPassword, `Admin E2E ${suffix}`);
@@ -113,6 +118,7 @@ test('flujo completo 1-28, offline, idempotencia, antifraude, PDF y FEL', async 
 
   // 12-18. Se preparan datos offline y se comprueba persistencia tras reabrir la PWA.
   await page.goto('/');
+  if (captureManual) await page.screenshot({ path: path.join(manualAssets, '01-inicio-sesion.png'), fullPage: true });
   await page.getByLabel('Usuario').fill(`seller-${suffix}`);
   await page.getByLabel('Contraseña').fill(sellerPassword);
   await page.getByLabel('Nombre del dispositivo').fill(`Telefono E2E ${suffix}`);
@@ -122,6 +128,7 @@ test('flujo completo 1-28, offline, idempotencia, antifraude, PDF y FEL', async 
   const browserLogin = await browserLoginPromise;
   if (!browserLogin.ok()) throw new Error(`login navegador: HTTP ${browserLogin.status()} ${await browserLogin.text()}`);
   await expect(page.getByRole('heading', { name: 'Panel operativo' })).toBeVisible();
+  if (captureManual) await page.screenshot({ path: path.join(manualAssets, '02-panel-vendedor.png'), fullPage: true });
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
     const open = indexedDB.open('agua-pura-mobile', 2);
@@ -134,6 +141,7 @@ test('flujo completo 1-28, offline, idempotencia, antifraude, PDF y FEL', async 
   await context.setOffline(true);
   await page.evaluate(() => window.dispatchEvent(new Event('offline')));
   await expect(page.getByRole('button', { name: 'Sin conexión' })).toBeVisible();
+  if (captureManual) await page.screenshot({ path: path.join(manualAssets, '03-modo-sin-conexion.png'), fullPage: true });
   await page.reload();
   const persisted = await page.evaluate(async () => {
     const open = indexedDB.open('agua-pura-mobile', 2);
@@ -235,12 +243,46 @@ test('flujo completo 1-28, offline, idempotencia, antifraude, PDF y FEL', async 
   });
   await page.locator('aside').getByRole('link', { name: 'Ventas' }).click();
   await expect(page.getByText(onlineSale.documentNumber)).toBeVisible();
+  if (captureManual) await page.screenshot({ path: path.join(manualAssets, '04-ventas-y-comprobantes.png'), fullPage: true });
   await page.getByRole('button', { name: 'Compartir / WhatsApp' }).first().click();
   await expect(page.getByText(/Comprobante compartido/i)).toBeVisible();
   expect(await page.evaluate(() => (window as any).__sharedReceipt)).toBe(true);
 
   const companyAfter = await body<Json>(await request.get('/api/company-configuration', authorized(admin.accessToken)), 'releer empresa');
   expect(companyAfter.id).toBe(company.id);
+
+  if (captureManual) {
+    // Evidencia visual administrativa en un contexto limpio, sin heredar el modo offline del vendedor.
+    const manualContext = await browser.newContext();
+    const manualPage = await manualContext.newPage();
+    await manualPage.goto('/');
+    await manualPage.getByLabel('Usuario').fill('admin');
+    await manualPage.getByLabel('Contraseña').fill(adminPassword);
+    await manualPage.getByLabel('Nombre del dispositivo').fill(`Manual E2E ${suffix}`);
+    const adminBrowserLoginPromise = manualPage.waitForResponse(response => response.url().endsWith('/api/auth/login')
+      && response.request().method() === 'POST');
+    await manualPage.getByRole('button', { name: 'Ingresar' }).click();
+    const adminBrowserLogin = await adminBrowserLoginPromise;
+    if (!adminBrowserLogin.ok()) throw new Error(`login admin navegador: HTTP ${adminBrowserLogin.status()} ${await adminBrowserLogin.text()}`);
+    await manualPage.goto('/');
+    await expect(manualPage.getByRole('heading', { name: 'Panel operativo' })).toBeVisible();
+    await manualPage.screenshot({ path: path.join(manualAssets, '05-panel-administrador.png'), fullPage: true });
+
+    const adminScreens = [
+      ['/company', 'Datos de la empresa', '06-datos-empresa.png'],
+      ['/administration', 'Usuarios y vendedores', '07-usuarios-vendedores.png'],
+      ['/routes', 'Rutas y vehículos', '08-rutas-vehiculos.png'],
+      ['/loads', 'Cargas de ruta', '09-cargas-ruta.png'],
+      ['/settlements', 'Liquidaciones', '10-liquidaciones.png'],
+      ['/reports', 'Reportes', '11-reportes.png'],
+    ] as const;
+    for (const [url, heading, filename] of adminScreens) {
+      await manualPage.goto(url);
+      await expect(manualPage.getByRole('heading', { name: heading })).toBeVisible();
+      await manualPage.screenshot({ path: path.join(manualAssets, filename), fullPage: true });
+    }
+    await manualContext.close();
+  }
 });
 
 test('despliegue anonimo aplica cabeceras, limite JSON y rate limit', async ({ request, page }) => {
