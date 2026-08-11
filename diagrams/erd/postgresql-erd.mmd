@@ -570,14 +570,22 @@ erDiagram
         UUID id PK
         UUID device_id FK
         UUID client_operation_id
+        UUID user_id FK
         VARCHAR entity_type
         VARCHAR operation_type
-        VARCHAR status
-        JSONB request_payload
+        UUID aggregate_local_id
+        JSONB payload
+        CHAR payload_hash
+        JSONB dependencies
+        VARCHAR processing_status
+        VARCHAR result_status
+        UUID server_entity_id
         JSONB result_payload
         VARCHAR error_code
-        TIMESTAMPTZ received_at
-        TIMESTAMPTZ processed_at
+        VARCHAR error_message
+        TIMESTAMPTZ created_at_local
+        TIMESTAMPTZ received_at_server
+        TIMESTAMPTZ processed_at_server
     }
 
     RECEIPT_DOCUMENT {
@@ -697,6 +705,7 @@ erDiagram
     ROUTE_RUN ||--o{ INCIDENT : has
     SALE ||--o{ ANNULMENT_REQUEST : requests
     DEVICE ||--o{ SYNC_OPERATION : submits
+    APP_USER ||--o{ SYNC_OPERATION : creates
     SALE ||--o{ RECEIPT_DOCUMENT : documents
     FILE_OBJECT ||--o{ RECEIPT_DOCUMENT : stores
     SALE ||--o{ FEL_DOCUMENT : certifies

@@ -266,4 +266,5 @@ Verificación: tests backend/frontend/integración/E2E, Docker build, Compose, h
 | 16 | Completada | IndexedDB móvil v2 con 26 stores canónicos, índices, repositorios, transacciones multi-store, migración v1→v2, persistencia tras reinicio y ERD lógico verificados. |
 | 17 | Completada | ConnectionManager con UNKNOWN/CHECKING/OFFLINE/DEGRADED/ONLINE, timeout, cooldown, deduplicación, lifecycle, backoff, comprobación manual y endpoint `no-store`; frontend, backend y despliegue verificados. |
 | 18 | Completada | SyncEngine independiente con Outbox IndexedDB, dependencias, batches, resultados parciales, estados visibles, recuperación, backoff+jitter, lifecycle, botón manual y Background Sync progresivo verificados. |
-| 19–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |
+| 19 | Completada | Idempotencia por dispositivo/operación, hash canónico, resultados persistidos, dependencias, reintentos transaccionales y lote HTTP; cinco reenvíos producen una sola fila y un solo efecto. |
+| 20–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |
