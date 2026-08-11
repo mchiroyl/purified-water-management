@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import { App } from './app/App';
 import { SessionProvider } from './features/auth/SessionContext';
+import { ConnectionProvider } from './features/connectivity/ConnectionContext';
 import { PwaLifecycle } from './pwa/PwaLifecycle';
 import './styles.css';
 
@@ -20,10 +21,12 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <SessionProvider>
-          <App />
-          <PwaLifecycle />
-        </SessionProvider>
+        <ConnectionProvider>
+          <SessionProvider>
+            <App />
+            <PwaLifecycle />
+          </SessionProvider>
+        </ConnectionProvider>
       </BrowserRouter>
     </QueryClientProvider>
   </StrictMode>

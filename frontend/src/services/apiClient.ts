@@ -17,11 +17,19 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
     headers.set('Authorization', `Bearer ${accessToken}`);
   }
 
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...init,
-    headers,
-    credentials: 'include'
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      ...init,
+      headers,
+      credentials: 'include'
+    });
+  } catch (error) {
+    window.dispatchEvent(new CustomEvent('agua-pura:request-failure'));
+    throw error;
+  }
+
+  if (response.status >= 500) window.dispatchEvent(new CustomEvent('agua-pura:request-failure'));
 
   if (response.status === 204) {
     return undefined as T;
