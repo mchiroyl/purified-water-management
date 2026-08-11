@@ -92,3 +92,6 @@ Fuente: `docs/ERS_SRS.md` y `PROMPT_MAESTRO_SISTEMA_AGUA_PURA.md`.
 - **RB-054:** Cada venta posee como máximo un PDF interno almacenado; repetir la solicitud devuelve el mismo documento.
 - **RB-055:** El PDF interno declara de forma visible que no es un DTE FEL certificado.
 - **RB-056:** FEL no se activa sin un adaptador de certificador real instalado y credenciales validadas exclusivamente en backend.
+- **RB-057:** Web Share se usa únicamente cuando el navegador confirma soporte para compartir el archivo PDF.
+- **RB-058:** El fallback descarga el PDF y usa el enlace público `wa.me`; no integra APIs privadas de WhatsApp.
+- **RB-059:** Un comprobante oficial descargado puede almacenarse en IndexedDB y una descarga solicitada offline queda pendiente sin inventar un documento local.

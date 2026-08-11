@@ -223,6 +223,13 @@ renderizado a PNG y revisado sin solapamientos ni recortes.
 Entregables: Web Share API, descarga y mensaje fallback.  
 Verificación: móvil compatible comparte archivo; navegador alterno permite descarga.
 
+Estado: **completada**. La PWA comparte el archivo PDF mediante Web Share API cuando el dispositivo
+acepta archivos. El fallback descarga el comprobante y abre exclusivamente `https://wa.me/` con un
+mensaje preparado que indica adjuntar el archivo, sin APIs privadas. El PDF oficial se guarda en
+`fileCache` y `receiptCache` de IndexedDB; si no existe copia y no hay conexión, queda
+`PENDING_DOWNLOAD` hasta que el usuario recupere Internet. Las pruebas cubren compartir nativo,
+cancelación segura, descarga, enlace WhatsApp, hash SHA-256, caché y pendiente offline.
+
 ### FASE 28 — Dashboard
 
 Entregables: indicadores operativos, diferencias y pendientes.  
