@@ -357,4 +357,6 @@ Verificación: tests backend/frontend/integración/E2E, Docker build, Compose, h
 | 34 | Completada | Manual de usuario en Markdown y PDF con 11 capturas reales generadas por la aceptación E2E; PDF de 17 páginas renderizado y revisado visualmente. |
 | 35 | Completada | Manual técnico creado con stack versionado, arquitectura, seguridad, esquema, invariantes, IndexedDB, sincronización, archivos/FEL, auditoría, pruebas y despliegue. |
 | 36 | Completada | Guía de instalación local/productiva y script PowerShell seguro para crear `.env`, secretos aleatorios y contraseña temporal sin sobrescritura ni exposición. |
-| 37–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |
+| 37 | Completada | Scripts y guía de respaldo/restauración integral PostgreSQL + archivos, manifiesto con SHA-256, respaldo previo, confirmación destructiva y healthchecks. |
+| 38 | Completada | README, API REST, guía de desarrollo y SECURITY.md agregados; documentación de contratos, flujo de contribución, seguridad y operación enlazada sin duplicar funciones. |
+| 39 | Completada | Verificación integral final, informe de evidencias, salud Compose y entrega documentadas en INFORME_VERIFICACION_FINAL.md. |
