@@ -1,7 +1,9 @@
 flowchart TB
+    Internet["Usuario por HTTPS"]
+    Nginx["Nginx\nTLS, CSP, límites y proxy"]
     subgraph Client["PWA React / TypeScript"]
         UI["UI por rol"]
-        Query["TanStack Query"]
+        Query["TanStack Query + cliente HTTP"]
         Connection["ConnectionManager"]
         Sync["SyncEngine"]
         SW["Service Worker"]
@@ -14,10 +16,10 @@ flowchart TB
     end
 
     subgraph Backend["Spring Boot — monolito modular"]
-        REST["Presentation / REST"]
+        REST["Presentation / REST\nvalidación, rate limit y autorización"]
         APP["Application / casos de uso"]
         DOMAIN["Domain / reglas"]
-        INFRA["Infrastructure / adaptadores"]
+        INFRA["Infrastructure / adaptadores\nJPA, JWT, storage, PDF, sincronización"]
         REST --> APP --> DOMAIN
         INFRA --> DOMAIN
     end
@@ -27,8 +29,10 @@ flowchart TB
     PDF["Generador PDF"]
     FEL["Adaptador FEL opcional"]
 
-    Query -->|HTTPS JSON| REST
-    Sync -->|batch idempotente| REST
+    Internet --> Nginx --> UI
+    Query -->|HTTPS JSON| Nginx
+    Sync -->|batch idempotente| Nginx
+    Nginx --> REST
     INFRA <--> PG
     INFRA <--> Files
     INFRA --> PDF

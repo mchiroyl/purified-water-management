@@ -1,4 +1,5 @@
 flowchart LR
+    Gateway["Nginx / seguridad HTTP"] --> Auth
     Auth --> Users
     Users --> Devices
     Company["Company Configuration"] --> Receipts
@@ -23,6 +24,11 @@ flowchart LR
     Sync --> Sales
     Sync --> Payments
     Sync --> Waste
+    Authorizations --> Incidents
+    Authorizations --> Annulments
+    Settlements --> Incidents
     Audit --> Reports
+    Users --> Audit
+    Sync --> Audit
     Sales --> Receipts
     Receipts -.-> FEL

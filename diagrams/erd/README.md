@@ -7,11 +7,32 @@ Esta carpeta contiene los dos modelos obligatorios del sistema:
 
 ## PostgreSQL
 
-PostgreSQL es la fuente oficial y autoritativa. El diagrama incluye entidades, claves primarias, claves foráneas, cardinalidades y campos que determinan integridad. Durante la implementación, Flyway será la fuente ejecutable del esquema; cualquier migración deberá actualizar el ERD en la misma fase.
+PostgreSQL es la fuente oficial y autoritativa. El diagrama incluye las 54 tablas creadas por Flyway V1–V18, sus claves primarias, claves foráneas, cardinalidades y los campos que determinan integridad. Flyway es la fuente ejecutable del esquema; cualquier migración nueva debe actualizar el ERD en el mismo cambio.
+
+### Inventario ejecutable por migración
+
+| Migración | Alcance principal |
+|---|---|
+| V1–V2 | Seguridad, usuarios, empresa única, archivos, FEL y auditoría |
+| V3 | Productos, presentaciones, unidades y conversiones |
+| V4 | Clientes, rutas, vendedores, vehículos y asignaciones históricas |
+| V5 | Listas/versiones de precios, tramos, precios especiales y descuentos |
+| V6 | Ubicaciones, saldos y libro inmutable de inventario |
+| V7 | Cargas de ruta, detalle y correcciones compensatorias |
+| V8–V9 | Ventas, detalles, pagos y cuenta corriente de crédito |
+| V10 | Idempotencia de sincronización por dispositivo y operación |
+| V11 | Revisión y fusión de clientes provisionales |
+| V12 | Mermas, evidencias, revisiones y alertas |
+| V13 | Devoluciones y recepción en bodega |
+| V14 | Entrega de efectivo y liquidación física/financiera |
+| V15 | Autorizaciones e incidencias |
+| V16 | Anulación segregada y reversos de pago |
+| V17 | Comprobantes internos y bloqueo FEL sin certificador |
+| V18 | Ampliación de auditoría correlacionada |
 
 ## IndexedDB móvil
 
-IndexedDB no es una base relacional y no aplica claves foráneas. El diagrama usa relaciones visuales para indicar referencias lógicas por UUID o clave local. La integridad de esas referencias se implementará en la capa de almacenamiento y el Sync Engine.
+IndexedDB no es una base relacional y no aplica claves foráneas. El diagrama usa relaciones visuales para indicar referencias lógicas por UUID o clave local. La integridad de esas referencias está implementada en la capa de almacenamiento y el Sync Engine.
 
 ### Object stores e índices mínimos
 

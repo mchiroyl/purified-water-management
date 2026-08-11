@@ -1,0 +1,16 @@
+sequenceDiagram
+    participant V as Vendedor PWA
+    participant I as IndexedDB
+    participant S as SyncEngine
+    participant A as API
+    participant P as PostgreSQL
+    V->>I: Guarda agregado + detalles + inventario + Outbox
+    Note over V,I: Una sola transacción local
+    S->>I: Lee operaciones READY por dependencias
+    S->>A: POST lote con deviceId y clientOperationId
+    A->>P: Reserva idempotencia y ejecuta transacción
+    P-->>A: Resultado oficial persistido
+    A-->>S: SYNCED / ALREADY_PROCESSED / RETRYABLE / REJECTED
+    S->>I: Guarda resultado y actualiza Outbox
+    S->>I: Reemplaza referencias locales por IDs oficiales
+    Note over S,A: Cinco reintentos producen un solo efecto oficial

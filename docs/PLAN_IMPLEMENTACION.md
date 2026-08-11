@@ -353,4 +353,5 @@ Verificación: tests backend/frontend/integración/E2E, Docker build, Compose, h
 | 30 | Completada | Auditoría inmutable, filtrable, correlacionada y sanitizada con cobertura de eventos críticos. |
 | 31 | Completada | Escaneo de seguridad y remediación: secretos obligatorios/rotados, puertos internos no publicados, rate limiting, límites JSON, cambio obligatorio de contraseña, revocación JWT inmediata, refresh serializado, aislamiento IndexedDB, TLS productivo y auditoría ampliada; pruebas y contenedores saludables. |
 | 32 | Completada | Playwright ejecuta en Docker y base aislada los 28 pasos: configuración, catálogo, precios, vendedor, ruta, carga, venta online/offline, persistencia PWA, sincronización idempotente, revisiones, devolución, liquidación sin diferencias, PDF interno, Web Share, bloqueo FEL y controles HTTP. |
-| 33–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |
+| 33 | Completada | Diagramas de contexto, arquitectura, componentes, casos de uso, operación, seguridad y sincronización actualizados; ERD PostgreSQL reconciliado 1:1 con las 54 tablas Flyway V1–V18 y ERD IndexedDB con sus 26 stores v2. |
+| 34–39 | Planificadas | Se ejecutarán en orden y se actualizará esta tabla sin duplicar fases ni funciones. |

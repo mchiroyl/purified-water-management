@@ -1,0 +1,18 @@
+sequenceDiagram
+    participant U as Usuario
+    participant N as Nginx
+    participant A as API
+    participant D as PostgreSQL
+    U->>N: Credenciales + identificador del dispositivo
+    N->>A: Solicitud limitada por IP y usuario
+    A->>D: Busca usuario activo y verifica Argon2id
+    D-->>A: Usuario, roles y estado
+    alt contraseña temporal
+        A-->>U: JWT limitado a cambio obligatorio
+        U->>A: Cambia contraseña
+        A->>D: Revoca sesiones anteriores
+    else credenciales vigentes
+        A->>D: Registra dispositivo y refresh rotativo
+        A-->>U: Access token + refresh cookie HttpOnly
+    end
+    Note over A,D: Cada petición revalida usuario, dispositivo y roles

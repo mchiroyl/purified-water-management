@@ -1,825 +1,519 @@
 erDiagram
-    COMPANY_CONFIGURATION {
-        UUID id PK
-        VARCHAR commercial_name
-        VARCHAR legal_name
-        VARCHAR tax_id
-        TEXT address
-        VARCHAR phone
-        VARCHAR whatsapp
-        VARCHAR email
-        UUID logo_file_id FK
-        CHAR currency_code
-        VARCHAR timezone
-        VARCHAR receipt_prefix
-        BIGINT next_receipt_number
-        TEXT document_legend
-        BIGINT version
-        TIMESTAMPTZ created_at
-        TIMESTAMPTZ updated_at
-    }
-
-    FEL_CONFIGURATION {
-        UUID id PK
-        BOOLEAN enabled
-        VARCHAR provider_code
-        VARCHAR credential_secret_ref
-        VARCHAR environment
-        VARCHAR establishment_code
-        BIGINT version
-        TIMESTAMPTZ updated_at
-        UUID updated_by FK
-    }
-
-    FEL_DOCUMENT {
-        UUID id PK
-        UUID sale_id FK
-        UUID fel_configuration_id FK
-        VARCHAR provider_code
-        VARCHAR environment
-        VARCHAR status
-        VARCHAR request_reference
-        VARCHAR response_reference
-        UUID certified_file_id FK
-        VARCHAR error_code
-        VARCHAR error_message
-        TIMESTAMPTZ created_at
-        TIMESTAMPTZ certified_at
-    }
-
-    FILE_OBJECT {
-        UUID id PK
-        VARCHAR storage_key UK
-        VARCHAR original_name
-        VARCHAR media_type
-        BIGINT size_bytes
-        VARCHAR sha256
-        VARCHAR status
-        UUID created_by FK
-        TIMESTAMPTZ created_at
-    }
-
     APP_USER {
-        UUID id PK
-        VARCHAR username UK
-        VARCHAR email UK
-        VARCHAR password_hash
-        VARCHAR status
-        BOOLEAN must_change_password
-        INT failed_attempts
-        TIMESTAMPTZ locked_until
-        BIGINT version
-        TIMESTAMPTZ created_at
-        TIMESTAMPTZ updated_at
+        uuid id PK
+        string username UK
+        string email UK
+        string status
+        boolean must_change_password
     }
-
     ROLE {
-        UUID id PK
-        VARCHAR code UK
-        VARCHAR name
+        uuid id PK
+        string code UK
     }
-
     USER_ROLE {
-        UUID user_id PK, FK
-        UUID role_id PK, FK
-        UUID assigned_by FK
-        TIMESTAMPTZ assigned_at
+        uuid user_id PK,FK
+        uuid role_id PK,FK
+        uuid assigned_by FK
     }
-
     SELLER {
-        UUID id PK
-        UUID user_id UK, FK
-        VARCHAR code UK
-        VARCHAR display_name
-        VARCHAR status
-        TIMESTAMPTZ created_at
+        uuid id PK
+        uuid user_id FK,UK
+        string code UK
     }
-
     DEVICE {
-        UUID id PK
-        UUID user_id FK
-        VARCHAR friendly_name
-        VARCHAR status
-        VARCHAR app_version
-        TIMESTAMPTZ first_seen_at
-        TIMESTAMPTZ last_seen_at
-        TIMESTAMPTZ revoked_at
-        UUID revoked_by FK
+        uuid id PK
+        uuid user_id FK
+        uuid revoked_by FK
+        string status
     }
-
     REFRESH_SESSION {
-        UUID id PK
-        UUID user_id FK
-        UUID device_id FK
-        UUID family_id
-        VARCHAR token_hash UK
-        TIMESTAMPTZ issued_at
-        TIMESTAMPTZ expires_at
-        TIMESTAMPTZ revoked_at
-        UUID replaced_by_id FK
-        VARCHAR revoke_reason
+        uuid id PK
+        uuid user_id FK
+        uuid device_id FK
+        uuid replaced_by_id FK
+        timestamp expires_at
     }
-
-    VEHICLE {
-        UUID id PK
-        VARCHAR code UK
-        VARCHAR license_plate UK
-        VARCHAR description
-        VARCHAR status
-        TIMESTAMPTZ created_at
+    FILE_OBJECT {
+        uuid id PK
+        uuid created_by FK
+        string storage_key UK
+        string sha256
     }
-
-    ROUTE {
-        UUID id PK
-        VARCHAR code UK
-        VARCHAR name
-        TEXT description
-        VARCHAR status
-        TIMESTAMPTZ created_at
+    COMPANY_CONFIGURATION {
+        uuid id PK
+        uuid logo_file_id FK
+        string commercial_name
+        string legal_name
+        string tax_id
+        string currency_code
+        string time_zone
+        bigint version
     }
-
-    ROUTE_ASSIGNMENT {
-        UUID id PK
-        UUID route_id FK
-        UUID seller_id FK
-        UUID vehicle_id FK
-        DATE valid_from
-        DATE valid_to
-        UUID assigned_by FK
-        TIMESTAMPTZ created_at
+    FEL_CONFIGURATION {
+        uuid id PK
+        uuid updated_by FK
+        boolean enabled
+        string provider_code
     }
-
-    ROUTE_RUN {
-        UUID id PK
-        UUID assignment_id FK
-        DATE business_date
-        VARCHAR status
-        UUID started_device_id FK
-        TIMESTAMPTZ started_at
-        TIMESTAMPTZ finished_at
-        BIGINT version
-    }
-
-    CUSTOMER {
-        UUID id PK
-        VARCHAR code UK
-        VARCHAR name
-        VARCHAR normalized_name
-        VARCHAR contact_name
-        VARCHAR phone
-        VARCHAR normalized_phone
-        VARCHAR whatsapp
-        TEXT address_reference
-        VARCHAR customer_type
-        VARCHAR status
-        BOOLEAN credit_allowed
-        NUMERIC credit_limit
-        UUID created_by FK
-        UUID source_device_id FK
-        VARCHAR registration_state
-        TIMESTAMPTZ created_at
-        TIMESTAMPTZ updated_at
-    }
-
-    CUSTOMER_ROUTE {
-        UUID id PK
-        UUID customer_id FK
-        UUID route_id FK
-        DATE valid_from
-        DATE valid_to
-        UUID assigned_by FK
-    }
-
-    CUSTOMER_MERGE {
-        UUID id PK
-        UUID source_customer_id FK
-        UUID target_customer_id FK
-        TEXT reason
-        UUID merged_by FK
-        TIMESTAMPTZ merged_at
-    }
-
-    CUSTOMER_REGISTRATION_REVIEW {
-        UUID id PK
-        UUID customer_id UK, FK
-        VARCHAR decision
-        UUID target_customer_id FK
-        TEXT reason
-        UUID reviewed_by FK
-        TIMESTAMPTZ reviewed_at
-    }
-
-    UNIT_OF_MEASURE {
-        UUID id PK
-        VARCHAR code UK
-        VARCHAR name
-        BOOLEAN active
-    }
-
-    PRODUCT {
-        UUID id PK
-        VARCHAR code UK
-        VARCHAR name
-        TEXT description
-        UUID base_uom_id FK
-        BOOLEAN active
-        BOOLEAN tracks_inventory
-        TIMESTAMPTZ created_at
-        TIMESTAMPTZ updated_at
-    }
-
-    PRODUCT_PRESENTATION {
-        UUID id PK
-        UUID product_id FK
-        VARCHAR code
-        VARCHAR name
-        NUMERIC units_per_presentation
-        BOOLEAN active
-        TIMESTAMPTZ created_at
-    }
-
-    PRESENTATION_CONVERSION {
-        UUID id PK
-        UUID from_presentation_id FK
-        UUID to_presentation_id FK
-        NUMERIC factor
-        DATE valid_from
-        DATE valid_to
-    }
-
-    PRICE_LIST {
-        UUID id PK
-        VARCHAR code UK
-        VARCHAR name
-        VARCHAR status
-        CHAR currency_code
-    }
-
-    PRICE_VERSION {
-        UUID id PK
-        UUID price_list_id FK
-        INT version_number
-        TIMESTAMPTZ valid_from
-        TIMESTAMPTZ valid_to
-        VARCHAR status
-        UUID created_by FK
-    }
-
-    PRICE_TIER {
-        UUID id PK
-        UUID price_version_id FK
-        UUID product_presentation_id FK
-        NUMERIC min_base_units
-        NUMERIC max_base_units
-        NUMERIC unit_price
-    }
-
-    CUSTOMER_SPECIAL_PRICE {
-        UUID id PK
-        UUID customer_id FK
-        UUID product_presentation_id FK
-        NUMERIC unit_price
-        TIMESTAMPTZ valid_from
-        TIMESTAMPTZ valid_to
-        UUID approved_by FK
-        VARCHAR status
-    }
-
-    DISCOUNT_REQUEST {
-        UUID id PK
-        UUID requested_by FK
-        UUID approved_by FK
-        UUID customer_id FK
-        UUID product_presentation_id FK
-        NUMERIC normal_price
-        NUMERIC requested_price
-        TEXT reason
-        VARCHAR status
-        TIMESTAMPTZ expires_at
-        TIMESTAMPTZ decided_at
-    }
-
-    INVENTORY_LOCATION {
-        UUID id PK
-        VARCHAR code UK
-        VARCHAR name
-        VARCHAR location_type
-        UUID route_run_id FK
-        VARCHAR status
-    }
-
-    INVENTORY_BALANCE {
-        UUID id PK
-        UUID location_id FK
-        UUID product_id FK
-        NUMERIC quantity_base_units
-        BIGINT version
-        TIMESTAMPTZ updated_at
-    }
-
-    INVENTORY_MOVEMENT {
-        UUID id PK
-        UUID product_id FK
-        UUID source_location_id FK
-        UUID destination_location_id FK
-        NUMERIC quantity_base_units
-        VARCHAR movement_type
-        VARCHAR reference_type
-        UUID reference_id
-        UUID created_by FK
-        UUID device_id FK
-        TIMESTAMPTZ occurred_at
-    }
-
-    ROUTE_LOAD {
-        UUID id PK
-        UUID route_run_id FK
-        UUID warehouse_location_id FK
-        UUID route_location_id FK
-        VARCHAR status
-        UUID prepared_by FK
-        TIMESTAMPTZ prepared_at
-        BIGINT version
-    }
-
-    ROUTE_LOAD_ITEM {
-        UUID id PK
-        UUID route_load_id FK
-        UUID presentation_id FK
-        NUMERIC presentation_quantity
-        NUMERIC quantity_base_units
-    }
-
-    ROUTE_LOAD_CONFIRMATION {
-        UUID id PK
-        UUID route_load_id FK
-        VARCHAR confirmation_type
-        UUID user_id FK
-        UUID device_id FK
-        TIMESTAMPTZ confirmed_at
-        JSONB quantity_snapshot
-    }
-
-    SALE {
-        UUID id PK
-        VARCHAR official_number UK
-        UUID local_reference
-        UUID route_run_id FK
-        UUID seller_id FK
-        UUID customer_id FK
-        UUID device_id FK
-        UUID client_operation_id
-        VARCHAR status
-        CHAR currency_code
-        NUMERIC subtotal
-        NUMERIC discount_total
-        NUMERIC total
-        VARCHAR company_name
-        VARCHAR company_legal_name
-        VARCHAR company_tax_id
-        VARCHAR company_address
-        VARCHAR company_phone
-        VARCHAR company_whatsapp
-        VARCHAR company_email
-        VARCHAR company_timezone
-        UUID company_logo_file_id FK
-        TEXT document_legend
-        TIMESTAMPTZ occurred_at_local
-        TIMESTAMPTZ received_at_server
-        TIMESTAMPTZ created_at
-    }
-
-    SALE_ITEM {
-        UUID id PK
-        UUID sale_id FK
-        UUID presentation_id FK
-        UUID price_version_id FK
-        UUID price_tier_id FK
-        UUID special_price_id FK
-        UUID discount_request_id FK
-        NUMERIC quantity_presentations
-        NUMERIC quantity_base_units
-        NUMERIC unit_price
-        NUMERIC subtotal
-    }
-
-    PAYMENT {
-        UUID id PK
-        UUID sale_id FK
-        UUID route_run_id FK
-        VARCHAR payment_method
-        NUMERIC amount
-        VARCHAR status
-        UUID device_id FK
-        UUID client_operation_id
-        TIMESTAMPTZ paid_at
-    }
-
-    TRANSFER_DETAIL {
-        UUID id PK
-        UUID payment_id UK, FK
-        VARCHAR bank_name
-        VARCHAR reference
-        UUID evidence_file_id FK
-        UUID verified_by FK
-        TIMESTAMPTZ verified_at
-        TEXT rejection_reason
-    }
-
-    CREDIT_ACCOUNT {
-        UUID id PK
-        UUID customer_id UK, FK
-        NUMERIC credit_limit
-        NUMERIC balance
-        VARCHAR status
-        BIGINT version
-    }
-
-    CREDIT_MOVEMENT {
-        UUID id PK
-        UUID credit_account_id FK
-        UUID sale_id FK
-        UUID payment_id FK
-        VARCHAR movement_type
-        NUMERIC amount
-        NUMERIC resulting_balance
-        UUID created_by FK
-        TIMESTAMPTZ created_at
-    }
-
-    CUSTOMER_RETURN {
-        UUID id PK
-        UUID client_reference UK
-        VARCHAR return_type
-        UUID route_id FK
-        UUID route_location_id FK
-        UUID customer_id FK
-        UUID sale_id FK
-        UUID seller_id FK
-        UUID reported_by FK
-        UUID device_id FK
-        VARCHAR reason
-        UUID received_by FK
-        UUID received_device_id FK
-        UUID warehouse_location_id FK
-        VARCHAR status
-        TIMESTAMPTZ reported_at_local
-        TIMESTAMPTZ received_at_server
-        TIMESTAMPTZ received_at
-        VARCHAR receipt_notes
-    }
-
-    RETURN_ITEM {
-        UUID id PK
-        UUID return_id FK
-        UUID presentation_id FK
-        UUID product_id FK
-        NUMERIC presentation_quantity
-        NUMERIC reported_base_units
-        NUMERIC received_base_units
-        VARCHAR condition
-    }
-
-    WASTE_TYPE {
-        UUID id PK
-        VARCHAR code UK
-        VARCHAR name
-        VARCHAR evidence_policy
-        NUMERIC warehouse_approval_limit_base_units
-        NUMERIC supervisor_approval_limit_base_units
-        INTEGER daily_alert_threshold
-        BOOLEAN active
-    }
-
-    WASTE {
-        UUID id PK
-        UUID client_reference UK
-        UUID route_id FK
-        UUID inventory_location_id FK
-        UUID seller_id FK
-        UUID reported_by FK
-        UUID device_id FK
-        VARCHAR status
-        VARCHAR required_role
-        TEXT reason
-        TIMESTAMPTZ occurred_at_local
-        TIMESTAMPTZ received_at_server
-    }
-
-    WASTE_ITEM {
-        UUID id PK
-        UUID waste_id FK
-        UUID waste_type_id FK
-        UUID presentation_id FK
-        UUID product_id FK
-        NUMERIC presentation_quantity
-        NUMERIC reported_base_units
-        NUMERIC recoverable_base_units
-        NUMERIC proposed_approved_base_units
-        NUMERIC approved_base_units
-    }
-
-    WASTE_EVIDENCE {
-        UUID id PK
-        UUID waste_id FK
-        VARCHAR storage_reference
-        VARCHAR media_type
-        VARCHAR sha256
-        UUID captured_device_id FK
-        TIMESTAMPTZ captured_at_local
-    }
-
-    WASTE_REVIEW {
-        UUID id PK
-        UUID waste_id FK
-        UUID reviewer_id FK
-        VARCHAR reviewer_role
-        VARCHAR decision
-        NUMERIC approved_base_units
-        TEXT notes
-        TIMESTAMPTZ reviewed_at
-    }
-
-    CASH_DELIVERY {
-        UUID id PK
-        UUID route_load_id FK
-        NUMERIC amount
-        UUID delivered_by FK
-        UUID delivered_device_id FK
-        UUID received_by FK
-        UUID received_device_id FK
-        VARCHAR notes
-        TIMESTAMPTZ delivered_at
-    }
-
-    SETTLEMENT {
-        UUID id PK
-        UUID route_load_id UK, FK
-        UUID route_id FK
-        VARCHAR status
-        NUMERIC sales_total
-        NUMERIC expected_cash
-        NUMERIC delivered_cash
-        NUMERIC verified_transfers
-        NUMERIC applied_credit
-        NUMERIC monetary_difference
-        NUMERIC physical_difference_total
-        TEXT blocking_reasons
-        UUID closed_by FK
-        UUID closed_device_id FK
-        VARCHAR close_notes
-        TIMESTAMPTZ calculated_at
-        TIMESTAMPTZ closed_at
-        BIGINT version
-    }
-
-    SETTLEMENT_ITEM {
-        UUID id PK
-        UUID settlement_id FK
-        UUID product_id FK
-        NUMERIC loaded_units
-        NUMERIC sold_units
-        NUMERIC returned_good_units
-        NUMERIC customer_return_units
-        NUMERIC approved_waste_units
-        NUMERIC physical_difference
-    }
-
-    INCIDENT {
-        UUID id PK
-        UUID route_id FK
-        UUID settlement_id FK
-        VARCHAR reference_type
-        UUID reference_id
-        UUID reported_by FK
-        UUID reported_device_id FK
-        UUID handled_by FK
-        UUID handled_device_id FK
-        VARCHAR incident_type
-        VARCHAR severity
-        VARCHAR status
-        TEXT description
-        TEXT resolution_notes
-        TIMESTAMPTZ created_at
-        TIMESTAMPTZ handled_at
-    }
-
-    AUTHORIZATION {
-        UUID id PK
-        VARCHAR authorization_type
-        VARCHAR entity_type
-        UUID entity_id
-        UUID requested_by FK
-        UUID requested_device_id FK
-        UUID decided_by FK
-        UUID decided_device_id FK
-        VARCHAR status
-        TEXT reason
-        TEXT decision_notes
-        TIMESTAMPTZ expires_at
-        TIMESTAMPTZ created_at
-        TIMESTAMPTZ decided_at
-    }
-
-    ANNULMENT_REQUEST {
-        UUID id PK
-        UUID sale_id FK
-        UUID requested_by FK
-        UUID requested_device_id FK
-        UUID decided_by FK
-        UUID decided_device_id FK
-        VARCHAR status
-        TEXT reason
-        TEXT decision_notes
-        TIMESTAMPTZ requested_at
-        TIMESTAMPTZ decided_at
-    }
-
-    PAYMENT_REVERSAL {
-        UUID id PK
-        UUID annulment_request_id FK
-        UUID payment_id FK
-        VARCHAR payment_method
-        NUMERIC amount
-        UUID reversed_by FK
-        UUID reversed_device_id FK
-        TIMESTAMPTZ reversed_at
-    }
-
-    SYNC_OPERATION {
-        UUID id PK
-        UUID device_id FK
-        UUID client_operation_id
-        UUID user_id FK
-        VARCHAR entity_type
-        VARCHAR operation_type
-        UUID aggregate_local_id
-        JSONB payload
-        CHAR payload_hash
-        JSONB dependencies
-        VARCHAR processing_status
-        VARCHAR result_status
-        UUID server_entity_id
-        JSONB result_payload
-        VARCHAR error_code
-        VARCHAR error_message
-        TIMESTAMPTZ created_at_local
-        TIMESTAMPTZ received_at_server
-        TIMESTAMPTZ processed_at_server
-    }
-
-    RECEIPT_DOCUMENT {
-        UUID id PK
-        UUID sale_id FK
-        UUID file_id FK
-        VARCHAR document_kind
-        VARCHAR document_number
-        UUID generated_by FK
-        UUID generated_device_id FK
-        TIMESTAMPTZ generated_at
-    }
-
     AUDIT_LOG {
-        UUID id PK
-        UUID user_id FK
-        UUID device_id FK
-        VARCHAR action
-        VARCHAR entity_type
-        UUID entity_id
-        JSONB before_data
-        JSONB after_data
-        UUID correlation_id
-        VARCHAR ip_address
-        TIMESTAMPTZ occurred_at
+        uuid id PK
+        uuid user_id FK
+        uuid device_id FK
+        string action
+        string resource_type
+        uuid correlation_id
     }
-
-    ALERT_RULE {
-        UUID id PK
-        VARCHAR code UK
-        VARCHAR alert_type
-        JSONB parameters
-        VARCHAR severity
-        BOOLEAN active
-        UUID updated_by FK
+    UNIT_OF_MEASURE {
+        uuid id PK
+        string code UK
     }
-
+    PRODUCT {
+        uuid id PK
+        uuid base_unit_id FK
+        string code UK
+        boolean active
+    }
+    PRODUCT_PRESENTATION {
+        uuid id PK
+        uuid product_id FK
+        uuid unit_id FK
+        string code
+        decimal factor
+    }
+    PRESENTATION_CONVERSION {
+        uuid id PK
+        uuid presentation_id FK
+        uuid base_unit_id FK
+        decimal factor
+        timestamp valid_from
+    }
+    VEHICLE {
+        uuid id PK
+        string plate UK
+        boolean active
+    }
+    ROUTE {
+        uuid id PK
+        string code UK
+        boolean active
+    }
+    ROUTE_ASSIGNMENT {
+        uuid id PK
+        uuid route_id FK
+        uuid seller_id FK
+        uuid vehicle_id FK
+        uuid assigned_by FK
+        date valid_from
+        date valid_to
+    }
+    CUSTOMER {
+        uuid id PK
+        uuid created_by FK
+        uuid source_device_id FK
+        string code UK
+        string status
+        boolean provisional
+    }
+    CUSTOMER_ROUTE {
+        uuid id PK
+        uuid customer_id FK
+        uuid route_id FK
+        uuid assigned_by FK
+        date valid_from
+        date valid_to
+    }
+    CUSTOMER_MERGE {
+        uuid id PK
+        uuid source_customer_id FK,UK
+        uuid target_customer_id FK
+        uuid merged_by FK
+    }
+    CUSTOMER_REGISTRATION_REVIEW {
+        uuid id PK
+        uuid customer_id FK,UK
+        uuid target_customer_id FK
+        uuid reviewed_by FK
+        string decision
+    }
+    PRICE_LIST {
+        uuid id PK
+        string code UK
+        boolean active
+    }
+    PRICE_VERSION {
+        uuid id PK
+        uuid price_list_id FK
+        uuid created_by FK
+        int version_number
+        string status
+    }
+    PRICE_TIER {
+        uuid id PK
+        uuid price_version_id FK
+        uuid product_presentation_id FK
+        decimal minimum_quantity
+        decimal unit_price
+    }
+    CUSTOMER_SPECIAL_PRICE {
+        uuid id PK
+        uuid customer_id FK
+        uuid product_presentation_id FK
+        uuid approved_by FK
+        decimal unit_price
+        string status
+    }
+    DISCOUNT_REQUEST {
+        uuid id PK
+        uuid requested_by FK
+        uuid approved_by FK
+        uuid customer_id FK
+        uuid product_presentation_id FK
+        string status
+    }
+    INVENTORY_LOCATION {
+        uuid id PK
+        uuid route_id FK,UK
+        string type
+        string code UK
+    }
+    INVENTORY_BALANCE {
+        uuid location_id PK,FK
+        uuid product_id PK,FK
+        decimal quantity
+        bigint version
+    }
+    INVENTORY_MOVEMENT {
+        uuid id PK
+        uuid location_id FK
+        uuid product_id FK
+        uuid actor_id FK
+        uuid device_id FK
+        string movement_type
+        decimal quantity
+    }
+    ROUTE_LOAD {
+        uuid id PK
+        uuid route_id FK
+        uuid source_location_id FK
+        uuid target_location_id FK
+        uuid created_by FK
+        string status
+        date business_date
+    }
+    ROUTE_LOAD_ITEM {
+        uuid id PK
+        uuid route_load_id FK
+        uuid product_id FK
+        decimal quantity
+    }
+    ROUTE_LOAD_CORRECTION {
+        uuid id PK
+        uuid route_load_id FK
+        uuid product_id FK
+        uuid actor_id FK
+        uuid device_id FK
+        decimal quantity_delta
+    }
+    SALE {
+        uuid id PK
+        uuid route_id FK
+        uuid inventory_location_id FK
+        uuid seller_id FK
+        uuid customer_id FK
+        uuid created_by FK
+        uuid device_id FK
+        uuid company_logo_file_id FK
+        string official_number UK
+        decimal total
+        string status
+    }
+    SALE_ITEM {
+        uuid id PK
+        uuid sale_id FK
+        uuid product_id FK
+        uuid presentation_id FK
+        uuid price_version_id FK
+        uuid price_tier_id FK
+        uuid special_price_id FK
+        decimal quantity
+        decimal line_total
+    }
+    PAYMENT {
+        uuid id PK
+        uuid sale_id FK
+        uuid registered_by FK
+        uuid device_id FK
+        uuid verified_by FK
+        string payment_method
+        decimal amount
+        string status
+    }
+    CREDIT_ACCOUNT_ENTRY {
+        uuid id PK
+        uuid customer_id FK
+        uuid sale_id FK
+        uuid payment_id FK,UK
+        uuid created_by FK
+        uuid device_id FK
+        string entry_type
+        decimal amount
+    }
+    SYNC_OPERATION {
+        uuid id PK
+        uuid device_id FK
+        uuid user_id FK
+        uuid client_operation_id UK
+        string operation_type
+        string request_hash
+        string status
+    }
+    WASTE_TYPE {
+        uuid id PK
+        string code UK
+        boolean evidence_required
+    }
+    WASTE {
+        uuid id PK
+        uuid route_id FK
+        uuid inventory_location_id FK
+        uuid seller_id FK
+        uuid reported_by FK
+        uuid device_id FK
+        string client_reference UK
+        string status
+    }
+    WASTE_ITEM {
+        uuid id PK
+        uuid waste_id FK
+        uuid waste_type_id FK
+        uuid presentation_id FK
+        uuid product_id FK
+        decimal reported_quantity
+        decimal approved_quantity
+    }
+    WASTE_EVIDENCE {
+        uuid id PK
+        uuid waste_id FK
+        uuid captured_device_id FK
+        string storage_key
+        string sha256
+    }
+    WASTE_REVIEW {
+        uuid id PK
+        uuid waste_id FK
+        uuid reviewer_id FK
+        string decision
+    }
     ALERT {
-        UUID id PK
-        UUID rule_id FK
-        VARCHAR entity_type
-        UUID entity_id
-        VARCHAR status
-        JSONB evidence
-        UUID assigned_to FK
-        TIMESTAMPTZ created_at
-        TIMESTAMPTZ resolved_at
+        uuid id PK
+        uuid investigated_by FK
+        string alert_type
+        string reference_type
+        uuid reference_id
+        string status
+    }
+    CUSTOMER_RETURN {
+        uuid id PK
+        uuid route_id FK
+        uuid route_location_id FK
+        uuid customer_id FK
+        uuid sale_id FK
+        uuid seller_id FK
+        uuid reported_by FK
+        uuid device_id FK
+        uuid warehouse_location_id FK
+        uuid received_by FK
+        uuid received_device_id FK
+        string return_type
+        string status
+    }
+    RETURN_ITEM {
+        uuid id PK
+        uuid return_id FK
+        uuid presentation_id FK
+        uuid product_id FK
+        decimal quantity
+    }
+    CASH_DELIVERY {
+        uuid id PK
+        uuid route_load_id FK
+        uuid delivered_by FK
+        uuid delivered_device_id FK
+        uuid received_by FK
+        uuid received_device_id FK
+        decimal amount
+    }
+    SETTLEMENT {
+        uuid id PK
+        uuid route_load_id FK,UK
+        uuid route_id FK
+        uuid closed_by FK
+        uuid closed_device_id FK
+        decimal physical_difference
+        decimal financial_difference
+        string status
+    }
+    SETTLEMENT_ITEM {
+        uuid id PK
+        uuid settlement_id FK
+        uuid product_id FK
+        decimal expected_quantity
+        decimal returned_quantity
+        decimal difference
+    }
+    AUTHORIZATION_REQUEST {
+        uuid id PK
+        uuid requested_by FK
+        uuid requested_device_id FK
+        uuid decided_by FK
+        uuid decided_device_id FK
+        string authorization_type
+        string status
+    }
+    INCIDENT {
+        uuid id PK
+        uuid route_id FK
+        uuid settlement_id FK
+        uuid reported_by FK
+        uuid reported_device_id FK
+        uuid handled_by FK
+        uuid handled_device_id FK
+        string status
+    }
+    ANNULMENT_REQUEST {
+        uuid id PK
+        uuid sale_id FK,UK
+        uuid requested_by FK
+        uuid requested_device_id FK
+        uuid decided_by FK
+        uuid decided_device_id FK
+        string status
+    }
+    PAYMENT_REVERSAL {
+        uuid id PK
+        uuid annulment_request_id FK
+        uuid payment_id FK,UK
+        uuid reversed_by FK
+        uuid reversed_device_id FK
+        decimal amount
+    }
+    RECEIPT_DOCUMENT {
+        uuid id PK
+        uuid sale_id FK,UK
+        uuid file_id FK,UK
+        uuid generated_by FK
+        uuid generated_device_id FK
+        string sha256
+    }
+    FEL_DOCUMENT {
+        uuid id PK
+        uuid sale_id FK,UK
+        uuid fel_configuration_id FK
+        uuid certified_file_id FK
+        string status
+        string authorization_number
     }
 
-    FILE_OBJECT o|--o| COMPANY_CONFIGURATION : logo
     APP_USER ||--o{ USER_ROLE : has
     ROLE ||--o{ USER_ROLE : grants
     APP_USER ||--o| SELLER : represents
     APP_USER ||--o{ DEVICE : owns
-    APP_USER ||--o{ REFRESH_SESSION : authenticates
+    APP_USER ||--o{ REFRESH_SESSION : opens
     DEVICE ||--o{ REFRESH_SESSION : binds
-    ROUTE ||--o{ ROUTE_ASSIGNMENT : assigned
-    SELLER ||--o{ ROUTE_ASSIGNMENT : works
-    VEHICLE ||--o{ ROUTE_ASSIGNMENT : uses
-    ROUTE_ASSIGNMENT ||--o{ ROUTE_RUN : instantiates
-    DEVICE ||--o{ ROUTE_RUN : starts
-    CUSTOMER ||--o{ CUSTOMER_ROUTE : follows
-    ROUTE ||--o{ CUSTOMER_ROUTE : contains
-    CUSTOMER ||--o{ CUSTOMER_MERGE : source
-    CUSTOMER ||--o{ CUSTOMER_MERGE : target
-    APP_USER ||--o{ CUSTOMER_MERGE : decides
-    CUSTOMER ||--o| CUSTOMER_REGISTRATION_REVIEW : reviewed
-    CUSTOMER o|--o{ CUSTOMER_REGISTRATION_REVIEW : merge_target
-    APP_USER ||--o{ CUSTOMER_REGISTRATION_REVIEW : reviews
+    REFRESH_SESSION o|--o| REFRESH_SESSION : rotates_to
+    APP_USER ||--o{ FILE_OBJECT : creates
+    FILE_OBJECT o|--o| COMPANY_CONFIGURATION : logo
+    APP_USER ||--o{ FEL_CONFIGURATION : updates
+    APP_USER o|--o{ AUDIT_LOG : acts
+    DEVICE o|--o{ AUDIT_LOG : originates
+
     UNIT_OF_MEASURE ||--o{ PRODUCT : base_unit
-    PRODUCT ||--o{ PRODUCT_PRESENTATION : offers
-    PRODUCT_PRESENTATION ||--o{ PRESENTATION_CONVERSION : converts_from
-    PRODUCT_PRESENTATION ||--o{ PRESENTATION_CONVERSION : converts_to
+    PRODUCT ||--o{ PRODUCT_PRESENTATION : presents
+    UNIT_OF_MEASURE ||--o{ PRODUCT_PRESENTATION : unit
+    PRODUCT_PRESENTATION ||--o{ PRESENTATION_CONVERSION : versions
+    UNIT_OF_MEASURE ||--o{ PRESENTATION_CONVERSION : converts_to
+
+    ROUTE ||--o{ ROUTE_ASSIGNMENT : schedules
+    SELLER ||--o{ ROUTE_ASSIGNMENT : assigned
+    VEHICLE o|--o{ ROUTE_ASSIGNMENT : uses
+    APP_USER ||--o{ ROUTE_ASSIGNMENT : assigns
+    APP_USER o|--o{ CUSTOMER : creates
+    DEVICE o|--o{ CUSTOMER : sources
+    CUSTOMER ||--o{ CUSTOMER_ROUTE : belongs
+    ROUTE ||--o{ CUSTOMER_ROUTE : contains
+    CUSTOMER ||--o| CUSTOMER_MERGE : source
+    CUSTOMER ||--o{ CUSTOMER_MERGE : target
+    CUSTOMER ||--o| CUSTOMER_REGISTRATION_REVIEW : reviewed
+    CUSTOMER o|--o{ CUSTOMER_REGISTRATION_REVIEW : merged_target
+
     PRICE_LIST ||--o{ PRICE_VERSION : versions
-    PRICE_VERSION ||--o{ PRICE_TIER : defines
+    PRICE_VERSION ||--o{ PRICE_TIER : tiers
     PRODUCT_PRESENTATION ||--o{ PRICE_TIER : priced
     CUSTOMER ||--o{ CUSTOMER_SPECIAL_PRICE : receives
-    PRODUCT_PRESENTATION ||--o{ CUSTOMER_SPECIAL_PRICE : special_for
+    PRODUCT_PRESENTATION ||--o{ CUSTOMER_SPECIAL_PRICE : overrides
     CUSTOMER ||--o{ DISCOUNT_REQUEST : requests_for
     PRODUCT_PRESENTATION ||--o{ DISCOUNT_REQUEST : discounts
-    ROUTE_RUN o|--o| INVENTORY_LOCATION : route_stock
+
+    ROUTE o|--o| INVENTORY_LOCATION : mobile_stock
     INVENTORY_LOCATION ||--o{ INVENTORY_BALANCE : holds
-    PRODUCT ||--o{ INVENTORY_BALANCE : balances
+    PRODUCT ||--o{ INVENTORY_BALANCE : balanced
+    INVENTORY_LOCATION ||--o{ INVENTORY_MOVEMENT : records
     PRODUCT ||--o{ INVENTORY_MOVEMENT : moves
-    INVENTORY_LOCATION o|--o{ INVENTORY_MOVEMENT : source
-    INVENTORY_LOCATION o|--o{ INVENTORY_MOVEMENT : destination
-    ROUTE_RUN ||--o| ROUTE_LOAD : receives
-    ROUTE_LOAD ||--|{ ROUTE_LOAD_ITEM : contains
-    PRODUCT_PRESENTATION ||--o{ ROUTE_LOAD_ITEM : loaded_as
-    ROUTE_LOAD ||--|{ ROUTE_LOAD_CONFIRMATION : confirms
-    ROUTE_RUN ||--o{ SALE : records
+    ROUTE ||--o{ ROUTE_LOAD : loaded
+    INVENTORY_LOCATION ||--o{ ROUTE_LOAD : source
+    INVENTORY_LOCATION ||--o{ ROUTE_LOAD : target
+    ROUTE_LOAD ||--o{ ROUTE_LOAD_ITEM : contains
+    PRODUCT ||--o{ ROUTE_LOAD_ITEM : quantity
+    ROUTE_LOAD ||--o{ ROUTE_LOAD_CORRECTION : corrects
+    PRODUCT ||--o{ ROUTE_LOAD_CORRECTION : adjusts
+
+    ROUTE ||--o{ SALE : produces
+    INVENTORY_LOCATION ||--o{ SALE : decrements
     SELLER ||--o{ SALE : sells
-    CUSTOMER o|--o{ SALE : buys
-    DEVICE ||--o{ SALE : originates
+    CUSTOMER ||--o{ SALE : buys
+    DEVICE ||--o{ SALE : captures
+    FILE_OBJECT o|--o{ SALE : historical_logo
     SALE ||--|{ SALE_ITEM : contains
-    PRODUCT_PRESENTATION ||--o{ SALE_ITEM : sold_as
-    PRICE_VERSION ||--o{ SALE_ITEM : priced_by
-    SALE ||--|{ PAYMENT : paid_by
-    PAYMENT ||--o| TRANSFER_DETAIL : transfer
-    FILE_OBJECT o|--o{ TRANSFER_DETAIL : evidence
-    CUSTOMER ||--o| CREDIT_ACCOUNT : owns
-    CREDIT_ACCOUNT ||--o{ CREDIT_MOVEMENT : posts
-    SALE o|--o{ CREDIT_MOVEMENT : charges
-    PAYMENT o|--o{ CREDIT_MOVEMENT : settles
-    ROUTE ||--o{ CUSTOMER_RETURN : reports
-    INVENTORY_LOCATION ||--o{ CUSTOMER_RETURN : route_stock
-    INVENTORY_LOCATION o|--o{ CUSTOMER_RETURN : receives_in_warehouse
-    SELLER ||--o{ CUSTOMER_RETURN : declares
-    APP_USER ||--o{ CUSTOMER_RETURN : reports
-    DEVICE ||--o{ CUSTOMER_RETURN : captures
-    CUSTOMER o|--o{ CUSTOMER_RETURN : returns
-    SALE o|--o{ CUSTOMER_RETURN : references
-    CUSTOMER_RETURN ||--|{ RETURN_ITEM : contains
-    PRODUCT_PRESENTATION ||--o{ RETURN_ITEM : returned_as
-    PRODUCT ||--o{ RETURN_ITEM : returned_product
+    PRODUCT ||--o{ SALE_ITEM : sold
+    PRODUCT_PRESENTATION ||--o{ SALE_ITEM : presented
+    PRICE_VERSION o|--o{ SALE_ITEM : prices
+    PRICE_TIER o|--o{ SALE_ITEM : tier
+    CUSTOMER_SPECIAL_PRICE o|--o{ SALE_ITEM : special
+    SALE ||--o{ PAYMENT : paid_by
+    PAYMENT ||--o| CREDIT_ACCOUNT_ENTRY : posts
+    CUSTOMER ||--o{ CREDIT_ACCOUNT_ENTRY : account
+
+    DEVICE ||--o{ SYNC_OPERATION : deduplicates
+    APP_USER ||--o{ SYNC_OPERATION : submits
     ROUTE ||--o{ WASTE : reports
     INVENTORY_LOCATION ||--o{ WASTE : affects
     SELLER ||--o{ WASTE : declares
-    APP_USER ||--o{ WASTE : reports
-    DEVICE ||--o{ WASTE : captures
     WASTE ||--|{ WASTE_ITEM : contains
     WASTE_TYPE ||--o{ WASTE_ITEM : classifies
-    PRODUCT_PRESENTATION ||--o{ WASTE_ITEM : damaged_as
+    PRODUCT_PRESENTATION ||--o{ WASTE_ITEM : identifies
+    PRODUCT ||--o{ WASTE_ITEM : affects
     WASTE ||--o{ WASTE_EVIDENCE : proves
-    DEVICE ||--o{ WASTE_EVIDENCE : captures
     WASTE ||--o{ WASTE_REVIEW : reviewed
-    ROUTE_LOAD ||--o{ CASH_DELIVERY : receives
+
+    ROUTE ||--o{ CUSTOMER_RETURN : receives
+    CUSTOMER o|--o{ CUSTOMER_RETURN : returns
+    SALE o|--o{ CUSTOMER_RETURN : traces
+    CUSTOMER_RETURN ||--|{ RETURN_ITEM : contains
+    PRODUCT_PRESENTATION ||--o{ RETURN_ITEM : identifies
+    PRODUCT ||--o{ RETURN_ITEM : affects
+    ROUTE_LOAD ||--o{ CASH_DELIVERY : reconciles
     ROUTE_LOAD ||--o| SETTLEMENT : closes
-    ROUTE ||--o{ SETTLEMENT : reconciles
-    SETTLEMENT ||--|{ SETTLEMENT_ITEM : reconciles
-    PRODUCT ||--o{ SETTLEMENT_ITEM : reconciled
-    ROUTE ||--o{ INCIDENT : has
+    ROUTE ||--o{ SETTLEMENT : settles
+    SETTLEMENT ||--|{ SETTLEMENT_ITEM : details
+    PRODUCT ||--o{ SETTLEMENT_ITEM : compares
+
+    ROUTE o|--o{ INCIDENT : has
     SETTLEMENT o|--o{ INCIDENT : explains
-    APP_USER ||--o{ INCIDENT : reports
-    APP_USER o|--o{ INCIDENT : handles
-    APP_USER ||--o{ AUTHORIZATION : requests
-    APP_USER o|--o{ AUTHORIZATION : decides
-    SALE ||--o{ ANNULMENT_REQUEST : requests
-    APP_USER ||--o{ ANNULMENT_REQUEST : requests
-    APP_USER o|--o{ ANNULMENT_REQUEST : decides
-    DEVICE ||--o{ ANNULMENT_REQUEST : records
-    ANNULMENT_REQUEST ||--o{ PAYMENT_REVERSAL : compensates
+    SALE ||--o| ANNULMENT_REQUEST : annulled_by
+    ANNULMENT_REQUEST ||--o{ PAYMENT_REVERSAL : produces
     PAYMENT ||--o| PAYMENT_REVERSAL : reverses
-    APP_USER ||--o{ PAYMENT_REVERSAL : applies
-    DEVICE ||--o{ PAYMENT_REVERSAL : records
-    DEVICE ||--o{ SYNC_OPERATION : submits
-    APP_USER ||--o{ SYNC_OPERATION : creates
-    SALE ||--o{ RECEIPT_DOCUMENT : documents
-    FILE_OBJECT ||--o{ RECEIPT_DOCUMENT : stores
-    APP_USER ||--o{ RECEIPT_DOCUMENT : generates
-    DEVICE ||--o{ RECEIPT_DOCUMENT : records
-    SALE ||--o{ FEL_DOCUMENT : certifies
-    FEL_CONFIGURATION ||--o{ FEL_DOCUMENT : uses
-    FILE_OBJECT o|--o{ FEL_DOCUMENT : certified_file
-    APP_USER o|--o{ AUDIT_LOG : acts
-    DEVICE o|--o{ AUDIT_LOG : traces
-    ALERT_RULE ||--o{ ALERT : triggers
+    SALE ||--o| RECEIPT_DOCUMENT : renders
+    FILE_OBJECT ||--o| RECEIPT_DOCUMENT : stores
+    SALE ||--o| FEL_DOCUMENT : certifies
+    FEL_CONFIGURATION ||--o{ FEL_DOCUMENT : configures
+    FILE_OBJECT o|--o{ FEL_DOCUMENT : certified_pdf
