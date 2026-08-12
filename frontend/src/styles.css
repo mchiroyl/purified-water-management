@@ -56,6 +56,8 @@ h2 { margin-top: 0; }
 .mobile-menu-list { display: grid; gap: .35rem; padding-top: .7rem; }
 .mobile-menu-list a { padding: .85rem .8rem; border-radius: .6rem; text-decoration: none; color: var(--muted); font-weight: 700; }
 .mobile-menu-list a:hover, .mobile-menu-list a.active { color: var(--primary-dark); background: #e3f7f9; }
+.mobile-menu-footer { margin-top: .7rem; padding-top: .7rem; border-top: 1px solid var(--line); }
+.mobile-menu-footer button { width: 100%; }
 .connection { padding: .35rem .55rem; border-radius: 999px; background: #edf4f5; color: var(--muted); font-size: .75rem; font-weight: 800; }
 .connection.online { color: var(--success); background: #ecfdf3; }
 .connection.offline { color: var(--danger); background: #fff0ee; }

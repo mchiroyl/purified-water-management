@@ -8,6 +8,10 @@ import { apiRequest } from '../services/apiClient';
 export function AppShell() {
   const { user, logout } = useSession();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const handleLogout = () => {
+    setMobileMenuOpen(false);
+    void logout();
+  };
   const isAdmin = user?.roles.includes('ADMINISTRADOR');
   const canSeeAudit = isAdmin || user?.roles.includes('SUPERVISOR');
   const canCatalog = user?.roles.some(role => ['ADMINISTRADOR', 'BODEGA', 'SUPERVISOR'].includes(role));
@@ -64,7 +68,7 @@ export function AppShell() {
       </header>
       <aside>
         <nav aria-label="Principal">{renderNavigation()}</nav>
-        <button className="secondary" onClick={() => void logout()}>Cerrar sesión</button>
+        <button className="secondary" onClick={handleLogout}>Cerrar sesión</button>
       </aside>
       <section className="page"><Outlet /></section>
       <nav className="bottom-nav" aria-label="Navegación móvil">
@@ -87,6 +91,9 @@ export function AppShell() {
           <nav className="mobile-menu-list" aria-label="Todas las opciones">
             {renderNavigation(() => setMobileMenuOpen(false))}
           </nav>
+          <div className="mobile-menu-footer">
+            <button className="secondary" type="button" onClick={handleLogout}>Cerrar sesión</button>
+          </div>
         </section>
       </div>}
     </div>

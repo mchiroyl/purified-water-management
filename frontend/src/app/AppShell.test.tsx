@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppShell } from './AppShell';
 
 const useSessionMock = vi.hoisted(() => vi.fn());
+const logoutMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../features/auth/SessionContext', () => ({ useSession: useSessionMock }));
 vi.mock('../features/connectivity/ConnectionIndicator', () => ({
@@ -16,9 +17,10 @@ vi.mock('../services/apiClient', () => ({
 
 describe('AppShell navegación móvil', () => {
   beforeEach(() => {
+    logoutMock.mockReset();
     useSessionMock.mockReturnValue({
       user: { displayName: 'Administrador', roles: ['ADMINISTRADOR'] },
-      logout: vi.fn()
+      logout: logoutMock
     });
   });
 
@@ -37,8 +39,23 @@ describe('AppShell navegación móvil', () => {
     for (const label of ['Usuarios', 'Datos de la empresa', 'FEL opcional', 'Auditoría', 'Reportes', 'Anulaciones']) {
       expect(within(menu).getByRole('link', { name: label })).toBeInTheDocument();
     }
+    expect(within(menu).getByRole('button', { name: 'Cerrar sesión' })).toBeInTheDocument();
 
     fireEvent.click(within(menu).getByRole('button', { name: 'Cerrar menú' }));
     expect(screen.queryByRole('dialog', { name: 'Menú principal' })).not.toBeInTheDocument();
+  });
+
+  it('permite cerrar sesión desde el menú móvil', () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter><AppShell /></MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Menú' }));
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Menú principal' }))
+      .getByRole('button', { name: 'Cerrar sesión' }));
+
+    expect(logoutMock).toHaveBeenCalledTimes(1);
   });
 });
