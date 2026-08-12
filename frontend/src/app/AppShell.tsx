@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useSession } from '../features/auth/SessionContext';
@@ -6,6 +7,7 @@ import { apiRequest } from '../services/apiClient';
 
 export function AppShell() {
   const { user, logout } = useSession();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isAdmin = user?.roles.includes('ADMINISTRADOR');
   const canSeeAudit = isAdmin || user?.roles.includes('SUPERVISOR');
   const canCatalog = user?.roles.some(role => ['ADMINISTRADOR', 'BODEGA', 'SUPERVISOR'].includes(role));
@@ -25,28 +27,31 @@ export function AppShell() {
     queryKey: ['company-configuration'],
     queryFn: () => apiRequest<{ commercialName: string; logoUrl?: string; version: number }>('/company-configuration')
   });
-  const navigation = <>
-    <NavLink to="/">Inicio</NavLink>
-    {canCatalog && <NavLink to="/products">Productos</NavLink>}
-    {canSeeCustomers && <NavLink to="/customers">Clientes</NavLink>}
-    {canSeeRoutes && <NavLink to="/routes">Rutas</NavLink>}
-    {canSeePricing && <NavLink to="/pricing">Precios</NavLink>}
-    {canSeeInventory && <NavLink to="/inventory">Inventario</NavLink>}
-    {canSeeLoads && <NavLink to="/loads">Cargas</NavLink>}
-    {canSeeSales && <NavLink to="/sales">Ventas</NavLink>}
-    {canVerifyTransfers && <NavLink to="/transfers">Transferencias</NavLink>}
-    {canSeeWastes && <NavLink to="/wastes">Mermas</NavLink>}
-    {canSeeReturns && <NavLink to="/returns">Devoluciones</NavLink>}
-    {canSeeSettlements && <NavLink to="/settlements">Liquidaciones</NavLink>}
-    {canSeeOperationsControl && <NavLink to="/operations-control">Control operativo</NavLink>}
-    {canSeeAnnulments && <NavLink to="/annulments">Anulaciones</NavLink>}
-    <NavLink to="/pending">Pendientes</NavLink>
-    <NavLink to="/reports">Reportes</NavLink>
-    {canSeeAudit && <NavLink to="/audit">Auditoría</NavLink>}
-    {isAdmin && <NavLink to="/administration">Usuarios</NavLink>}
-    {isAdmin && <NavLink to="/company">Datos de la empresa</NavLink>}
-    {isAdmin && <NavLink to="/fel-configuration">FEL opcional</NavLink>}
-  </>;
+  const navigationItems = [
+    { to: '/', label: 'Inicio', visible: true },
+    { to: '/products', label: 'Productos', visible: canCatalog },
+    { to: '/customers', label: 'Clientes', visible: canSeeCustomers },
+    { to: '/routes', label: 'Rutas', visible: canSeeRoutes },
+    { to: '/pricing', label: 'Precios', visible: canSeePricing },
+    { to: '/inventory', label: 'Inventario', visible: canSeeInventory },
+    { to: '/loads', label: 'Cargas', visible: canSeeLoads },
+    { to: '/sales', label: 'Ventas', visible: canSeeSales },
+    { to: '/transfers', label: 'Transferencias', visible: canVerifyTransfers },
+    { to: '/wastes', label: 'Mermas', visible: canSeeWastes },
+    { to: '/returns', label: 'Devoluciones', visible: canSeeReturns },
+    { to: '/settlements', label: 'Liquidaciones', visible: canSeeSettlements },
+    { to: '/operations-control', label: 'Control operativo', visible: canSeeOperationsControl },
+    { to: '/annulments', label: 'Anulaciones', visible: canSeeAnnulments },
+    { to: '/pending', label: 'Pendientes', visible: true },
+    { to: '/reports', label: 'Reportes', visible: true },
+    { to: '/audit', label: 'Auditoría', visible: canSeeAudit },
+    { to: '/administration', label: 'Usuarios', visible: isAdmin },
+    { to: '/company', label: 'Datos de la empresa', visible: isAdmin },
+    { to: '/fel-configuration', label: 'FEL opcional', visible: isAdmin },
+  ];
+  const renderNavigation = (onNavigate?: () => void) => navigationItems
+    .filter(item => item.visible)
+    .map(item => <NavLink key={item.to} to={item.to} onClick={onNavigate}>{item.label}</NavLink>);
 
   return (
     <div className="app-shell">
@@ -58,11 +63,32 @@ export function AppShell() {
         <ConnectionIndicator />
       </header>
       <aside>
-        <nav aria-label="Principal">{navigation}</nav>
+        <nav aria-label="Principal">{renderNavigation()}</nav>
         <button className="secondary" onClick={() => void logout()}>Cerrar sesión</button>
       </aside>
       <section className="page"><Outlet /></section>
-      <nav className="bottom-nav" aria-label="Navegación móvil">{navigation}</nav>
+      <nav className="bottom-nav" aria-label="Navegación móvil">
+        <button
+          className="mobile-menu-trigger"
+          type="button"
+          aria-expanded={mobileMenuOpen}
+          aria-controls="mobile-menu-panel"
+          onClick={() => setMobileMenuOpen(open => !open)}
+        >
+          Menú
+        </button>
+      </nav>
+      {mobileMenuOpen && <div className="mobile-menu-overlay">
+        <section id="mobile-menu-panel" className="mobile-menu-panel" role="dialog" aria-modal="true" aria-label="Menú principal">
+          <div className="mobile-menu-header">
+            <h2>Menú</h2>
+            <button className="secondary" type="button" onClick={() => setMobileMenuOpen(false)}>Cerrar menú</button>
+          </div>
+          <nav className="mobile-menu-list" aria-label="Todas las opciones">
+            {renderNavigation(() => setMobileMenuOpen(false))}
+          </nav>
+        </section>
+      </div>}
     </div>
   );
 }

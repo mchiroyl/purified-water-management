@@ -19,7 +19,7 @@ El sistema administra la operación completa de una purificadora: empresa, usuar
 | Supervisor | Seguimiento operativo, aprobaciones, transferencias, liquidaciones, incidencias, reportes y auditoría. |
 | Vendedor | Recepción de carga, clientes de su ruta, ventas/pagos, operaciones offline, mermas, devoluciones y comprobantes. |
 
-Los menús se muestran según el perfil. Que una opción no aparezca significa que el usuario no tiene autorización para esa función.
+Los menús se muestran según el perfil. Que una opción no aparezca significa que el usuario no tiene autorización para esa función. En teléfonos, pulse **Menú** en la barra inferior para abrir el panel desplazable con todas las opciones autorizadas; pulse **Cerrar menú** para ocultarlo.
 
 ## 3. Iniciar y cerrar sesión
 
