@@ -215,9 +215,11 @@ Alertas operativas viven en el dominio (`alert`); alertas de infraestructura deb
 ### Backend
 
 ```powershell
-docker run --rm -v aguapura_m2:/root/.m2 -v "${PWD}:/workspace" `
+docker run --rm --mount "type=bind,source=$((Get-Location).Path)\backend,target=/workspace/backend" `
   -w /workspace/backend maven:3.9.11-eclipse-temurin-21-alpine mvn -q test
 ```
+
+La prueba usa un montaje temporal del código y no crea un volumen persistente de Maven. Si se necesita cachear dependencias para una ejecución puntual, use un nombre claramente temporal y elimínelo al terminar; nunca reutilice los volúmenes oficiales de `purificadora`.
 
 Las pruebas de integración levantan PostgreSQL real con Testcontainers y verifican concurrencia, constraints, bloqueos, rollback, inmutabilidad, seguridad y migraciones.
 
@@ -250,12 +252,62 @@ Remove-Item Env:E2E_CAPTURE_MANUAL
 
 `docker compose up -d --build` construye backend y frontend con imágenes multi-stage. Los contenedores ejecutan como usuarios no privilegiados donde aplica y disponen de healthchecks/restart policy.
 
+### 13.1 Levantamiento manual local
+
+Estos pasos permiten levantar la instalación oficial desde PowerShell sin depender de un script externo, salvo el inicializador de secretos. Ejecútelos desde la raíz del proyecto:
+
+```powershell
+Set-Location 'E:\UMG\Purificadora'
+docker --version
+docker compose version
+docker info
+```
+
+Docker Desktop debe estar iniciado y `docker info` debe responder correctamente. En una instalación nueva, genere el archivo `.env` y las credenciales iniciales una sola vez:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/initialize-local-env.ps1
+```
+
+El inicializador solicita la contraseña del administrador, genera los secretos de PostgreSQL/JWT y no sobrescribe un `.env` existente. Revise los valores no sensibles y valide la configuración antes de construir:
+
+```powershell
+docker compose config --quiet
+docker compose up -d --build
+docker compose ps
+```
+
+Los tres servicios (`postgres`, `backend` y `frontend`) deben aparecer `healthy`. Compruebe los puntos de salud publicados por el frontend y la preparación del backend:
+
+```powershell
+Invoke-WebRequest http://localhost:3000/healthz -UseBasicParsing
+Invoke-WebRequest http://localhost:3000/api/connectivity -UseBasicParsing
+$backend = (docker compose ps -q backend).Trim()
+docker exec $backend wget -q -O - http://localhost:8080/actuator/health/readiness
+```
+
+Las dos primeras respuestas deben ser HTTP 200 y el último comando debe devolver `{"status":"UP"}`. Abra `http://localhost:3000`, inicie con el usuario `admin`, la contraseña definida durante la inicialización y el nombre del dispositivo. Si `BOOTSTRAP_ADMIN_FORCE_PASSWORD_CHANGE=true`, el primer ingreso solicita sustituir la contraseña temporal.
+
+Para la operación diaria no es necesario reconstruir las imágenes:
+
+```powershell
+docker compose up -d       # iniciar
+docker compose ps          # estado y healthchecks
+docker compose logs --tail 100
+docker compose restart     # reiniciar sin eliminar datos
+docker compose stop        # detener temporalmente
+```
+
+Para aplicar cambios de código o dependencias use `docker compose up -d --build`. `docker compose down` detiene y elimina los contenedores, pero conserva los datos. No use `docker compose down -v` ni elimine `purificadora_postgres_data` o `purificadora_file_storage` salvo que exista una orden explícita de destruir la instalación; esos son los volúmenes oficiales del sistema. Las pruebas E2E usan un nombre de proyecto aislado y sus volúmenes temporales no deben mezclarse con los oficiales.
+
+Si `docker info` indica que no puede conectarse al daemon, inicie Docker Desktop, espere a que el motor Linux esté disponible y repita la validación. Si el puerto 3000 está ocupado, defina otro `FRONTEND_PORT` en `.env` y vuelva a ejecutar `docker compose up -d`.
+
 Para producción use también `docker-compose.prod.yml`, certificados montados, `SPRING_PROFILES_ACTIVE=prod`, `COOKIE_SECURE=true` y orígenes HTTPS explícitos. No publique 5432 ni 8080. Un balanceador externo debe conservar el esquema HTTPS y la IP únicamente desde redes de proxy confiables.
 
 Los volúmenes persistentes son:
 
-- `postgres_data`: esquema y datos oficiales;
-- `file_storage`: logotipos, evidencias y comprobantes.
+- `purificadora_postgres_data` (clave Compose `postgres_data`): esquema y datos oficiales;
+- `purificadora_file_storage` (clave Compose `file_storage`): logotipos, evidencias y comprobantes.
 
 Ambos forman una sola unidad lógica de respaldo/restauración.
 

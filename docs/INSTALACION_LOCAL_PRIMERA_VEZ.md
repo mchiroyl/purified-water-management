@@ -178,6 +178,8 @@ docker volume rm ...
 
 en una instalación con datos que deban conservarse. `-v` elimina la base y archivos persistentes de esa instalación.
 
+En la instalación oficial los volúmenes persistentes se identifican como `purificadora_postgres_data` (base de datos) y `purificadora_file_storage` (archivos). Los proyectos de pruebas E2E usan nombres Compose aislados y se eliminan al terminar.
+
 ## 10. Solución de problemas
 
 ### Docker no está disponible

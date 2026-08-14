@@ -1,6 +1,6 @@
 # Manual de usuario — Sistema Agua Pura
 
-Versión funcional: fases 0–34  
+Versión funcional: fases 0–39
 Ámbito: una sola empresa purificadora  
 Moneda y zona iniciales: configurables; valores usuales `GTQ` y `America/Guatemala`
 
