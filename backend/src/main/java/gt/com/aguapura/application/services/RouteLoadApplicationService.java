@@ -29,7 +29,7 @@ public class RouteLoadApplicationService {
     private final RouteTrackingPort tracking;
 
     public RouteLoadApplicationService(RouteLoadPort persistence, InventoryApplicationService inventory,
-                                       CompanyConfigurationPersistencePort companyConfiguration) {
+                                       CompanyConfigurationPersistencePort companyConfiguration, RouteTrackingPort tracking) {
         this.persistence = persistence;
         this.inventory = inventory;
         this.companyConfiguration = companyConfiguration;
@@ -79,7 +79,8 @@ public class RouteLoadApplicationService {
     }
 
     @Transactional
-    public RouteLoadResponse confirmReceipt(UUID id, UUID actorId, UUID deviceId, boolean restrictedToSeller) {
+    public RouteLoadResponse confirmReceipt(UUID id, ConfirmRouteLoadReceiptRequest request,
+                                            UUID actorId, UUID deviceId, boolean restrictedToSeller) {
         var load = persistence.findLoad(id);
         if (restrictedToSeller && !persistence.sellerAssignedToRoute(actorId, load.routeId())) {
             throw forbidden("LOAD_ROUTE_FORBIDDEN", "La carga no pertenece a una ruta asignada al vendedor.");
@@ -89,7 +90,13 @@ public class RouteLoadApplicationService {
                 inventory.transfer(load.sourceLocationId(), load.targetLocationId(), item.productId(),
                         item.quantityBaseUnits(), "LOAD_OUT", "LOAD_IN", "Recepción de " + number(load.loadNumber()),
                         "ROUTE_LOAD", load.id(), actorId, deviceId));
-        return response(persistence.confirmReceipt(id, actorId, deviceId));
+        var received = persistence.confirmReceipt(id, actorId, deviceId);
+        if ("INITIAL".equals(load.loadType())) {
+            var location = request.location();
+            tracking.recordStart(load.id(), load.routeId(), new RouteTrackingPort.GeoLocation(location.latitude(),
+                    location.longitude(), location.accuracyMeters(), location.capturedAt()), actorId, deviceId);
+        }
+        return response(received);
     }
 
     @Transactional

@@ -8,6 +8,7 @@ import gt.com.aguapura.application.ports.RouteTrackingPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -20,6 +21,7 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -52,7 +54,10 @@ class RouteLoadApplicationServiceTest {
 
         service.confirmReceipt(loadId, new ConfirmRouteLoadReceiptRequest(location), actorId, deviceId, true);
 
-        verify(tracking).recordStart(eq(loadId), eq(routeId), eq(new RouteTrackingPort.GeoLocation(
+        InOrder order = inOrder(inventory, persistence, tracking);
+        order.verify(inventory).transfer(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+        order.verify(persistence).confirmReceipt(loadId, actorId, deviceId);
+        order.verify(tracking).recordStart(eq(loadId), eq(routeId), eq(new RouteTrackingPort.GeoLocation(
                 location.latitude(), location.longitude(), location.accuracyMeters(), location.capturedAt())),
                 eq(actorId), eq(deviceId));
     }
@@ -82,6 +87,7 @@ class RouteLoadApplicationServiceTest {
                 "Bodega", UUID.randomUUID(), "RUT-1", "Ruta", LocalDate.of(2026, 8, 16), "", status,
                 UUID.randomUUID(), "bodega", Instant.parse("2026-08-16T11:00:00Z"), UUID.randomUUID(),
                 "bodega", UUID.randomUUID(), Instant.parse("2026-08-16T11:30:00Z"), null, null, null, null,
-                loadType, null, null, null, null, List.of(), List.of());
+                loadType, null, null, null, null, List.of(new RouteLoadPort.ItemView(UUID.randomUUID(), UUID.randomUUID(),
+                "AGUA", "Agua", "UN", BigDecimal.ONE)), List.of());
     }
 }
