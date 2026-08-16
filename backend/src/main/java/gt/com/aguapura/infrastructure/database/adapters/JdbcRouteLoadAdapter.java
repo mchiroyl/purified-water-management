@@ -16,6 +16,14 @@ import java.util.UUID;
 
 @Repository
 public class JdbcRouteLoadAdapter implements RouteLoadPort {
+    static final String CURRENT_INITIAL_LOAD_CLOSED_SETTLEMENT_SQL = """
+            SELECT EXISTS(
+                SELECT 1 FROM route_load rl
+                JOIN settlement s ON s.route_load_id=rl.id
+                WHERE rl.route_id=:routeId AND rl.load_type='INITIAL' AND rl.status='STARTED'
+                  AND s.status='CLOSED'
+            )
+            """;
     private final JdbcClient jdbc;
 
     public JdbcRouteLoadAdapter(JdbcClient jdbc) {
@@ -51,7 +59,7 @@ public class JdbcRouteLoadAdapter implements RouteLoadPort {
 
     @Override
     public boolean routeHasClosedSettlement(UUID routeId) {
-        return Boolean.TRUE.equals(jdbc.sql("SELECT EXISTS(SELECT 1 FROM settlement WHERE route_id=:routeId AND status='CLOSED')")
+        return Boolean.TRUE.equals(jdbc.sql(CURRENT_INITIAL_LOAD_CLOSED_SETTLEMENT_SQL)
                 .param("routeId", routeId).query(Boolean.class).single());
     }
 
