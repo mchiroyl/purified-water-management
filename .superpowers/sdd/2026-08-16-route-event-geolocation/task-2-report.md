@@ -22,6 +22,13 @@
 - Backend compilation and the new service test could not be executed in this environment because Maven is unavailable. The test was written before production wiring, but its expected compilation failure could not be observed.
 - The shared working tree already contains unrelated modifications, including adjacent route-load and E2E changes. The task commit stages only the Task 2 hunks and new files.
 
+### Review-fix report
+
+- Fix commit: `d5b703e` (`fix: complete route receipt geolocation tracking`).
+- Corrected the `RouteTrackingPort` constructor injection, receipt request signature and controller body validation, then records the initial route start after inventory transfer and persisted receipt confirmation.
+- Removed the unrelated replenishment endpoint from `RouteLoadController` and strengthened the initial-load test with Mockito `InOrder` verification for transfer, persistence, then tracking.
+- Re-ran `npm --prefix frontend test -- src/features/loading/RouteLoadsPage.test.tsx`: passed — 36 files and 57 tests (exit 0). A direct root-level Vitest invocation is not valid for this project because it lacks the frontend test globals (`describe is not defined`).
+
 ### Commit
 
 - Commit: `feat: record route start location on receipt`
