@@ -53,6 +53,27 @@ describe('ConnectionManager', () => {
     manager.stop();
   });
 
+  it('ignora el rechazo tardío de una comprobación iniciada antes de una solicitud exitosa', async () => {
+    let rejectProbe!: (error: unknown) => void;
+    const lifecycle = new EventTarget();
+    const fetcher = vi.fn().mockImplementation(() => new Promise<Response>((_resolve, reject) => {
+      rejectProbe = reject;
+    }));
+    const manager = new ConnectionManager({ fetcher, lifecycleTarget: lifecycle, timeoutMs: 60_000 });
+
+    manager.start();
+    const probe = manager.check('STARTUP', true);
+    await Promise.resolve();
+    lifecycle.dispatchEvent(new Event('agua-pura:request-success'));
+    expect(manager.getSnapshot()).toMatchObject({ state: 'ONLINE', reason: 'REQUEST_SUCCESS' });
+
+    rejectProbe(new TypeError('stale probe failed'));
+    await probe;
+
+    expect(manager.getSnapshot()).toMatchObject({ state: 'ONLINE', reason: 'REQUEST_SUCCESS', retryCount: 0 });
+    manager.stop();
+  });
+
   it('deduplica comprobaciones simultáneas y respeta el cooldown', async () => {
     let resolveResponse!: (value: Response) => void;
     const fetcher = vi.fn().mockImplementation(() => new Promise<Response>((resolve) => { resolveResponse = resolve; }));

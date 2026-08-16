@@ -23,6 +23,13 @@ class RefreshUnavailableError extends Error {
   }
 }
 
+class RefreshRejectedError extends Error {
+  constructor() {
+    super('La sesión ya no está vigente.');
+    this.name = 'RefreshRejectedError';
+  }
+}
+
 async function refreshAccessToken(): Promise<string> {
   const response = await fetch(`${baseUrl}/auth/refresh`, {
     method: 'POST',
@@ -34,7 +41,7 @@ async function refreshAccessToken(): Promise<string> {
     publish('agua-pura:request-failure');
     throw new RefreshUnavailableError();
   }
-  if (!response.ok) throw new Error('La sesión ya no está vigente.');
+  if (!response.ok) throw new RefreshRejectedError();
   const payload = await response.json() as { accessToken?: string };
   if (!payload.accessToken) throw new Error('El servidor no devolvió un token de sesión.');
   setAccessToken(payload.accessToken);
@@ -45,7 +52,7 @@ async function refreshOnce(): Promise<string> {
   if (!refreshPromise) {
     refreshPromise = refreshAccessToken()
       .catch(error => {
-        if (error instanceof RefreshUnavailableError) throw error;
+        if (!(error instanceof RefreshRejectedError)) throw error;
         setAccessToken(null);
         publish('agua-pura:session-expired');
         throw error;
@@ -90,7 +97,7 @@ async function fetchWithRefresh(path: string, init: RequestInit, accept: string)
       });
       if (response.status < 500) publish('agua-pura:request-success');
     } catch (error) {
-      // A refresh failure means the session expired; it is not a network outage.
+      // Transport and backend outages are surfaced as request failures without expiring the session.
       if (error instanceof TypeError) publish('agua-pura:request-failure');
       throw error;
     }

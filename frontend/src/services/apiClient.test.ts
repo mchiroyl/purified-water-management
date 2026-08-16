@@ -110,6 +110,28 @@ describe('apiClient', () => {
     window.removeEventListener('agua-pura:session-expired', expired);
   });
 
+  it('publica fallo y conserva la sesión cuando la renovación pierde transporte', async () => {
+    const failure = vi.fn();
+    const expired = vi.fn();
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockRejectedValueOnce(new TypeError('network unavailable'))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    window.addEventListener('agua-pura:request-failure', failure);
+    window.addEventListener('agua-pura:session-expired', expired);
+    vi.stubGlobal('fetch', fetcher);
+
+    await expect(apiRequest('/dashboard')).rejects.toThrow('network unavailable');
+    expect(failure).toHaveBeenCalledTimes(1);
+    expect(expired).not.toHaveBeenCalled();
+
+    await expect(apiRequest<{ ok: boolean }>('/health')).resolves.toEqual({ ok: true });
+    const preservedHeaders = fetcher.mock.calls[2][1]?.headers as Headers;
+    expect(preservedHeaders.get('Authorization')).toBe('Bearer expired-token');
+    window.removeEventListener('agua-pura:request-failure', failure);
+    window.removeEventListener('agua-pura:session-expired', expired);
+  });
+
   it('comparte la renovación cuando varias solicitudes vencen juntas', async () => {
     let refreshCalls = 0;
     let refreshed = false;

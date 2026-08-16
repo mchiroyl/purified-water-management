@@ -58,6 +58,7 @@ export class ConnectionManager {
   private lastStartedAt = Number.NEGATIVE_INFINITY;
   private retryTimer?: number;
   private retryCount = 0;
+  private requestSuccessGeneration = 0;
   private activeAbort?: AbortController;
   private started = false;
 
@@ -125,7 +126,8 @@ export class ConnectionManager {
     if (!force && startedAt - this.lastStartedAt < this.minimumIntervalMs) return Promise.resolve(this.snapshot);
     this.lastStartedAt = startedAt;
     this.publish({ ...this.snapshot, state: 'CHECKING', reason });
-    this.inFlight = this.performCheck(reason, startedAt).finally(() => {
+    const generation = this.requestSuccessGeneration;
+    this.inFlight = this.performCheck(reason, startedAt, generation).finally(() => {
       this.inFlight = undefined;
     });
     return this.inFlight;
@@ -151,6 +153,7 @@ export class ConnectionManager {
   };
 
   private readonly handleRequestSuccess = () => {
+    this.requestSuccessGeneration += 1;
     this.retryCount = 0;
     this.clearRetry();
     this.publish({
@@ -167,7 +170,7 @@ export class ConnectionManager {
     if (this.visibilityTarget?.visibilityState === 'visible') void this.check('FOREGROUND');
   };
 
-  private async performCheck(reason: ConnectionCheckReason, startedAt: number) {
+  private async performCheck(reason: ConnectionCheckReason, startedAt: number, generation: number) {
     const controller = new AbortController();
     this.activeAbort = controller;
     const timeout = this.setTimer(() => controller.abort(), this.timeoutMs);
@@ -177,10 +180,12 @@ export class ConnectionManager {
         headers: { Accept: 'application/json' },
         signal: controller.signal,
       });
+      if (generation !== this.requestSuccessGeneration) return this.snapshot;
       if (!response.ok) {
         return this.markUnavailable('DEGRADED', reason, startedAt);
       }
       const payload = await response.json().catch(() => ({})) as { serverTime?: string };
+      if (generation !== this.requestSuccessGeneration) return this.snapshot;
       this.retryCount = 0;
       this.clearRetry();
       const online: ConnectionSnapshot = {
@@ -193,6 +198,7 @@ export class ConnectionManager {
       this.publish(online);
       return online;
     } catch {
+      if (generation !== this.requestSuccessGeneration) return this.snapshot;
       return this.markUnavailable('OFFLINE', reason, startedAt);
     } finally {
       this.clearTimer(timeout);

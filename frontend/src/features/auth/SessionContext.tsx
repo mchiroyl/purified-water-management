@@ -54,6 +54,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       .finally(() => setInitializing(false));
   }, [refresh]);
 
+  useEffect(() => {
+    const handleExpired = () => {
+      setAccessToken(null);
+      setUser(null);
+      void clearMobileData();
+    };
+    window.addEventListener('agua-pura:session-expired', handleExpired);
+    return () => window.removeEventListener('agua-pura:session-expired', handleExpired);
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await apiRequest<void>('/auth/logout', { method: 'POST' });

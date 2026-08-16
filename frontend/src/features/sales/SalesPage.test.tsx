@@ -9,6 +9,29 @@ afterEach(() => {
 });
 
 describe('SalesPage', () => {
+  async function prepareSaleForm(fetchMock: ReturnType<typeof vi.fn>) {
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <SalesPage canSell={true} />
+    </QueryClientProvider>);
+    await screen.findByRole('option', { name: /r-01.*ruta norte/i });
+    fireEvent.change(screen.getByLabelText('Ruta'), { target: { value: 'route-1' } });
+    await waitFor(() => expect(screen.getByLabelText('Cliente')).not.toBeDisabled());
+    fireEvent.change(screen.getByLabelText('Cliente'), { target: { value: 'customer-1' } });
+    fireEvent.change(screen.getByLabelText('Presentación'), { target: { value: 'presentation-1' } });
+    expect(fetchMock).toBeDefined();
+  }
+
+  function formFetchMock() {
+    return vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
+      const path = input.toString();
+      const value = path.endsWith('/routes') ? [{ id: 'route-1', code: 'R-01', name: 'Ruta norte', status: 'ACTIVE' }]
+        : path.endsWith('/customers') ? [{ id: 'customer-1', code: 'C-01', name: 'Tienda La Fuente', status: 'ACTIVE', routeId: 'route-1', customerType: 'OCCASIONAL', creditAllowed: false, creditLimit: 0, currentBalance: 0 }]
+        : path.endsWith('/products') ? [{ id: 'product-1', code: 'AGUA', name: 'Agua pura', active: true, controlsInventory: true, presentations: [{ id: 'presentation-1', code: 'BOT-600', name: 'Botella 600 ml', active: true }] }]
+        : [];
+      return Promise.resolve(new Response(JSON.stringify(value), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    });
+  }
+
   it('muestra el número, precios y total calculados por el servidor', async () => {
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const path = input.toString();
@@ -117,5 +140,31 @@ describe('SalesPage', () => {
 
     resolvePosition({ coords: { latitude: 14.6349, longitude: -90.5069, accuracy: 7 } } as GeolocationPosition);
     await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => input.toString().endsWith('/sales') && (init as RequestInit | undefined)?.method === 'POST')).toBe(true));
+  });
+
+  it('no crea una venta cuando el usuario deniega la ubicación', async () => {
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: {
+      getCurrentPosition: vi.fn((_success: PositionCallback, error?: PositionErrorCallback) => error?.({ code: 1, message: 'denied' } as GeolocationPositionError)),
+    } });
+    const fetchMock = formFetchMock();
+    vi.stubGlobal('fetch', fetchMock);
+    await prepareSaleForm(fetchMock);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar venta' }));
+
+    expect(await screen.findByText(/Se requiere permitir el acceso a la ubicación/i)).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input, init]) => input.toString().endsWith('/sales') && (init as RequestInit | undefined)?.method === 'POST')).toBe(false);
+  });
+
+  it('no crea una venta cuando el dispositivo no admite geolocalización', async () => {
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: undefined });
+    const fetchMock = formFetchMock();
+    vi.stubGlobal('fetch', fetchMock);
+    await prepareSaleForm(fetchMock);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar venta' }));
+
+    expect(await screen.findByText(/Este dispositivo no permite obtener la ubicación/i)).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input, init]) => input.toString().endsWith('/sales') && (init as RequestInit | undefined)?.method === 'POST')).toBe(false);
   });
 });
