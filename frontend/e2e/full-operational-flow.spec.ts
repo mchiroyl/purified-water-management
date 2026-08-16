@@ -105,7 +105,10 @@ test('flujo completo 1-28, offline, idempotencia, antifraude, PDF y FEL', async 
   }));
   expect(changed.status()).toBe(204);
   const seller = await login(request, `seller-${suffix}`, sellerPassword, `Telefono E2E ${suffix}`);
-  await body(await request.post(`/api/loads/${load.id}/receipt`, authorized(seller.accessToken)), 'recibir carga');
+  const receivedLoad = await body<Json>(await request.post(`/api/loads/${load.id}/receipt`, authorized(seller.accessToken, {
+    location: { latitude: 14.6349, longitude: -90.5069, accuracyMeters: 5, capturedAt: '2026-08-16T12:00:00Z' },
+  })), 'recibir carga');
+  expect(receivedLoad.status).toBe('RECEIVED');
   await body(await request.post(`/api/loads/${load.id}/start`, authorized(seller.accessToken)), 'iniciar ruta');
 
   // 11. Venta online.

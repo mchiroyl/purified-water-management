@@ -2,9 +2,11 @@ package gt.com.aguapura.application.services;
 
 import gt.com.aguapura.application.dto.loading.CreateRouteLoadCorrectionRequest;
 import gt.com.aguapura.application.dto.loading.CreateRouteLoadRequest;
+import gt.com.aguapura.application.dto.loading.ConfirmRouteLoadReceiptRequest;
 import gt.com.aguapura.application.dto.loading.RouteLoadResponse;
 import gt.com.aguapura.application.ports.RouteLoadPort;
 import gt.com.aguapura.application.ports.CompanyConfigurationPersistencePort;
+import gt.com.aguapura.application.ports.RouteTrackingPort;
 import gt.com.aguapura.domain.exceptions.BusinessException;
 import gt.com.aguapura.domain.exceptions.ErrorCategory;
 import gt.com.aguapura.domain.loading.RouteLoadWorkflow;
@@ -24,12 +26,14 @@ public class RouteLoadApplicationService {
     private final RouteLoadPort persistence;
     private final InventoryApplicationService inventory;
     private final CompanyConfigurationPersistencePort companyConfiguration;
+    private final RouteTrackingPort tracking;
 
     public RouteLoadApplicationService(RouteLoadPort persistence, InventoryApplicationService inventory,
                                        CompanyConfigurationPersistencePort companyConfiguration) {
         this.persistence = persistence;
         this.inventory = inventory;
         this.companyConfiguration = companyConfiguration;
+        this.tracking = tracking;
     }
 
     @Transactional
