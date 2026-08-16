@@ -29,6 +29,11 @@
 - Removed the unrelated replenishment endpoint from `RouteLoadController` and strengthened the initial-load test with Mockito `InOrder` verification for transfer, persistence, then tracking.
 - Re-ran `npm --prefix frontend test -- src/features/loading/RouteLoadsPage.test.tsx`: passed — 36 files and 57 tests (exit 0). A direct root-level Vitest invocation is not valid for this project because it lacks the frontend test globals (`describe is not defined`).
 
+### Re-review replenishment fix
+
+- Restored `POST /api/loads/replenishments` in `RouteLoadController`, delegating to the already-present `createReplenishment` service method. This preserves the callers in the loading page, API documentation, and manual verification script.
+- Re-ran `npm --prefix frontend test -- src/features/loading/RouteLoadsPage.test.tsx`: passed — 36 files and 57 tests (exit 0).
+
 ### Commit
 
 - Commit: `feat: record route start location on receipt`

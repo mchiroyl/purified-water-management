@@ -51,6 +51,17 @@ public class RouteLoadController {
         return result;
     }
 
+    @PostMapping("/replenishments")
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR','BODEGA')")
+    public RouteLoadResponse createReplenishment(@Valid @RequestBody CreateRouteLoadRequest request,
+                                                 @AuthenticationPrincipal Jwt jwt) {
+        var result = service.createReplenishment(request, actor(jwt));
+        audit.record(actor(jwt), device(jwt), "CREATE_ROUTE_REPLENISHMENT", "ROUTE_LOAD", result.id(), Map.of(),
+                Map.of("loadNumber", result.loadNumber(), "routeId", result.routeId(), "status", result.status()));
+        return result;
+    }
+
     @PostMapping("/{id}/warehouse-confirmation")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','BODEGA')")
     public RouteLoadResponse confirmWarehouse(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
