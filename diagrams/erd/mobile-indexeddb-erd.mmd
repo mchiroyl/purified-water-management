@@ -1,3 +1,5 @@
+%% A sale can retain one optional location snapshot in its existing offline payload.
+%% Capture is on confirmation only; IndexedDB has no watcher or background tracking store.
 erDiagram
     IDB_APP_METADATA {
         VARCHAR key PK
@@ -116,6 +118,7 @@ erDiagram
     IDB_ROUTE_LOAD {
         UUID id PK
         UUID route_run_id
+        VARCHAR load_type
         VARCHAR status
         DATETIME seller_confirmed_at
         VARCHAR server_version
@@ -154,6 +157,7 @@ erDiagram
         DECIMAL subtotal
         DECIMAL discount_total
         DECIMAL total
+        JSON location
         VARCHAR sync_status
         DATETIME occurred_at_local
     }

@@ -42,9 +42,11 @@ No se implementará multitenencia. FEL será una integración opcional que perma
 | Idempotencia | Repetir una solicitud sin duplicar sus efectos. |
 | Merma | Pérdida física de producto; no representa dinero. |
 | Carga | Producto entregado por bodega a un vendedor para una ruta. |
+| Recarga | Carga adicional entregada durante un recorrido ya iniciado; no crea otra ruta ni otra liquidación. |
 | Liquidación | Cierre que compara carga, ventas, devoluciones, mermas y pagos. |
 | Cliente provisional | Cliente creado offline y sujeto a revisión posterior. |
 | Unidad base | Unidad mínima utilizada para contabilizar inventario. |
+| Código operativo | Identificador asignado exclusivamente por el servidor para cliente, vendedor, ruta o vehículo. |
 
 ## 5. Contexto y límites
 
@@ -111,9 +113,11 @@ El servidor es autoritativo. La PWA puede calcular valores para informar al usua
 | RF-CUS-003 | El vendedor podrá crear cliente provisional offline con UUID local. | Alta | El cliente persiste al cerrar la PWA y puede referenciarse en una venta. |
 | RF-CUS-004 | El provisional seguirá PROVISIONAL_LOCAL, PENDING_SYNC, PENDING_REVIEW y una decisión final. | Alta | La venta permanece aunque el registro permanente sea rechazado o fusionado. |
 | RF-CUS-005 | El sistema detectará posibles duplicados sin fusionarlos automáticamente. | Media | Coincidencias generan revisión y la fusión queda auditada. |
+| RF-CUS-006 | El servidor asignará automáticamente el código de cada cliente con prefijo `CLI-` y numeración única. | Alta | Crear un cliente sin código devuelve un código `CLI-000001` (o el siguiente correlativo), sin aceptar uno impuesto desde el cliente. |
 | RF-RTE-001 | Administración gestionará rutas sin borrar su historial. | Alta | Una ruta inactiva conserva asignaciones y recorridos previos. |
 | RF-RTE-002 | Las asignaciones de vendedor, cliente y vehículo tendrán vigencia histórica. | Alta | Cambiar una asignación no sobrescribe la anterior. |
 | RF-RTE-003 | Un vendedor solo descargará y operará sus rutas asignadas. | Alta | No recibe clientes ni inventario de otra ruta. |
+| RF-RTE-004 | El servidor asignará automáticamente los códigos de vendedores, rutas y vehículos con prefijos `VND-`, `RUT-` y `VEH-`. | Alta | Los formularios no solicitan códigos y cada alta recibe un correlativo único. |
 
 ### 7.5 Inventario y carga
 
@@ -125,6 +129,9 @@ El servidor es autoritativo. La PWA puede calcular valores para informar al usua
 | RF-LOD-001 | Bodega preparará una carga con ítems y cantidades. | Alta | La carga queda en estado preparado y auditable. |
 | RF-LOD-002 | Bodega confirmará entrega y vendedor confirmará recepción por separado. | Alta | Se guardan ambos actores, fechas de servidor y dispositivos. |
 | RF-LOD-003 | Una carga iniciada no podrá editarse silenciosamente. | Alta | Correcciones requieren movimiento compensatorio autorizado. |
+| RF-LOD-004 | Bodega podrá registrar una recarga para una ruta con recorrido iniciado. | Alta | La recarga usa doble confirmación, mueve inventario, queda auditada y se incorpora a la liquidación de la carga inicial. |
+| RF-LOD-005 | Una recarga no podrá iniciar un segundo recorrido ni registrarse después del cierre de la liquidación. | Alta | La API rechaza ambos casos y mantiene una sola liquidación por recorrido. |
+| RF-LOD-006 | Confirmar la recepción de una carga inicial requerirá una ubicación puntual y registrará el inicio de ruta en la misma transacción. | Alta | Sin `location` válida la recepción se rechaza; una ruta conserva un único punto `START`. |
 
 ### 7.6 Ventas, pagos y crédito
 
@@ -134,6 +141,7 @@ El servidor es autoritativo. La PWA puede calcular valores para informar al usua
 | RF-SAL-002 | Venta, ítems, pago y movimientos se confirmarán en una transacción ACID. | Alta | Una falla revierte todos los efectos. |
 | RF-SAL-003 | Una venta confirmada será inmutable. | Alta | No existen endpoints de edición o borrado; solo anulación autorizada. |
 | RF-SAL-004 | El servidor asignará número oficial después de sincronizar y conservará referencia local. | Alta | Ambas referencias se consultan y no se duplican. |
+| RF-SAL-005 | Confirmar una venta requerirá una ubicación puntual y la persistirá atómicamente con la venta. | Alta | Sin `location` válida no existe venta oficial; cada venta tiene exactamente un punto `SALE`. |
 | RF-PAY-001 | El sistema admitirá efectivo, transferencia y crédito. | Alta | El total se distribuye entre medios válidos sin exceder la venta. |
 | RF-PAY-002 | Las transferencias usarán PENDING_VERIFICATION, VERIFIED o REJECTED. | Alta | El vendedor no puede verificar su propia transferencia. |
 | RF-CRD-001 | Crédito se permitirá solo a clientes autorizados dentro del límite disponible. | Alta | Operación que excede límite es rechazada transaccionalmente. |
@@ -175,6 +183,7 @@ El servidor es autoritativo. La PWA puede calcular valores para informar al usua
 | RF-SYN-008 | Los reintentos usarán backoff exponencial y jitter. | Media | Fallas temporales no generan polling excesivo. |
 | RF-SYN-009 | ConnectionManager verificará conectividad real mediante endpoint sin caché. | Alta | Distingue OFFLINE, DEGRADED y ONLINE sin depender solo de `navigator.onLine`. |
 | RF-SYN-010 | El usuario verá estado y error de cada operación local. | Alta | La interfaz muestra PENDING, SYNCING, SYNCED, FAILED_RETRYABLE, CONFLICT o REJECTED. |
+| RF-SYN-011 | El payload offline de una venta podrá conservar un snapshot opcional `location` para sincronizar el mismo contrato. | Alta | El snapshot permanece en la operación Outbox; no se crea un watcher, historial móvil de rastreo ni tarea de fondo. |
 
 ### 7.10 Comprobantes, FEL, reportes y auditoría
 
@@ -186,6 +195,7 @@ El servidor es autoritativo. La PWA puede calcular valores para informar al usua
 | RF-FEL-001 | FEL permanecerá desactivado sin adaptador real y credenciales válidas. | Alta | Intento de activación es rechazado y auditado. |
 | RF-FEL-002 | Una integración FEL habilitada conservará solicitud, respuesta, identificadores, estado y DTE. | Alta | Cada emisión se rastrea hasta la venta y respuesta del certificador. |
 | RF-REP-001 | Administración consultará dashboard y reportes por vendedor, ruta, cliente, producto, fecha, pago, merma y diferencia. | Media | Filtros retornan datos autorizados y paginados. |
+| RF-REP-002 | Los reportes de ventas, mermas y liquidaciones se exportarán en Excel `.xlsx` y PDF imprimible. | Alta | Ambos formatos contienen identidad empresarial, filtros aplicados, datos autorizados y no omiten filas silenciosamente. |
 | RF-ALT-001 | El sistema generará alertas configurables para diferencias y conductas anómalas. | Media | Cada alerta posee regla, severidad, evidencia y estado de atención. |
 | RF-AUD-001 | Las acciones críticas producirán auditoría inmutable. | Alta | Eventos exigidos contienen actor, entidad, fecha, dispositivo y correlación. |
 
@@ -224,6 +234,7 @@ El servidor es autoritativo. La PWA puede calcular valores para informar al usua
 | SEC-010 | Logs y auditoría excluyen secretos y datos innecesarios. | Pruebas inspeccionan eventos representativos. |
 | SEC-011 | Producción exige HTTPS, HSTS y cookies Secure. | Perfil de producción no inicia con configuración insegura. |
 | SEC-012 | Credenciales FEL se protegen en backend. | Nunca se devuelven, registran ni incluyen en documentos. |
+| SEC-013 | Un HTTP 401 de una sesión vigente intentará una sola renovación coordinada del access token y repetirá la solicitud original. | Solicitudes concurrentes comparten una renovación; si falla, se cierra la sesión y no se muestra como caída de PostgreSQL. |
 
 ## 10. Requisitos de datos
 
@@ -241,6 +252,7 @@ El servidor es autoritativo. La PWA puede calcular valores para informar al usua
 | DAT-010 | Evidencias grandes se guardan mediante abstracción de archivos, no en columnas PostgreSQL. |
 | DAT-011 | Auditoría e historial financiero son inmutables. |
 | DAT-012 | Backup PostgreSQL es independiente del volumen Docker. |
+| DAT-013 | `route_tracking_point` es inmutable, aplica rangos geográficos y sólo permite una fila `START` por ruta y una `SALE` por venta. |
 
 ## 11. Interfaces externas
 

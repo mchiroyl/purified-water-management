@@ -116,13 +116,18 @@ Los importes y cantidades se envían como decimal exacto cuando el DTO lo define
 | Método | Ruta | Función |
 |---|---|---|
 | GET/POST | `/loads` | listar/preparar carga |
+| POST | `/loads/replenishments` | preparar recarga para una ruta ya iniciada |
 | POST | `/loads/{id}/warehouse-confirmation` | confirmación bodega |
 | POST | `/loads/{id}/receipt` | recepción vendedor |
 | POST | `/loads/{id}/start` | iniciar recorrido |
 | POST | `/loads/{id}/corrections` | corrección compensatoria |
+
+`POST /loads/replenishments` recibe el mismo cuerpo de carga (`routeId`, `sourceLocationId`, `plannedDate`, `items` y `notes`), pero fuerza `loadType=REPLENISHMENT`. Solo se acepta cuando la carga `INITIAL` de la ruta está `STARTED`, exige confirmación de bodega y vendedor, se suma a la liquidación de la carga inicial y se rechaza después del cierre.
+
+`POST /loads/{id}/receipt` requiere el cuerpo `{"location": { ... }}`. Al confirmar la recepción de la carga inicial, el servidor persiste un único punto `START` de ruta en la misma transacción; la recarga conserva su propio flujo y no inicia otro recorrido.
 | GET/POST | `/sales` | consultar/crear venta online |
 | GET | `/sales/{id}` | detalle oficial |
-| GET | `/sales/{saleId}/receipt` | PDF interno inmutable |
+| GET | `/sales/{saleId}/receipt` | PDF interno inmutable con el logotipo histórico |
 | GET | `/payments/transfers` | transferencias pendientes |
 | POST | `/payments/transfers/{id}/decision` | verificar/rechazar transferencia |
 
@@ -134,11 +139,23 @@ Venta mínima:
   "routeId": "uuid",
   "customerId": "uuid",
   "items": [{ "presentationId": "uuid", "quantity": 2 }],
-  "payments": [{ "method": "CASH", "amount": null }]
+  "payments": [{ "method": "CASH", "amount": null }],
+  "location": {
+    "latitude": 14.6349,
+    "longitude": -90.5069,
+    "accuracyMeters": 5,
+    "capturedAt": "2026-08-16T12:00:00Z"
+  }
 }
 ```
 
 El monto `null` en un único medio permite que el servidor aplique el total calculado; no permite que el cliente defina el precio.
+
+### Captura puntual de ubicación
+
+Los cuerpos de recepción y de venta incluyen `location` con `latitude`, `longitude`, `accuracyMeters` opcional y `capturedAt` ISO-8601. Latitud debe estar entre `-90` y `90`, longitud entre `-180` y `180`, la precisión no puede ser negativa y los demás campos son obligatorios. Un cuerpo ausente o inválido devuelve `400 VALIDATION_ERROR` con `fieldErrors`.
+
+La PWA solicita una sola posición al pulsar **Confirmar recepción** y otra al pulsar **Confirmar venta**. Si el permiso de ubicación se deniega, no envía la solicitud ni confirma la operación; no existe endpoint de rastreo continuo, watcher ni captura en segundo plano. La API persiste filas inmutables en `route_tracking_point`: una `START` por ruta y una `SALE` por venta, vinculadas a carga, ruta, actor y dispositivo. Esos datos no forman parte de las respuestas de venta ni de los comprobantes o reportes dirigidos al cliente.
 
 ## Offline y control operativo
 
@@ -173,12 +190,14 @@ El lote de sincronización conserva `clientOperationId`, `deviceId`, hash canón
 | GET | `/reports/sales` | reporte paginado |
 | GET | `/reports/wastes` | reporte paginado |
 | GET | `/reports/settlements` | reporte paginado |
-| GET | `/reports/sales.csv` | exportación CSV segura |
-| GET | `/reports/wastes.csv` | exportación CSV segura |
-| GET | `/reports/settlements.csv` | exportación CSV segura |
+| GET | `/reports/sales.xlsx` / `/reports/sales.pdf` | exportar ventas en Excel o PDF |
+| GET | `/reports/wastes.xlsx` / `/reports/wastes.pdf` | exportar mermas en Excel o PDF |
+| GET | `/reports/settlements.xlsx` / `/reports/settlements.pdf` | exportar liquidaciones en Excel o PDF |
 | GET | `/audit` | auditoría filtrable |
 
-Los filtros de fechas, ruta, vendedor y paginación respetan alcance por rol. Las exportaciones sanitizan celdas que podrían interpretarse como fórmulas.
+Los filtros de fechas, ruta, vendedor y paginación respetan alcance por rol. Excel incluye logotipo e identidad de empresa, filtros y encabezados congelados; PDF es imprimible y contiene el logotipo, la misma identidad y filtros. El sistema no publica CSV como formato operativo.
+
+Los códigos de cliente, vendedor, ruta y vehículo los asigna el servidor con los prefijos `CLI-`, `VND-`, `RUT-` y `VEH-`; si una integración antigua envía un campo `code`, ese valor se ignora por compatibilidad. La placa y la descripción del vehículo siguen siendo datos operativos capturados por el usuario.
 
 ## Salud y límites
 

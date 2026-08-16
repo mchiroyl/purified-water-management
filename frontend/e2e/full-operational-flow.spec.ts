@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type APIResponse } from '@playwright/test';
 import crypto from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -25,12 +26,23 @@ function authorized(token: string, data?: unknown) {
   return { headers: { Authorization: `Bearer ${token}` }, ...(data === undefined ? {} : { data }) };
 }
 
+function trackingPointCount(where: string) {
+  const value = execFileSync('docker', [
+    'compose', 'exec', '-T', 'postgres', 'psql', '-U', process.env.POSTGRES_USER ?? 'agua_pura_app',
+    '-d', process.env.POSTGRES_DB ?? 'agua_pura', '-At', '-c', `SELECT count(*) FROM route_tracking_point WHERE ${where}`,
+  ], { cwd: path.resolve(process.cwd(), '..'), encoding: 'utf8' }).trim();
+  return Number(value);
+}
+
 test('flujo completo 1-28, offline, idempotencia, antifraude, PDF y FEL', async ({ request, page, context, browser }) => {
   test.setTimeout(180_000);
   const suffix = Date.now().toString().slice(-7);
   const manualAssets = path.resolve(process.cwd(), '../docs/assets/manual');
   const captureManual = process.env.E2E_CAPTURE_MANUAL === '1';
   if (captureManual) fs.mkdirSync(manualAssets, { recursive: true });
+
+  const connectivity = await request.get('/api/connectivity');
+  expect(connectivity.status()).toBe(200);
 
   // 1. Administrador inicia sesion y configura una sola identidad empresarial.
   const admin = await login(request, 'admin', adminPassword, `Admin E2E ${suffix}`);
@@ -61,22 +73,26 @@ test('flujo completo 1-28, offline, idempotencia, antifraude, PDF y FEL', async 
   // 5-7. Vendedor, ruta, vehiculo, cliente y asignaciones historicas.
   const sellerUser = await body<Json>(await request.post('/api/administration/users', authorized(admin.accessToken, {
     username: `seller-${suffix}`, email: `seller-${suffix}@example.invalid`, password: sellerTemporaryPassword,
-    roles: ['VENDEDOR'], sellerCode: `V-${suffix}`, sellerDisplayName: `Vendedor E2E ${suffix}`,
+    roles: ['VENDEDOR'], sellerDisplayName: `Vendedor E2E ${suffix}`,
   })), 'crear vendedor');
+  expect(sellerUser.sellerCode).toMatch(/^VND-\d{6}$/);
   const route = await body<Json>(await request.post('/api/routes', authorized(admin.accessToken, {
-    code: `R-${suffix}`, name: `Ruta E2E ${suffix}`, description: 'Ruta de aceptacion',
+    name: `Ruta E2E ${suffix}`, description: 'Ruta de aceptacion',
   })), 'crear ruta');
+  expect(route.code).toMatch(/^RUT-\d{6}$/);
   const vehicle = await body<Json>(await request.post('/api/routes/vehicles', authorized(admin.accessToken, {
-    code: `VH-${suffix}`, licensePlate: `P${suffix.slice(-5)}`, description: 'Vehiculo E2E',
+    licensePlate: `P${suffix.slice(-5)}`, description: 'Vehiculo E2E',
   })), 'crear vehiculo');
+  expect(vehicle.code).toMatch(/^VEH-\d{6}$/);
   await body(await request.post(`/api/routes/${route.id}/assignment`, authorized(admin.accessToken, {
     sellerId: sellerUser.sellerId, vehicleId: vehicle.id, validFrom: new Date().toISOString().slice(0, 10),
   })), 'asignar ruta');
   const customer = await body<Json>(await request.post('/api/customers', authorized(admin.accessToken, {
-    code: `C-${suffix}`, name: `Cliente E2E ${suffix}`, contactName: 'Encargado', phone: `55${suffix}`,
+    name: `Cliente E2E ${suffix}`, contactName: 'Encargado', phone: `55${suffix}`,
     whatsapp: `55${suffix}`, addressReference: 'Tienda de prueba', customerType: 'PERMANENT',
     creditAllowed: false, creditLimit: 0,
   })), 'crear cliente');
+  expect(customer.code).toMatch(/^CLI-\d{6}$/);
   await body(await request.post(`/api/customers/${customer.id}/route-assignment`, authorized(admin.accessToken, {
     routeId: route.id, validFrom: new Date().toISOString().slice(0, 10),
   })), 'asignar cliente');
@@ -109,15 +125,18 @@ test('flujo completo 1-28, offline, idempotencia, antifraude, PDF y FEL', async 
     location: { latitude: 14.6349, longitude: -90.5069, accuracyMeters: 5, capturedAt: '2026-08-16T12:00:00Z' },
   })), 'recibir carga');
   expect(receivedLoad.status).toBe('RECEIVED');
+  expect(trackingPointCount(`route_load_id = '${load.id}' AND point_type = 'START'`)).toBe(1);
   await body(await request.post(`/api/loads/${load.id}/start`, authorized(seller.accessToken)), 'iniciar ruta');
 
   // 11. Venta online.
   const onlineSale = await body<Json>(await request.post('/api/sales', authorized(seller.accessToken, {
     clientReference: crypto.randomUUID(), routeId: route.id, customerId: customer.id,
     items: [{ presentationId, quantity: 10 }], payments: [{ method: 'CASH', amount: null }],
+    location: { latitude: 14.635, longitude: -90.507, accuracyMeters: 6, capturedAt: '2026-08-16T12:01:00Z' },
   })), 'venta online');
   expect(Number(onlineSale.total)).toBe(25);
   expect(onlineSale.companyName).toBe(company.commercialName);
+  expect(trackingPointCount(`sale_id = '${onlineSale.id}' AND point_type = 'SALE'`)).toBe(1);
 
   // 12-18. Se preparan datos offline y se comprueba persistencia tras reabrir la PWA.
   await page.goto('/');
@@ -131,6 +150,7 @@ test('flujo completo 1-28, offline, idempotencia, antifraude, PDF y FEL', async 
   const browserLogin = await browserLoginPromise;
   if (!browserLogin.ok()) throw new Error(`login navegador: HTTP ${browserLogin.status()} ${await browserLogin.text()}`);
   await expect(page.getByRole('heading', { name: 'Panel operativo' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'En línea' })).toBeVisible();
   if (captureManual) await page.screenshot({ path: path.join(manualAssets, '02-panel-vendedor.png'), fullPage: true });
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
@@ -174,7 +194,7 @@ test('flujo completo 1-28, offline, idempotencia, antifraude, PDF y FEL', async 
     { clientOperationId: provisionalOperation, deviceId: seller.user.deviceId, entityType: 'PROVISIONAL_CUSTOMER', operationType: 'CREATE', aggregateLocalId: provisionalId,
       payload: { localCustomerId: provisionalId, routeId: route.id, name: `Cliente provisional ${suffix}`, phone: `44${suffix}`, whatsapp: '', addressReference: 'Creado sin Internet' }, dependencies: [], createdAtLocal },
     { clientOperationId: offlineSaleOperation, deviceId: seller.user.deviceId, entityType: 'SALE', operationType: 'CREATE', aggregateLocalId: offlineSaleId,
-      payload: { clientReference: offlineSaleId, routeId: route.id, customerId: provisionalId, items: [{ presentationId, quantity: 5 }], payments: [{ method: 'CASH', amount: null }] }, dependencies: [provisionalOperation], createdAtLocal },
+      payload: { clientReference: offlineSaleId, routeId: route.id, customerId: provisionalId, items: [{ presentationId, quantity: 5 }], payments: [{ method: 'CASH', amount: null }], location: { latitude: 14.6351, longitude: -90.5071, accuracyMeters: null, capturedAt: createdAtLocal } }, dependencies: [provisionalOperation], createdAtLocal },
     { clientOperationId: wasteOperation, deviceId: seller.user.deviceId, entityType: 'WASTE', operationType: 'CREATE', aggregateLocalId: wasteId,
       payload: { clientReference: wasteId, routeId: route.id, reason: 'Rotura durante reparto', occurredAtLocal: createdAtLocal,
         items: [{ wasteTypeId: wasteType.id, presentationId, presentationQuantity: 2, reportedDamagedUnits: 2, recoverableUnits: 0 }], evidence: [] }, dependencies: [], createdAtLocal },

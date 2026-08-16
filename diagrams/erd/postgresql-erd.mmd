@@ -197,6 +197,7 @@ erDiagram
         uuid source_location_id FK
         uuid target_location_id FK
         uuid created_by FK
+        string load_type
         string status
         date business_date
     }
@@ -213,6 +214,20 @@ erDiagram
         uuid actor_id FK
         uuid device_id FK
         decimal quantity_delta
+    }
+    ROUTE_TRACKING_POINT {
+        uuid id PK
+        uuid route_load_id FK
+        uuid route_id FK
+        uuid sale_id FK
+        string point_type
+        decimal latitude
+        decimal longitude
+        decimal accuracy_meters
+        timestamp captured_at
+        timestamp persisted_at
+        uuid actor_id FK
+        uuid device_id FK
     }
     SALE {
         uuid id PK
@@ -466,6 +481,10 @@ erDiagram
     PRODUCT ||--o{ ROUTE_LOAD_ITEM : quantity
     ROUTE_LOAD ||--o{ ROUTE_LOAD_CORRECTION : corrects
     PRODUCT ||--o{ ROUTE_LOAD_CORRECTION : adjusts
+    ROUTE_LOAD ||--o{ ROUTE_TRACKING_POINT : event_source
+    ROUTE ||--o{ ROUTE_TRACKING_POINT : tracks
+    APP_USER ||--o{ ROUTE_TRACKING_POINT : records
+    DEVICE ||--o{ ROUTE_TRACKING_POINT : captures
 
     ROUTE ||--o{ SALE : produces
     INVENTORY_LOCATION ||--o{ SALE : decrements
@@ -480,6 +499,7 @@ erDiagram
     PRICE_TIER o|--o{ SALE_ITEM : tier
     CUSTOMER_SPECIAL_PRICE o|--o{ SALE_ITEM : special
     SALE ||--o{ PAYMENT : paid_by
+    SALE o|--o{ ROUTE_TRACKING_POINT : sale_event
     PAYMENT ||--o| CREDIT_ACCOUNT_ENTRY : posts
     CUSTOMER ||--o{ CREDIT_ACCOUNT_ENTRY : account
 

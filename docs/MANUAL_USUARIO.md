@@ -64,7 +64,7 @@ En **Datos de la empresa** complete un único formulario con:
 - prefijo y siguiente número de comprobante;
 - texto o leyenda para documentos.
 
-Estos datos se usan en la aplicación y en los comprobantes. Revise especialmente la numeración antes de iniciar ventas; el servidor asigna el correlativo oficial y evita duplicados.
+Estos datos se usan en la aplicación y en los comprobantes. El logotipo guardado aquí se incrusta en los comprobantes internos y en los reportes exportados a Excel o PDF; las ventas conservan una copia histórica del logotipo vigente al confirmarse. Revise especialmente la numeración antes de iniciar ventas; el servidor asigna el correlativo oficial y evita duplicados.
 
 ![Configuración única de la empresa](assets/manual/06-datos-empresa.png)
 
@@ -74,7 +74,7 @@ En **Usuarios**:
 
 1. Escriba usuario, correo y contraseña temporal.
 2. Seleccione uno o más roles.
-3. Si el rol es **Vendedor**, ingrese código y nombre visible del vendedor.
+3. Si el rol es **Vendedor**, ingrese el nombre visible; el sistema asigna automáticamente el código `VND-000001` consecutivo.
 4. Guarde y entregue la contraseña temporal de forma privada.
 5. Use el listado de dispositivos para revocar un teléfono perdido o que ya no debe operar.
 
@@ -102,9 +102,9 @@ El precio, el descuento y los totales finales los calcula el servidor. El vended
 
 ### 5.5 Rutas, vehículos y clientes
 
-En **Rutas** cree las rutas y los vehículos. Después asigne vendedor y vehículo con una fecha de inicio; estas asignaciones son históricas.
+En **Rutas** cree las rutas y los vehículos. El sistema asigna automáticamente los códigos `RUT-000001` y `VEH-000001`; la placa del vehículo continúa siendo manual. Después asigne vendedor y vehículo con una fecha de inicio; estas asignaciones son históricas.
 
-En **Clientes** registre datos de contacto, dirección, tipo y reglas de crédito. Asigne cada cliente a una ruta. El vendedor solo puede ver o usar los clientes autorizados de su alcance.
+En **Clientes** registre datos de contacto, dirección, tipo y reglas de crédito. El código `CLI-000001` se genera al guardar. Asigne cada cliente a una ruta. El vendedor solo puede ver o usar los clientes autorizados de su alcance.
 
 Un cliente encontrado durante el reparto puede registrarse como ocasional/provisional, incluso offline. No se habilitan crédito ni precios especiales hasta que un administrador o supervisor revise su identidad.
 
@@ -127,10 +127,20 @@ Los ajustes requieren cantidad y motivo. El libro de movimientos es de solo lect
 2. Agregue productos en unidades base.
 3. Pulse **Preparar carga**.
 4. Bodega verifica físicamente y confirma la entrega desde su dispositivo.
-5. El vendedor ingresa desde su propio dispositivo y confirma la recepción.
+5. El vendedor ingresa desde su propio dispositivo y pulsa **Confirmar recepción**. El teléfono solicita una sola ubicación para registrar el inicio de la ruta.
 6. El vendedor inicia el recorrido.
 
-La misma persona/dispositivo no debe simular las dos confirmaciones. El sistema conserva quién confirmó cada etapa.
+La misma persona/dispositivo no debe simular las dos confirmaciones. El sistema conserva quién confirmó cada etapa. Si el permiso de ubicación se deniega o el teléfono no puede obtenerla, la recepción no se confirma: active el permiso y vuelva a intentarlo. La aplicación no vigila su ubicación durante el recorrido ni realiza capturas en segundo plano.
+
+### 6.3 Recarga durante el recorrido
+
+Si al vendedor se le termina un producto, bodega abre **Cargas → Nueva recarga de ruta**, selecciona la ruta que ya tiene el recorrido iniciado, la bodega origen y los productos/cantidades adicionales. La recarga sigue el mismo control de doble confirmación:
+
+1. Bodega la prepara y confirma la entrega.
+2. El vendedor la recibe desde su teléfono.
+3. El sistema mueve el inventario de bodega a la ubicación de ruta y deja auditoría de ambos usuarios.
+
+Una recarga no inicia otro recorrido, no crea otra liquidación y se suma a la conciliación del recorrido original. No se permite crearla cuando la liquidación de esa ruta ya fue cerrada ni dejar una recarga pendiente al intentar cerrar.
 
 ![Carga preparada y su estado](assets/manual/09-cargas-ruta.png)
 
@@ -142,7 +152,9 @@ En **Ventas**:
 2. Agregue presentación y cantidad.
 3. Seleccione efectivo, transferencia o crédito según las reglas del cliente.
 4. En un único medio de pago puede dejar el monto vacío para aplicar el total calculado por el servidor.
-5. Confirme la venta.
+5. Pulse **Confirmar venta** y permita una única ubicación para esa venta.
+
+Si se deniega el permiso o no se puede obtener la ubicación, la venta no se confirma y puede intentarlo otra vez después de corregir el permiso o la señal. No hay seguimiento continuo. La ubicación se conserva únicamente para control interno de los eventos de ruta; no aparece en el comprobante compartido con el cliente ni en los reportes operativos.
 
 El sistema valida vendedor/ruta, precio vigente, crédito disponible, inventario, correlativo y total en una sola transacción. Una venta rechazada no debe descontar inventario ni consumir numeración.
 
@@ -219,7 +231,7 @@ El panel muestra indicadores oficiales en la zona horaria de la empresa: ventas,
 
 ![Panel administrativo](assets/manual/05-panel-administrador.png)
 
-En **Reportes** seleccione ventas, mermas o liquidaciones, aplique fechas/filtros y use la exportación. Los resultados se paginan y respetan el alcance del rol.
+En **Reportes** seleccione ventas, mermas o liquidaciones, aplique fechas/filtros y use **Exportar … a Excel** para obtener `.xlsx` o **Imprimir / descargar PDF** para generar un documento imprimible con el logotipo e identidad de la empresa y los filtros aplicados. Los resultados se paginan y respetan el alcance del rol; no se ofrece CSV como formato operativo.
 
 ![Reportes filtrables y exportables](assets/manual/11-reportes.png)
 
@@ -246,7 +258,7 @@ FEL permanece desactivado hasta conocer e integrar un certificador real. La pant
 |---|---|
 | No puedo iniciar sesión | Compruebe usuario, contraseña y mayúsculas. Espere si hubo muchos intentos; informe al administrador sin enviar la contraseña. |
 | Se exige cambiar contraseña | Complete el cambio; las demás rutas están bloqueadas hasta hacerlo. |
-| Aparece “Sin conexión” | Pulse el indicador, compruebe Internet y servidor. Continúe solo con funciones offline permitidas. |
+| Aparece “Sin conexión” después de dejar el sistema abierto | El access token dura pocos minutos; la aplicación intenta renovarlo automáticamente mediante la cookie segura y repite la solicitud una vez. Si la renovación falla, inicie sesión de nuevo. Un error 401 no significa que PostgreSQL esté caído. |
 | Una operación sigue pendiente | Mantenga la PWA abierta, recupere conexión y use **Pendientes → Sincronizar**. |
 | Hay conflicto/rechazo | No duplique la venta. Tome nota del UUID/referencia y solicite revisión. |
 | No aparece un cliente/producto | Verifique ruta, vigencia, estado activo y permisos; vuelva a sincronizar. |

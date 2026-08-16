@@ -12,7 +12,7 @@ Alcance organizacional: una empresa purificadora
 | PWA | vite-plugin-pwa 1.3, Service Worker/Workbox, IndexedDB con `idb` 8 |
 | Estado/validación | TanStack Query 5, React Hook Form 7, Zod 4 |
 | API | Java 21, Spring Boot 4.1, Spring MVC, Security, Validation y Actuator |
-| Persistencia | Spring Data JPA, PostgreSQL 18.4, Flyway V1–V18 |
+| Persistencia | Spring Data JPA, PostgreSQL 18.4, Flyway V1–V19 |
 | Documentos | Apache PDFBox 3.0.8 y almacenamiento por volumen |
 | Pruebas | JUnit, Testcontainers 2, Vitest 4, Testing Library y Playwright 1.62 |
 | Ejecución | Docker Compose, imágenes multi-stage y procesos no privilegiados |
@@ -113,7 +113,7 @@ No registre valores secretos en tickets, auditoría, capturas, comandos comparti
 
 ## 6. Modelo oficial PostgreSQL
 
-Flyway es la única fuente ejecutable de esquema. V1–V18 crean 54 tablas agrupadas así:
+Flyway es la única fuente ejecutable de esquema. V1–V20 crean 55 tablas y las secuencias operativas agrupadas así:
 
 - identidad, roles, dispositivos, sesiones, empresa, archivos, FEL y auditoría;
 - productos, presentaciones, conversiones y precios versionados;
@@ -123,6 +123,10 @@ Flyway es la única fuente ejecutable de esquema. V1–V18 crean 54 tablas agrup
 - provisionales, mermas, devoluciones y alertas;
 - liquidaciones, autorizaciones, incidencias y anulaciones;
 - comprobantes internos y documentos FEL.
+
+V19 agrega las secuencias `customer_code_seq`, `seller_code_seq`, `route_code_seq` y `vehicle_code_seq`, además de `route_load.load_type` (`INITIAL` o `REPLENISHMENT`). Los códigos se reservan en PostgreSQL dentro de la inserción y no se renumeran los históricos.
+
+V20 crea `route_tracking_point` para los eventos inmutables `START` y `SALE`. Cada fila enlaza carga, ruta, actor y dispositivo con latitud, longitud, precisión opcional, instante de captura y de persistencia. Las restricciones de rango validan coordenadas y precisión; los índices parciales garantizan un `START` por ruta y un `SALE` por venta. El punto se escribe dentro de la transacción de recepción inicial o venta, por lo que un fallo revierte la operación completa.
 
 El ERD reconciliado está en `diagrams/erd/postgresql-erd.mmd`. `diagrams/erd/README.md` relaciona cada migración con su alcance.
 
@@ -156,6 +160,8 @@ La cuenta se representa con entradas inmutables; las anulaciones generan compens
 
 Bodega y vendedor confirman por separado. La liquidación solo cierra sin Outbox pendiente; calcula diferencias desde libros oficiales y deja la carga en estado liquidado.
 
+Una recarga se asocia a una ruta con carga inicial en estado `STARTED`, mueve inventario al recibirla y se agrega a la conciliación de la carga inicial. Nunca ejecuta `STARTED` ni crea una segunda liquidación; una liquidación cerrada bloquea nuevas recargas.
+
 ### Anulación
 
 La venta original no se borra. Una decisión autorizada crea movimientos y reversos exactos con correlación/auditoría.
@@ -177,6 +183,8 @@ No se almacenan contraseñas, refresh tokens, secretos FEL ni datos administrati
 
 `ConnectionManager` modela `UNKNOWN`, `CHECKING`, `OFFLINE`, `DEGRADED` y `ONLINE`; usa timeout, cooldown, backoff y eventos de ciclo de vida. `navigator.onLine` no se toma como prueba suficiente: se consulta `/api/connectivity` con `no-store`.
 
+`apiClient` centraliza la renovación: ante un `401` de una ruta protegida comparte una sola promesa de `POST /auth/refresh`, actualiza el access token en memoria y repite la solicitud una vez. Un `401` no dispara el indicador de red; si la cookie de refresh falla, emite `agua-pura:session-expired`, limpia la sesión y solicita iniciar sesión nuevamente.
+
 `SyncEngine`:
 
 1. Lee operaciones Outbox listas por dependencias.
@@ -188,11 +196,13 @@ No se almacenan contraseñas, refresh tokens, secretos FEL ni datos administrati
 
 Reenviar una operación idéntica devuelve `ALREADY_PROCESSED`. Reutilizar el UUID con otro contenido genera conflicto. El servidor es responsable de la idempotencia; la PWA no puede asumirla localmente.
 
+La ubicación es un contrato puntual: `GeoLocationRequest` exige `latitude`, `longitude` y `capturedAt`, admite `accuracyMeters` nulo, y aplica los rangos geográficos y precisión no negativa tanto en Bean Validation como en PostgreSQL. `captureCurrentLocation` usa exclusivamente `navigator.geolocation.getCurrentPosition` al confirmar recepción o venta; no usa `watchPosition`, no crea almacén de tracking y no ejecuta captura en segundo plano. Para ventas offline, `LocalSaleRecord.location` es un snapshot opcional que se conserva dentro del payload ya sincronizable.
+
 ## 10. Archivos, comprobantes y FEL
 
 `file_object` conserva metadatos, propósito, tamaño, MIME, storage key y SHA-256. El contenido vive en `file_storage`/`STORAGE_PATH` y debe respaldarse junto con PostgreSQL.
 
-PDFBox crea el comprobante interno desde el snapshot histórico de la venta/empresa. `receipt_document` vincula venta, archivo, hash, usuario y dispositivo generador.
+PDFBox crea el comprobante interno desde el snapshot histórico de la venta/empresa e incrusta el logotipo que estaba vigente al confirmar la venta. Los reportes usan el logotipo empresarial actual al exportarse a PDF o Excel; Excel incrusta imágenes PNG/JPEG y conserva el resto de la identidad y filtros. Las coordenadas de `route_tracking_point` no se proyectan en respuestas de venta, plantillas de comprobante ni exportaciones de reporte. `receipt_document` vincula venta, archivo, hash, usuario y dispositivo generador.
 
 FEL usa un puerto/adaptador opcional. Sin implementación y credenciales reales, activar FEL responde `FEL_PROVIDER_UNAVAILABLE`; nunca simula una certificación. Un adaptador futuro debe ser idempotente por venta, validar respuesta/firma, persistir autorización y archivo certificado, y auditar cada transición.
 
@@ -251,6 +261,8 @@ Remove-Item Env:E2E_CAPTURE_MANUAL
 ## 13. Construcción y despliegue
 
 `docker compose up -d --build` construye backend y frontend con imágenes multi-stage. Los contenedores ejecutan como usuarios no privilegiados donde aplica y disponen de healthchecks/restart policy.
+
+Para inspeccionar la base con DataGrip, PostgreSQL se publica únicamente en `127.0.0.1:15432` (variable `POSTGRES_HOST_PORT`, configurable en `.env`). Use la base `agua_pura`, usuario `agua_pura_app` y la contraseña `POSTGRES_PASSWORD` definida localmente; no exponga este puerto en una red compartida.
 
 ### 13.1 Levantamiento manual local
 
