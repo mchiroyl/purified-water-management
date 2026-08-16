@@ -94,4 +94,32 @@ describe('RouteLoadsPage', () => {
     expect(await screen.findByText(/se requiere permitir el acceso a la ubicación/i)).toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([input]) => input.toString().endsWith('/loads/l1/receipt'))).toBe(false);
   });
+
+  it('confirma una recarga sin solicitar ubicación', async () => {
+    const getCurrentPosition = vi.fn();
+    vi.stubGlobal('navigator', { geolocation: { getCurrentPosition } });
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (input.toString().endsWith('/loads/l1/receipt')) {
+        return Promise.resolve(new Response(JSON.stringify({}), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (input.toString().endsWith('/loads')) {
+        return Promise.resolve(new Response(JSON.stringify([{
+          id: 'l1', loadNumber: 'RECARGA-000001', routeId: 'r1', routeCode: 'R-01', routeName: 'Ruta norte',
+          sourceLocationId: 'w1', sourceLocationName: 'Bodega central', targetLocationId: 't1', targetLocationName: 'Inventario ruta norte',
+          plannedDate: '2026-08-10', loadType: 'REPLENISHMENT', notes: '', status: 'WAREHOUSE_CONFIRMED', createdByUsername: 'bodega', items: [], corrections: [],
+        }]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (input.toString().endsWith('/company-configuration')) return Promise.resolve(new Response(JSON.stringify({ timezone: 'America/Guatemala' }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      return Promise.resolve(new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirmar recepción' }));
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => input.toString().endsWith('/loads/l1/receipt'))).toBe(true));
+    expect(getCurrentPosition).not.toHaveBeenCalled();
+    const call = fetchMock.mock.calls.find(([input]) => input.toString().endsWith('/loads/l1/receipt'));
+    expect(JSON.parse((call?.[1] as RequestInit).body as string)).toEqual({});
+  });
 });

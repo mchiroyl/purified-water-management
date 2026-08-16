@@ -26,22 +26,23 @@ class IdentityAdministrationApplicationServiceTest {
     void createsSellerUserWithNormalizedIdentityAndHashedPassword() {
         var result = service.createUser(new CreateUserRequest(
                 "  Vendedor.Uno ", " VENDEDOR@EJEMPLO.COM ", "Clave-segura-2026",
-                Set.of("VENDEDOR"), " V-001 ", " Juan Pérez "));
+                Set.of("VENDEDOR"), " MANUAL-999 ", " Juan Pérez "));
 
         assertThat(result.username()).isEqualTo("vendedor.uno");
         assertThat(result.email()).isEqualTo("vendedor@ejemplo.com");
-        assertThat(result.sellerCode()).isEqualTo("V-001");
+        assertThat(result.sellerCode()).isEqualTo("VND-000001");
+        assertThat(persistence.created.sellerCode()).isBlank();
         assertThat(persistence.created.passwordHash()).isEqualTo("hashed:Clave-segura-2026");
         assertThat(persistence.created.sellerDisplayName()).isEqualTo("Juan Pérez");
     }
 
     @Test
-    void rejectsSellerRoleWithoutSellerProfile() {
+    void rejectsSellerRoleWithoutSellerName() {
         assertThatThrownBy(() -> service.createUser(new CreateUserRequest(
                 "vendedor", "vendedor@ejemplo.com", "Clave-segura-2026",
-                Set.of("VENDEDOR"), "", "")))
+                Set.of("VENDEDOR"), null, "")))
                 .isInstanceOf(BusinessException.class)
-                .hasMessage("El código y nombre del vendedor son obligatorios.");
+                .hasMessage("El nombre del vendedor es obligatorio.");
     }
 
     @Test
@@ -69,7 +70,8 @@ class IdentityAdministrationApplicationServiceTest {
             created = user;
             return new UserView(UUID.randomUUID(), user.username(), user.email(), "ACTIVE", true,
                     user.roles(), user.roles().contains("VENDEDOR") ? UUID.randomUUID() : null,
-                    user.sellerCode(), user.sellerDisplayName(), Instant.now());
+                    user.roles().contains("VENDEDOR") ? "VND-000001" : user.sellerCode(),
+                    user.sellerDisplayName(), Instant.now());
         }
 
         @Override public List<UserView> findUsers() { return new ArrayList<>(); }

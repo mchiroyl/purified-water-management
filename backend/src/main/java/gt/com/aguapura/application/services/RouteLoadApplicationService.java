@@ -38,6 +38,11 @@ public class RouteLoadApplicationService {
 
     @Transactional
     public RouteLoadResponse create(CreateRouteLoadRequest request, UUID actorId) {
+        String loadType = safe(request.loadType()).toUpperCase(java.util.Locale.ROOT);
+        if (loadType.isBlank()) loadType = "INITIAL";
+        if (!List.of("INITIAL", "REPLENISHMENT").contains(loadType)) {
+            throw validation("LOAD_TYPE_INVALID", "El tipo de carga no es válido.");
+        }
         ZoneId companyZone = companyConfiguration.find().map(data -> ZoneId.of(data.timezone()))
                 .orElse(ZoneId.of("America/Guatemala"));
         if (request.plannedDate().isBefore(LocalDate.now(companyZone))) {
@@ -45,6 +50,14 @@ public class RouteLoadApplicationService {
         }
         if (!persistence.activeRouteExists(request.routeId())) {
             throw validation("LOAD_ROUTE_NOT_FOUND", "No se encontró la ruta activa.");
+        }
+        if ("REPLENISHMENT".equals(loadType)) {
+            if (!persistence.activeInitialLoadExists(request.routeId())) {
+                throw conflict("REPLENISHMENT_ROUTE_NOT_STARTED", "La recarga requiere una ruta con recorrido iniciado.");
+            }
+            if (persistence.routeHasClosedSettlement(request.routeId())) {
+                throw conflict("REPLENISHMENT_AFTER_SETTLEMENT", "No se puede recargar una ruta cuya liquidación ya fue cerrada.");
+            }
         }
         if (!persistence.activeWarehouseLocationExists(request.sourceLocationId())) {
             throw validation("LOAD_WAREHOUSE_NOT_FOUND", "El origen debe ser una bodega de inventario activa.");
@@ -62,7 +75,15 @@ public class RouteLoadApplicationService {
             return new RouteLoadPort.NewItem(item.productId(), item.quantityBaseUnits());
         }).toList();
         return response(persistence.createLoad(new RouteLoadPort.NewLoad(request.routeId(),
-                request.sourceLocationId(), targetLocation, request.plannedDate(), safe(request.notes()), actorId, items)));
+                request.sourceLocationId(), targetLocation, request.plannedDate(), loadType,
+                safe(request.notes()), actorId, items)));
+    }
+
+    @Transactional
+    public RouteLoadResponse createReplenishment(CreateRouteLoadRequest request, UUID actorId) {
+        var replenishment = new CreateRouteLoadRequest(request.routeId(), request.sourceLocationId(),
+                request.plannedDate(), "REPLENISHMENT", request.notes(), request.items());
+        return create(replenishment, actorId);
     }
 
     @Transactional(readOnly = true)
@@ -93,6 +114,9 @@ public class RouteLoadApplicationService {
         var received = persistence.confirmReceipt(id, actorId, deviceId);
         if ("INITIAL".equals(load.loadType())) {
             var location = request.location();
+            if (location == null) {
+                throw validation("LOAD_RECEIPT_LOCATION_REQUIRED", "La carga inicial requiere una ubicación válida.");
+            }
             tracking.recordStart(load.id(), load.routeId(), new RouteTrackingPort.GeoLocation(location.latitude(),
                     location.longitude(), location.accuracyMeters(), location.capturedAt()), actorId, deviceId);
         }
@@ -104,6 +128,9 @@ public class RouteLoadApplicationService {
         var load = persistence.findLoad(id);
         if (restrictedToSeller && !persistence.sellerAssignedToRoute(actorId, load.routeId())) {
             throw forbidden("LOAD_ROUTE_FORBIDDEN", "La carga no pertenece a una ruta asignada al vendedor.");
+        }
+        if ("REPLENISHMENT".equals(load.loadType())) {
+            throw conflict("REPLENISHMENT_CANNOT_START", "Una recarga se recibe dentro del recorrido y no inicia otro recorrido.");
         }
         RouteLoadWorkflow.start(load.status());
         return response(persistence.start(id, actorId, deviceId));
@@ -144,7 +171,7 @@ public class RouteLoadApplicationService {
         return new RouteLoadResponse(item.id(), number(item.loadNumber()), item.routeId(), item.routeCode(),
                 item.routeName(), item.sourceLocationId(), item.sourceLocationCode(), item.sourceLocationName(),
                 item.targetLocationId(), item.targetLocationCode(), item.targetLocationName(), item.plannedDate(),
-                item.notes(), item.status(), item.createdBy(), item.createdByUsername(), item.createdAt(),
+                item.loadType(), item.notes(), item.status(), item.createdBy(), item.createdByUsername(), item.createdAt(),
                 item.warehouseConfirmedBy(), item.warehouseConfirmedByUsername(), item.warehouseConfirmedDeviceId(),
                 item.warehouseConfirmedAt(), item.sellerReceivedBy(), item.sellerReceivedByUsername(),
                 item.sellerReceivedDeviceId(), item.sellerReceivedAt(), item.startedBy(), item.startedByUsername(),

@@ -40,7 +40,7 @@ public class IdentityAdministrationApplicationService {
         String username = request.username().trim().toLowerCase(Locale.ROOT);
         String email = request.email().trim().toLowerCase(Locale.ROOT);
         Set<String> roles = normalizeRoles(request.roles());
-        String sellerCode = safe(request.sellerCode()).toUpperCase(Locale.ROOT);
+        String sellerCode = "";
         String sellerName = safe(request.sellerDisplayName());
 
         if (persistence.usernameExists(username)) {
@@ -49,11 +49,8 @@ public class IdentityAdministrationApplicationService {
         if (persistence.emailExists(email)) {
             throw conflict("EMAIL_EXISTS", "El correo ya está registrado.");
         }
-        if (roles.contains(RoleCode.VENDEDOR.name()) && (sellerCode.isBlank() || sellerName.isBlank())) {
-            throw validation("SELLER_PROFILE_REQUIRED", "El código y nombre del vendedor son obligatorios.");
-        }
-        if (!sellerCode.isBlank() && persistence.sellerCodeExists(sellerCode)) {
-            throw conflict("SELLER_CODE_EXISTS", "El código de vendedor ya está registrado.");
+        if (roles.contains(RoleCode.VENDEDOR.name()) && sellerName.isBlank()) {
+            throw validation("SELLER_PROFILE_REQUIRED", "El nombre del vendedor es obligatorio.");
         }
 
         var user = new IdentityAdministrationPort.NewUser(username, email,

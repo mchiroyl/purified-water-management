@@ -16,6 +16,7 @@ public record CreateRouteLoadRequest(
         @NotNull UUID routeId,
         @NotNull UUID sourceLocationId,
         @NotNull LocalDate plannedDate,
+        String loadType,
         @Size(max = 500) String notes,
         @NotEmpty @Size(max = 100) List<@Valid ItemRequest> items
 ) {

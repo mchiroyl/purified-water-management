@@ -56,9 +56,9 @@ public class JdbcIdentityAdministrationAdapter implements IdentityAdministration
         if (user.roles().contains("VENDEDOR")) {
             jdbc.sql("""
                     INSERT INTO seller(id, user_id, code, display_name)
-                    VALUES (:id, :userId, :code, :displayName)
+                    VALUES (:id, :userId, 'VND-' || lpad(nextval('seller_code_seq')::text, 6, '0'), :displayName)
                     """).param("id", UUID.randomUUID()).param("userId", userId)
-                    .param("code", user.sellerCode()).param("displayName", user.sellerDisplayName()).update();
+                    .param("displayName", user.sellerDisplayName()).update();
         }
         return findUser(userId);
     }

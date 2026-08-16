@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -47,27 +46,44 @@ public class ReportController {
         return service.settlements(parameters.filter(), actor(jwt), sellerOnly(jwt));
     }
 
-    @GetMapping(value = "/sales.csv", produces = "text/csv")
-    public ResponseEntity<byte[]> salesCsv(Parameters parameters, @AuthenticationPrincipal Jwt jwt) {
-        return csv("ventas.csv", service.exportCsv(ReportApplicationService.ReportType.SALES,
-                parameters.filter(), actor(jwt), sellerOnly(jwt)));
+    @GetMapping(value = "/sales.xlsx", produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    public ResponseEntity<byte[]> salesExcel(Parameters parameters, @AuthenticationPrincipal Jwt jwt) {
+        return file("ventas.xlsx", service.exportExcel(ReportApplicationService.ReportType.SALES,
+                parameters.filter(), actor(jwt), sellerOnly(jwt)), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     }
 
-    @GetMapping(value = "/wastes.csv", produces = "text/csv")
-    public ResponseEntity<byte[]> wastesCsv(Parameters parameters, @AuthenticationPrincipal Jwt jwt) {
-        return csv("mermas.csv", service.exportCsv(ReportApplicationService.ReportType.WASTES,
-                parameters.filter(), actor(jwt), sellerOnly(jwt)));
+    @GetMapping(value = "/sales.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> salesPdf(Parameters parameters, @AuthenticationPrincipal Jwt jwt) {
+        return file("ventas.pdf", service.exportPdf(ReportApplicationService.ReportType.SALES,
+                parameters.filter(), actor(jwt), sellerOnly(jwt)), MediaType.APPLICATION_PDF_VALUE);
     }
 
-    @GetMapping(value = "/settlements.csv", produces = "text/csv")
-    public ResponseEntity<byte[]> settlementsCsv(Parameters parameters, @AuthenticationPrincipal Jwt jwt) {
-        return csv("liquidaciones.csv", service.exportCsv(ReportApplicationService.ReportType.SETTLEMENTS,
-                parameters.filter(), actor(jwt), sellerOnly(jwt)));
+    @GetMapping(value = "/wastes.xlsx", produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    public ResponseEntity<byte[]> wastesExcel(Parameters parameters, @AuthenticationPrincipal Jwt jwt) {
+        return file("mermas.xlsx", service.exportExcel(ReportApplicationService.ReportType.WASTES,
+                parameters.filter(), actor(jwt), sellerOnly(jwt)), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     }
 
-    private ResponseEntity<byte[]> csv(String filename, byte[] body) {
-        var type = new MediaType("text", "csv", StandardCharsets.UTF_8);
-        return ResponseEntity.ok().contentType(type)
+    @GetMapping(value = "/wastes.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> wastesPdf(Parameters parameters, @AuthenticationPrincipal Jwt jwt) {
+        return file("mermas.pdf", service.exportPdf(ReportApplicationService.ReportType.WASTES,
+                parameters.filter(), actor(jwt), sellerOnly(jwt)), MediaType.APPLICATION_PDF_VALUE);
+    }
+
+    @GetMapping(value = "/settlements.xlsx", produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    public ResponseEntity<byte[]> settlementsExcel(Parameters parameters, @AuthenticationPrincipal Jwt jwt) {
+        return file("liquidaciones.xlsx", service.exportExcel(ReportApplicationService.ReportType.SETTLEMENTS,
+                parameters.filter(), actor(jwt), sellerOnly(jwt)), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
+
+    @GetMapping(value = "/settlements.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> settlementsPdf(Parameters parameters, @AuthenticationPrincipal Jwt jwt) {
+        return file("liquidaciones.pdf", service.exportPdf(ReportApplicationService.ReportType.SETTLEMENTS,
+                parameters.filter(), actor(jwt), sellerOnly(jwt)), MediaType.APPLICATION_PDF_VALUE);
+    }
+
+    private ResponseEntity<byte[]> file(String filename, byte[] body, String mediaType) {
+        return ResponseEntity.ok().contentType(MediaType.parseMediaType(mediaType))
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(filename).build().toString())
                 .header("X-Content-Type-Options", "nosniff").body(body);
     }

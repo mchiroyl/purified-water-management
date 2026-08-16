@@ -19,6 +19,7 @@ public record RouteLoadResponse(
         String targetLocationCode,
         String targetLocationName,
         LocalDate plannedDate,
+        String loadType,
         String notes,
         String status,
         UUID createdBy,

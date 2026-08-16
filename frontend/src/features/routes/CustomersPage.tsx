@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { PageHeader } from '../../app/PageHeader';
 import { getMobileDatabase } from '../../offline/SyncContext';
 import type { ProvisionalCustomerRecord } from '../../offline/mobileDatabase';
 import { apiRequest } from '../../services/apiClient';
@@ -22,7 +23,8 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
   const routes = useQuery({ queryKey: ['routes'], queryFn: () => apiRequest<Route[]>('/routes'), enabled: canManage || canCreateRouteCustomer });
   const reviews = useQuery({ queryKey: ['customers', 'provisional-reviews'],
     queryFn: () => apiRequest<ProvisionalReview[]>('/customers/provisional-reviews'), enabled: canReviewProvisional });
-  const [form, setForm] = useState({ code: '', name: '', contactName: '', phone: '', whatsapp: '', addressReference: '', customerType: 'PERMANENT', creditAllowed: false, creditLimit: 0 });
+  const emptyForm = { name: '', contactName: '', phone: '', whatsapp: '', addressReference: '', customerType: 'PERMANENT', creditAllowed: false, creditLimit: 0 };
+  const [form, setForm] = useState(emptyForm);
   const [routeCustomer, setRouteCustomer] = useState(emptyRouteCustomer);
   const [localCustomers, setLocalCustomers] = useState<ProvisionalCustomerRecord[]>([]);
   const [localMessage, setLocalMessage] = useState('');
@@ -31,7 +33,7 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
   const create = useMutation({
     mutationFn: () => apiRequest<Customer>('/customers', { method: 'POST', body: JSON.stringify(form) }),
     onSuccess: () => {
-      setForm({ code: '', name: '', contactName: '', phone: '', whatsapp: '', addressReference: '', customerType: 'PERMANENT', creditAllowed: false, creditLimit: 0 });
+      setForm(emptyForm);
       void queryClient.invalidateQueries({ queryKey: ['customers'] });
     }
   });
@@ -87,12 +89,10 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
   const submit = (event: FormEvent) => { event.preventDefault(); create.mutate(); };
 
   return <main>
-    <p className="eyebrow">Maestros operativos</p>
-    <h1>Clientes</h1>
-    <p className="muted">Clientes permanentes, datos de contacto, crédito autorizado y ruta vigente.</p>
+    <PageHeader eyebrow="Maestros operativos" title="Clientes" description="Clientes permanentes, datos de contacto, crédito autorizado y ruta vigente." />
     {canManage && <form className="form-grid panel" onSubmit={submit}>
       <h2 className="wide">Nuevo cliente</h2>
-      <label>Código<input required value={form.code} onChange={event => setForm({ ...form, code: event.target.value })} /></label>
+      <p className="muted wide">El código de cliente se asigna automáticamente al guardar (CLI-000001).</p>
       <label>Nombre comercial<input required value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} /></label>
       <label>Contacto<input value={form.contactName} onChange={event => setForm({ ...form, contactName: event.target.value })} /></label>
       <label>Teléfono<input value={form.phone} onChange={event => setForm({ ...form, phone: event.target.value })} /></label>

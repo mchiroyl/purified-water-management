@@ -12,6 +12,8 @@ public interface RouteLoadPort {
     boolean activeWarehouseLocationExists(UUID locationId);
     Optional<UUID> findActiveRouteLocation(UUID routeId);
     boolean activeInventoryProductExists(UUID productId);
+    boolean activeInitialLoadExists(UUID routeId);
+    boolean routeHasClosedSettlement(UUID routeId);
     boolean sellerAssignedToRoute(UUID userId, UUID routeId);
     LoadView createLoad(NewLoad load);
     List<LoadView> findLoads(Optional<UUID> sellerUserId);
@@ -22,7 +24,7 @@ public interface RouteLoadPort {
     LoadView addCorrection(NewCorrection correction);
 
     record NewLoad(UUID routeId, UUID sourceLocationId, UUID targetLocationId, LocalDate plannedDate,
-                   String notes, UUID createdBy, List<NewItem> items) {
+                   String loadType, String notes, UUID createdBy, List<NewItem> items) {
     }
 
     record NewItem(UUID productId, BigDecimal quantityBaseUnits) {
@@ -39,7 +41,7 @@ public interface RouteLoadPort {
                     String createdByUsername, Instant createdAt, UUID warehouseConfirmedBy,
                     String warehouseConfirmedByUsername, UUID warehouseConfirmedDeviceId,
                     Instant warehouseConfirmedAt, UUID sellerReceivedBy, String sellerReceivedByUsername,
-                    UUID sellerReceivedDeviceId, Instant sellerReceivedAt, UUID startedBy,
+                    UUID sellerReceivedDeviceId, Instant sellerReceivedAt, String loadType, UUID startedBy,
                     String startedByUsername, UUID startedDeviceId, Instant startedAt,
                     List<ItemView> items, List<CorrectionView> corrections) {
     }

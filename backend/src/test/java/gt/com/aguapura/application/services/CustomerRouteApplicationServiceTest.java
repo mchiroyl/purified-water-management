@@ -22,10 +22,11 @@ class CustomerRouteApplicationServiceTest {
 
     @Test
     void normalizesCustomerIdentityBeforePersisting() {
-        service.createCustomer(new CreateCustomerRequest("C-001", "  Tienda El Éxito  ", "Ana",
+        service.createCustomer(new CreateCustomerRequest("MANUAL-999", "  Tienda El Éxito  ", "Ana",
                 "+502 5555-0101", "5555 0101", "Frente al parque", "PERMANENT",
                 false, BigDecimal.ZERO), UUID.randomUUID());
 
+        assertThat(persistence.createdCustomer.code()).isBlank();
         assertThat(persistence.createdCustomer.normalizedName()).isEqualTo("tienda el exito");
         assertThat(persistence.createdCustomer.normalizedPhone()).isEqualTo("50255550101");
     }

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
+import { PageHeader } from '../../app/PageHeader';
 import { apiRequest } from '../../services/apiClient';
 import { localDate, type Route, type Seller, type Vehicle } from './types';
 
@@ -8,16 +9,16 @@ export function RoutesPage({ canManage }: { canManage: boolean }) {
   const routes = useQuery({ queryKey: ['routes'], queryFn: () => apiRequest<Route[]>('/routes') });
   const vehicles = useQuery({ queryKey: ['routes', 'vehicles'], queryFn: () => apiRequest<Vehicle[]>('/routes/vehicles'), enabled: canManage });
   const sellers = useQuery({ queryKey: ['routes', 'sellers'], queryFn: () => apiRequest<Seller[]>('/routes/sellers'), enabled: canManage });
-  const [routeForm, setRouteForm] = useState({ code: '', name: '', description: '' });
-  const [vehicleForm, setVehicleForm] = useState({ code: '', licensePlate: '', description: '' });
+  const [routeForm, setRouteForm] = useState({ name: '', description: '' });
+  const [vehicleForm, setVehicleForm] = useState({ licensePlate: '', description: '' });
   const [assignments, setAssignments] = useState<Record<string, { sellerId: string; vehicleId: string; validFrom: string }>>({});
   const createRoute = useMutation({
     mutationFn: () => apiRequest<Route>('/routes', { method: 'POST', body: JSON.stringify(routeForm) }),
-    onSuccess: () => { setRouteForm({ code: '', name: '', description: '' }); void queryClient.invalidateQueries({ queryKey: ['routes'] }); }
+    onSuccess: () => { setRouteForm({ name: '', description: '' }); void queryClient.invalidateQueries({ queryKey: ['routes'] }); }
   });
   const createVehicle = useMutation({
     mutationFn: () => apiRequest<Vehicle>('/routes/vehicles', { method: 'POST', body: JSON.stringify(vehicleForm) }),
-    onSuccess: () => { setVehicleForm({ code: '', licensePlate: '', description: '' }); void queryClient.invalidateQueries({ queryKey: ['routes', 'vehicles'] }); }
+    onSuccess: () => { setVehicleForm({ licensePlate: '', description: '' }); void queryClient.invalidateQueries({ queryKey: ['routes', 'vehicles'] }); }
   });
   const assign = useMutation({
     mutationFn: ({ routeId, sellerId, vehicleId, validFrom }: { routeId: string; sellerId: string; vehicleId: string; validFrom: string }) =>
@@ -28,17 +29,16 @@ export function RoutesPage({ canManage }: { canManage: boolean }) {
   const vehicleSubmit = (event: FormEvent) => { event.preventDefault(); createVehicle.mutate(); };
 
   return <main>
-    <p className="eyebrow">Operación de reparto</p><h1>Rutas y vehículos</h1>
-    <p className="muted">La asignación vigente enlaza cada ruta con vendedor y vehículo sin borrar su historial.</p>
+    <PageHeader eyebrow="Operación de reparto" title="Rutas y vehículos" description="La asignación vigente enlaza cada ruta con vendedor y vehículo sin borrar su historial." />
     {canManage && <div className="dual-panels">
       <form className="panel form-grid compact-form" onSubmit={routeSubmit}><h2 className="wide">Nueva ruta</h2>
-        <label>Código<input required value={routeForm.code} onChange={event => setRouteForm({ ...routeForm, code: event.target.value })} /></label>
+        <p className="muted wide">El código de ruta se asigna automáticamente al guardar (RUT-000001).</p>
         <label>Nombre<input required value={routeForm.name} onChange={event => setRouteForm({ ...routeForm, name: event.target.value })} /></label>
         <label className="wide">Descripción<textarea value={routeForm.description} onChange={event => setRouteForm({ ...routeForm, description: event.target.value })} /></label>
         {createRoute.error && <div className="alert error wide">{createRoute.error.message}</div>}<button className="primary">Crear ruta</button>
       </form>
       <form className="panel form-grid compact-form" onSubmit={vehicleSubmit}><h2 className="wide">Nuevo vehículo</h2>
-        <label>Código<input required value={vehicleForm.code} onChange={event => setVehicleForm({ ...vehicleForm, code: event.target.value })} /></label>
+        <p className="muted wide">El código interno se asigna automáticamente al guardar (VEH-000001). La placa sigue siendo manual.</p>
         <label>Placa<input value={vehicleForm.licensePlate} onChange={event => setVehicleForm({ ...vehicleForm, licensePlate: event.target.value })} /></label>
         <label className="wide">Descripción<textarea value={vehicleForm.description} onChange={event => setVehicleForm({ ...vehicleForm, description: event.target.value })} /></label>
         {createVehicle.error && <div className="alert error wide">{createVehicle.error.message}</div>}<button className="primary">Crear vehículo</button>

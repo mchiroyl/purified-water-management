@@ -44,6 +44,18 @@ public class JdbcRouteLoadAdapter implements RouteLoadPort {
     }
 
     @Override
+    public boolean activeInitialLoadExists(UUID routeId) {
+        return Boolean.TRUE.equals(jdbc.sql("SELECT EXISTS(SELECT 1 FROM route_load WHERE route_id=:routeId AND load_type='INITIAL' AND status='STARTED')")
+                .param("routeId", routeId).query(Boolean.class).single());
+    }
+
+    @Override
+    public boolean routeHasClosedSettlement(UUID routeId) {
+        return Boolean.TRUE.equals(jdbc.sql("SELECT EXISTS(SELECT 1 FROM settlement WHERE route_id=:routeId AND status='CLOSED')")
+                .param("routeId", routeId).query(Boolean.class).single());
+    }
+
+    @Override
     public boolean sellerAssignedToRoute(UUID userId, UUID routeId) {
         return Boolean.TRUE.equals(jdbc.sql("""
                 SELECT EXISTS(SELECT 1 FROM route_assignment ra JOIN seller s ON s.id=ra.seller_id
@@ -56,11 +68,11 @@ public class JdbcRouteLoadAdapter implements RouteLoadPort {
     public LoadView createLoad(NewLoad item) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
-                INSERT INTO route_load(id,route_id,source_location_id,target_location_id,planned_date,notes,created_by)
-                VALUES (:id,:routeId,:sourceLocationId,:targetLocationId,:plannedDate,:notes,:createdBy)
+                INSERT INTO route_load(id,route_id,source_location_id,target_location_id,planned_date,load_type,notes,created_by)
+                VALUES (:id,:routeId,:sourceLocationId,:targetLocationId,:plannedDate,:loadType,:notes,:createdBy)
                 """).param("id", id).param("routeId", item.routeId())
                 .param("sourceLocationId", item.sourceLocationId()).param("targetLocationId", item.targetLocationId())
-                .param("plannedDate", item.plannedDate()).param("notes", item.notes())
+                .param("plannedDate", item.plannedDate()).param("loadType", item.loadType()).param("notes", item.notes())
                 .param("createdBy", item.createdBy()).update();
         for (var row : item.items()) {
             jdbc.sql("""
@@ -156,7 +168,7 @@ public class JdbcRouteLoadAdapter implements RouteLoadPort {
                 load.createdBy(), load.createdByUsername(), load.createdAt(), load.warehouseConfirmedBy(),
                 load.warehouseConfirmedByUsername(), load.warehouseConfirmedDeviceId(), load.warehouseConfirmedAt(),
                 load.sellerReceivedBy(), load.sellerReceivedByUsername(), load.sellerReceivedDeviceId(),
-                load.sellerReceivedAt(), load.startedBy(), load.startedByUsername(), load.startedDeviceId(),
+                load.sellerReceivedAt(), load.loadType(), load.startedBy(), load.startedByUsername(), load.startedDeviceId(),
                 load.startedAt(), items, corrections);
     }
 
@@ -165,7 +177,7 @@ public class JdbcRouteLoadAdapter implements RouteLoadPort {
                 SELECT rl.id,rl.load_number,rl.route_id,r.code route_code,r.name route_name,
                        rl.source_location_id,src.code source_location_code,src.name source_location_name,
                        rl.target_location_id,dst.code target_location_code,dst.name target_location_name,
-                       rl.planned_date,rl.notes,rl.status,rl.created_by,creator.username created_by_username,rl.created_at,
+                       rl.planned_date,rl.load_type,rl.notes,rl.status,rl.created_by,creator.username created_by_username,rl.created_at,
                        rl.warehouse_confirmed_by,warehouse_user.username warehouse_confirmed_by_username,
                        rl.warehouse_confirmed_device_id,rl.warehouse_confirmed_at,
                        rl.seller_received_by,seller_user.username seller_received_by_username,
@@ -192,7 +204,7 @@ public class JdbcRouteLoadAdapter implements RouteLoadPort {
                 rs.getObject("warehouse_confirmed_by", UUID.class), rs.getString("warehouse_confirmed_by_username"),
                 rs.getObject("warehouse_confirmed_device_id", UUID.class), instant(rs, "warehouse_confirmed_at"),
                 rs.getObject("seller_received_by", UUID.class), rs.getString("seller_received_by_username"),
-                rs.getObject("seller_received_device_id", UUID.class), instant(rs, "seller_received_at"),
+                rs.getObject("seller_received_device_id", UUID.class), instant(rs, "seller_received_at"), rs.getString("load_type"),
                 rs.getObject("started_by", UUID.class), rs.getString("started_by_username"),
                 rs.getObject("started_device_id", UUID.class), instant(rs, "started_at"), List.of(), List.of());
     }

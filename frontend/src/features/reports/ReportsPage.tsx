@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState, type FormEvent } from 'react';
+import { PageHeader } from '../../app/PageHeader';
+import { StatusPanel } from '../../app/StatusPanel';
 import { apiFile, apiRequest } from '../../services/apiClient';
 
 type ReportType = 'sales' | 'wastes' | 'settlements';
@@ -43,19 +45,19 @@ export function ReportsPage() {
   });
   const submit = (event: FormEvent) => { event.preventDefault(); setPage(0); setFilters({ ...draft }); };
   const changeType = (next: ReportType) => { setType(next); setPage(0); };
-  const exportCsv = async () => {
+  const exportFile = async (format: 'xlsx' | 'pdf') => {
     setExportError('');
     try {
-      const blob = await apiFile(`/reports/${type}.csv?${parameters(filters, 0)}`, 'text/csv');
+      const accept = format === 'xlsx' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/pdf';
+      const blob = await apiFile(`/reports/${type}.${format}?${parameters(filters, 0)}`, accept);
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a'); link.href = url; link.download = `${type}.csv`; link.click();
+      const link = document.createElement('a'); link.href = url; link.download = `${type}.${format}`; link.click();
       URL.revokeObjectURL(url);
     } catch (error) { setExportError(error instanceof Error ? error.message : 'No fue posible exportar.'); }
   };
 
   return <main>
-    <p className="eyebrow">Análisis autorizado</p><h1>Reportes</h1>
-    <p className="muted">Las cifras provienen de PostgreSQL y el servidor limita los resultados según el rol y las rutas asignadas.</p>
+    <PageHeader eyebrow="Análisis autorizado" title="Reportes" description="Las cifras provienen de PostgreSQL y el servidor limita los resultados según el rol y las rutas asignadas." />
     <div className="report-tabs" role="tablist" aria-label="Tipo de reporte">
       <button className={type === 'sales' ? 'primary' : 'secondary'} onClick={() => changeType('sales')}>Ventas</button>
       <button className={type === 'wastes' ? 'primary' : 'secondary'} onClick={() => changeType('wastes')}>Mermas</button>
@@ -76,10 +78,11 @@ export function ReportsPage() {
       </select></label>}
       {type === 'settlements' && <label className="checkbox"><input type="checkbox" checked={draft.differenceOnly} onChange={event => setDraft({ ...draft, differenceOnly: event.target.checked })} />Solo con diferencias</label>}
       <div className="report-actions"><button className="primary" type="submit">Aplicar filtros</button>
-        <button className="secondary" type="button" onClick={() => void exportCsv()}>Exportar {type === 'sales' ? 'ventas' : type === 'wastes' ? 'mermas' : 'liquidaciones'} CSV</button></div>
+        <button className="secondary" type="button" onClick={() => void exportFile('xlsx')}>Exportar {type === 'sales' ? 'ventas' : type === 'wastes' ? 'mermas' : 'liquidaciones'} a Excel</button>
+        <button className="secondary" type="button" onClick={() => void exportFile('pdf')}>Imprimir / descargar PDF</button></div>
     </form>
-    {report.isLoading && <section className="panel">Generando reporte…</section>}
-    {report.error && <div className="alert error">{report.error.message}</div>}
+    {report.isLoading && <StatusPanel tone="loading">Generando reporte…</StatusPanel>}
+    {report.error && <StatusPanel tone="error">{report.error.message}</StatusPanel>}
     {exportError && <div className="alert error">{exportError}</div>}
     {report.data && <section className="panel report-results">
       <div className="section-heading"><div><h2>Resultados</h2><span>{report.data.totalElements} filas autorizadas</span></div></div>

@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
+import { PageHeader } from '../../app/PageHeader';
+import { StatusPanel } from '../../app/StatusPanel';
 import { apiRequest } from '../../services/apiClient';
 
 type UserAdmin = {
@@ -16,11 +18,11 @@ export function AdministrationPage() {
   const queryClient = useQueryClient();
   const users = useQuery({ queryKey: ['administration', 'users'], queryFn: () => apiRequest<UserAdmin[]>('/administration/users') });
   const devices = useQuery({ queryKey: ['administration', 'devices'], queryFn: () => apiRequest<DeviceAdmin[]>('/administration/devices') });
-  const [form, setForm] = useState({ username: '', email: '', password: '', roles: ['VENDEDOR'], sellerCode: '', sellerDisplayName: '' });
+  const [form, setForm] = useState({ username: '', email: '', password: '', roles: ['VENDEDOR'], sellerDisplayName: '' });
   const create = useMutation({
     mutationFn: () => apiRequest<UserAdmin>('/administration/users', { method: 'POST', body: JSON.stringify(form) }),
     onSuccess: () => {
-      setForm({ username: '', email: '', password: '', roles: ['VENDEDOR'], sellerCode: '', sellerDisplayName: '' });
+      setForm({ username: '', email: '', password: '', roles: ['VENDEDOR'], sellerDisplayName: '' });
       void queryClient.invalidateQueries({ queryKey: ['administration', 'users'] });
     }
   });
@@ -38,9 +40,7 @@ export function AdministrationPage() {
   const submit = (event: FormEvent) => { event.preventDefault(); create.mutate(); };
 
   return <main>
-    <p className="eyebrow">Configuración</p>
-    <h1>Usuarios y vendedores</h1>
-    <p className="muted">Crea accesos por rol, registra los datos del vendedor y controla los teléfonos autorizados.</p>
+    <PageHeader eyebrow="Configuración" title="Usuarios y vendedores" description="Crea accesos por rol, registra los datos del vendedor y controla los teléfonos autorizados." />
     <form className="form-grid panel" onSubmit={submit}>
       <h2 className="wide">Nuevo usuario</h2>
       <label>Usuario<input required minLength={3} value={form.username} onChange={event => setForm({ ...form, username: event.target.value })} /></label>
@@ -50,7 +50,7 @@ export function AdministrationPage() {
         <input type="checkbox" checked={form.roles.includes(role)} onChange={() => toggleRole(role)} />{role}
       </label>)}</fieldset>
       {form.roles.includes('VENDEDOR') && <>
-        <label>Código de vendedor<input required value={form.sellerCode} onChange={event => setForm({ ...form, sellerCode: event.target.value })} /></label>
+        <p className="muted wide">El código del vendedor se asigna automáticamente al crear el usuario (VND-000001).</p>
         <label>Nombre del vendedor<input required value={form.sellerDisplayName} onChange={event => setForm({ ...form, sellerDisplayName: event.target.value })} /></label>
       </>}
       {create.error && <div className="alert error wide">{create.error.message}</div>}
@@ -58,8 +58,8 @@ export function AdministrationPage() {
     </form>
     <section className="panel section-panel">
       <h2>Usuarios registrados</h2>
-      {users.isLoading && <p>Cargando usuarios…</p>}
-      {users.error && <div className="alert error">{users.error.message}</div>}
+      {users.isLoading && <StatusPanel tone="loading">Cargando usuarios…</StatusPanel>}
+      {users.error && <StatusPanel tone="error">{users.error.message}</StatusPanel>}
       <div className="data-list">{users.data?.map(user => <article className="data-row" key={user.id}>
         <div><strong>{user.sellerDisplayName || user.username}</strong><span>{user.sellerCode ? `${user.sellerCode} · ` : ''}{user.username} · {user.email}</span><small>{user.roles.join(', ')}</small></div>
         <div className="row-actions"><span className={`status ${user.status === 'ACTIVE' ? 'active' : 'inactive'}`}>{user.status === 'ACTIVE' ? 'Activo' : 'Inactivo'}</span>

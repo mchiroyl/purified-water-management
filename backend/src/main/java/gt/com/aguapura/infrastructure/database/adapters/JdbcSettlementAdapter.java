@@ -49,9 +49,7 @@ public class JdbcSettlementAdapter implements SettlementPort {
         if (source.startedAt() == null) throw new BusinessException("SETTLEMENT_LOAD_NOT_STARTED",
                 "La carga debe estar iniciada antes de calcular su liquidación.", ErrorCategory.CONFLICT);
         var products = jdbc.sql("""
-                SELECT p.id product_id,p.code product_code,p.name product_name,
-                    rli.quantity_base_units+COALESCE((SELECT SUM(rlc.quantity_delta) FROM route_load_correction rlc
-                        WHERE rlc.route_load_id=rl.id AND rlc.product_id=p.id),0) loaded_units,
+                SELECT p.id product_id,p.code product_code,p.name product_name,loaded.loaded_units,
                     COALESCE((SELECT SUM(si.quantity_base_units) FROM sale_item si JOIN sale sale ON sale.id=si.sale_id
                         WHERE sale.route_id=rl.route_id AND si.product_id=p.id AND sale.status='CONFIRMED'
                           AND NOT EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=sale.id AND ar.status='APPROVED')
@@ -68,8 +66,24 @@ public class JdbcSettlementAdapter implements SettlementPort {
                         WHERE w.route_id=rl.route_id AND wi.product_id=p.id AND w.status IN ('APPROVED','PARTIALLY_APPROVED')
                           AND w.received_at_server>=rl.started_at
                           AND w.received_at_server<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now())),0) approved_waste_units
-                FROM route_load rl JOIN route_load_item rli ON rli.route_load_id=rl.id
-                JOIN product p ON p.id=rli.product_id WHERE rl.id=:id ORDER BY p.name
+                FROM route_load rl
+                JOIN LATERAL (
+                    SELECT rli.product_id,
+                           SUM(rli.quantity_base_units + COALESCE((SELECT SUM(rlc.quantity_delta)
+                               FROM route_load_correction rlc WHERE rlc.route_load_id=source_load.id
+                                 AND rlc.product_id=rli.product_id),0)) loaded_units
+                    FROM route_load source_load JOIN route_load_item rli ON rli.route_load_id=source_load.id
+                    WHERE source_load.route_id=rl.route_id AND (
+                        source_load.id=rl.id OR (
+                            source_load.load_type='REPLENISHMENT'
+                            AND source_load.status IN ('RECEIVED','STARTED','SETTLED')
+                            AND source_load.seller_received_at>=rl.started_at
+                            AND source_load.seller_received_at<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now())
+                        )
+                    )
+                    GROUP BY rli.product_id
+                ) loaded ON true
+                JOIN product p ON p.id=loaded.product_id WHERE rl.id=:id ORDER BY p.name
                 """).param("id", routeLoadId).query((rs, row) -> new ProductSource(
                 rs.getObject("product_id", UUID.class), rs.getString("product_code"), rs.getString("product_name"),
                 rs.getBigDecimal("loaded_units"), rs.getBigDecimal("sold_units"),
@@ -126,6 +140,11 @@ public class JdbcSettlementAdapter implements SettlementPort {
         addBlocker(result, loadId, "SYNC_CONFLICT", """
                 SELECT count(*) FROM sync_operation so JOIN route_load rl ON so.user_id=rl.seller_received_by WHERE rl.id=:id
                 AND so.received_at_server>=rl.started_at AND (so.processing_status<>'COMPLETED' OR so.result_status IN ('CONFLICT','RETRY'))
+                """);
+        addBlocker(result, loadId, "REPLENISHMENT_PENDING", """
+                SELECT count(*) FROM route_load rec JOIN route_load initial ON initial.route_id=rec.route_id
+                WHERE initial.id=:id AND rec.load_type='REPLENISHMENT' AND rec.created_at>=initial.started_at
+                  AND rec.status IN ('PREPARED','WAREHOUSE_CONFIRMED')
                 """);
         return result;
     }

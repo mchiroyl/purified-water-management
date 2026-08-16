@@ -9,7 +9,7 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 
 public record CreateCustomerRequest(
-        @NotBlank @Size(max = 40) @Pattern(regexp = "[A-Za-z0-9-]+") String code,
+        @Size(max = 40) @Pattern(regexp = "[A-Za-z0-9-]+") String code,
         @NotBlank @Size(min = 2, max = 180) String name,
         @Size(max = 150) String contactName,
         @Size(max = 30) String phone,

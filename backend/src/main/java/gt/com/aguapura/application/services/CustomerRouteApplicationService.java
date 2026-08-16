@@ -23,13 +23,9 @@ public class CustomerRouteApplicationService {
 
     @Transactional
     public CustomerResponse createCustomer(CreateCustomerRequest request, UUID actorId) {
-        String code = request.code().trim().toUpperCase(Locale.ROOT);
         String normalizedName = CustomerIdentityNormalizer.name(request.name());
         String normalizedPhone = CustomerIdentityNormalizer.phone(request.phone());
         String normalizedWhatsapp = CustomerIdentityNormalizer.phone(request.whatsapp());
-        if (persistence.customerCodeExists(code)) {
-            throw conflict("CUSTOMER_CODE_EXISTS", "El código de cliente ya está registrado.");
-        }
         if (persistence.hasPotentialDuplicate(normalizedName, normalizedPhone, normalizedWhatsapp)) {
             throw conflict("POTENTIAL_CUSTOMER_DUPLICATE",
                     "Existe un posible cliente duplicado; revise las coincidencias antes de continuar.");
@@ -40,7 +36,7 @@ public class CustomerRouteApplicationService {
         }
         boolean creditAllowed = request.creditAllowed() && "PERMANENT".equals(type);
         BigDecimal limit = creditAllowed ? request.creditLimit() : BigDecimal.ZERO;
-        var created = persistence.createCustomer(new CustomerRoutePort.NewCustomer(code, request.name().trim(),
+        var created = persistence.createCustomer(new CustomerRoutePort.NewCustomer("", request.name().trim(),
                 normalizedName, CustomerIdentityNormalizer.safe(request.contactName()),
                 CustomerIdentityNormalizer.safe(request.phone()), normalizedPhone,
                 CustomerIdentityNormalizer.safe(request.whatsapp()), normalizedWhatsapp,
@@ -63,9 +59,7 @@ public class CustomerRouteApplicationService {
 
     @Transactional
     public RouteResponse createRoute(CreateRouteRequest request) {
-        String code = request.code().trim().toUpperCase(Locale.ROOT);
-        if (persistence.routeCodeExists(code)) throw conflict("ROUTE_CODE_EXISTS", "El código de ruta ya está registrado.");
-        return route(persistence.createRoute(new CustomerRoutePort.NewRoute(code, request.name().trim(),
+        return route(persistence.createRoute(new CustomerRoutePort.NewRoute("", request.name().trim(),
                 CustomerIdentityNormalizer.safe(request.description()))));
     }
 
@@ -83,9 +77,7 @@ public class CustomerRouteApplicationService {
 
     @Transactional
     public VehicleResponse createVehicle(CreateVehicleRequest request) {
-        String code = request.code().trim().toUpperCase(Locale.ROOT);
-        if (persistence.vehicleCodeExists(code)) throw conflict("VEHICLE_CODE_EXISTS", "El código de vehículo ya está registrado.");
-        var item = persistence.createVehicle(new CustomerRoutePort.NewVehicle(code,
+        var item = persistence.createVehicle(new CustomerRoutePort.NewVehicle("",
                 CustomerIdentityNormalizer.safe(request.licensePlate()).toUpperCase(Locale.ROOT),
                 CustomerIdentityNormalizer.safe(request.description())));
         return vehicle(item);

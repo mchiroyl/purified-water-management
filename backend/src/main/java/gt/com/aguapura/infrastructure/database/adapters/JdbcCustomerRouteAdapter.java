@@ -45,10 +45,10 @@ public class JdbcCustomerRouteAdapter implements CustomerRoutePort {
                 INSERT INTO customer(id, code, name, normalized_name, contact_name, phone, normalized_phone,
                     whatsapp, normalized_whatsapp, address_reference, customer_type, credit_allowed,
                     credit_limit, created_by, registration_state)
-                VALUES (:id, :code, :name, :normalizedName, :contactName, :phone, :normalizedPhone,
+                VALUES (:id, 'CLI-' || lpad(nextval('customer_code_seq')::text, 6, '0'), :name, :normalizedName, :contactName, :phone, :normalizedPhone,
                     :whatsapp, :normalizedWhatsapp, :address, :type, :creditAllowed, :creditLimit,
                     :createdBy, :registrationState)
-                """).param("id", id).param("code", item.code()).param("name", item.name())
+                """).param("id", id).param("name", item.name())
                 .param("normalizedName", item.normalizedName()).param("contactName", item.contactName())
                 .param("phone", item.phone()).param("normalizedPhone", item.normalizedPhone())
                 .param("whatsapp", item.whatsapp()).param("normalizedWhatsapp", item.normalizedWhatsapp())
@@ -87,8 +87,8 @@ public class JdbcCustomerRouteAdapter implements CustomerRoutePort {
     @Override
     public RouteView createRoute(NewRoute item) {
         UUID id = UUID.randomUUID();
-        jdbc.sql("INSERT INTO route(id, code, name, description) VALUES (:id, :code, :name, :description)")
-                .param("id", id).param("code", item.code()).param("name", item.name())
+        jdbc.sql("INSERT INTO route(id, code, name, description) VALUES (:id, 'RUT-' || lpad(nextval('route_code_seq')::text, 6, '0'), :name, :description)")
+                .param("id", id).param("name", item.name())
                 .param("description", item.description()).update();
         return findRoute(id);
     }
@@ -104,8 +104,8 @@ public class JdbcCustomerRouteAdapter implements CustomerRoutePort {
     @Override
     public VehicleView createVehicle(NewVehicle item) {
         UUID id = UUID.randomUUID();
-        jdbc.sql("INSERT INTO vehicle(id, code, license_plate, description) VALUES (:id, :code, :plate, :description)")
-                .param("id", id).param("code", item.code())
+        jdbc.sql("INSERT INTO vehicle(id, code, license_plate, description) VALUES (:id, 'VEH-' || lpad(nextval('vehicle_code_seq')::text, 6, '0'), :plate, :description)")
+                .param("id", id)
                 .param("plate", item.licensePlate().isBlank() ? null : item.licensePlate(), Types.VARCHAR)
                 .param("description", item.description()).update();
         return findVehicle(id);

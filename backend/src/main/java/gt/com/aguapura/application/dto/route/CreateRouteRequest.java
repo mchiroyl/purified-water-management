@@ -5,7 +5,7 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 public record CreateRouteRequest(
-        @NotBlank @Size(max = 40) @Pattern(regexp = "[A-Za-z0-9-]+") String code,
+        @Size(max = 40) @Pattern(regexp = "[A-Za-z0-9-]+") String code,
         @NotBlank @Size(min = 2, max = 150) String name,
         @Size(max = 1000) String description
 ) {}

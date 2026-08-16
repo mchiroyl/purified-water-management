@@ -8,12 +8,10 @@ import gt.com.aguapura.application.ports.CompanyConfigurationPersistencePort;
 import gt.com.aguapura.application.ports.ReportPort;
 import gt.com.aguapura.domain.exceptions.BusinessException;
 import gt.com.aguapura.domain.exceptions.ErrorCategory;
-import gt.com.aguapura.domain.reports.CsvCellEncoder;
 import gt.com.aguapura.domain.reports.ReportDateRange;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -21,6 +19,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.Arrays;
 
 @Service
 public class ReportApplicationService {
@@ -28,10 +27,13 @@ public class ReportApplicationService {
     private static final Set<String> PAYMENT_METHODS = Set.of("", "CASH", "TRANSFER", "CREDIT");
     private final ReportPort reports;
     private final CompanyConfigurationPersistencePort company;
+    private final gt.com.aguapura.application.ports.ReportDocumentPort documents;
 
-    public ReportApplicationService(ReportPort reports, CompanyConfigurationPersistencePort company) {
+    public ReportApplicationService(ReportPort reports, CompanyConfigurationPersistencePort company,
+                                    gt.com.aguapura.application.ports.ReportDocumentPort documents) {
         this.reports = reports;
         this.company = company;
+        this.documents = documents;
     }
 
     @Transactional(readOnly = true)
@@ -50,19 +52,29 @@ public class ReportApplicationService {
     }
 
     @Transactional(readOnly = true)
-    public byte[] exportCsv(ReportType type, Filter filter, UUID actor, boolean restricted) {
+    public byte[] exportExcel(ReportType type, Filter filter, UUID actor, boolean restricted) {
+        return export(type, filter, actor, restricted, false);
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] exportPdf(ReportType type, Filter filter, UUID actor, boolean restricted) {
+        return export(type, filter, actor, restricted, true);
+    }
+
+    private byte[] export(ReportType type, Filter filter, UUID actor, boolean restricted, boolean pdf) {
         var exportFilter = new Filter(filter.from(), filter.to(), filter.seller(), filter.route(), filter.customer(),
                 filter.product(), filter.presentation(), filter.paymentMethod(), filter.differenceOnly(), 0, EXPORT_LIMIT);
-        var csv = switch (type) {
-            case SALES -> salesCsv(reports.sales(query(exportFilter, true), actor, restricted));
-            case WASTES -> wastesCsv(reports.wastes(query(exportFilter, true), actor, restricted));
-            case SETTLEMENTS -> settlementsCsv(reports.settlements(query(exportFilter, true), actor, restricted));
+        var configuration = company.find().orElseThrow(() -> validation(
+                "COMPANY_CONFIGURATION_NOT_FOUND", "Configure los datos de la empresa."));
+        var page = switch (type) {
+            case SALES -> reports.sales(query(exportFilter, true), actor, restricted);
+            case WASTES -> reports.wastes(query(exportFilter, true), actor, restricted);
+            case SETTLEMENTS -> reports.settlements(query(exportFilter, true), actor, restricted);
         };
-        byte[] content = csv.getBytes(StandardCharsets.UTF_8);
-        byte[] withBom = new byte[content.length + 3];
-        withBom[0] = (byte) 0xEF; withBom[1] = (byte) 0xBB; withBom[2] = (byte) 0xBF;
-        System.arraycopy(content, 0, withBom, 3, content.length);
-        return withBom;
+        ensureComplete(page);
+        var content = documentData(type, page);
+        return pdf ? documents.pdf(content.title(), configuration, filterSummary(filter), content.headers(), content.rows())
+                : documents.excel(content.title(), configuration, filterSummary(filter), content.headers(), content.rows());
     }
 
     private ReportPort.Query query(Filter filter, boolean export) {
@@ -88,42 +100,35 @@ public class ReportApplicationService {
         return cleaned;
     }
 
-    private String salesCsv(ReportPageResponse<SalesReportRow> page) {
-        ensureComplete(page);
-        var lines = new StringBuilder("Documento,Fecha,Vendedor,Ruta,Cliente,Producto,Presentación,Cantidad,Unidades base,Precio unitario,Total línea,Total venta,Pagos,Efectivo,Transferencia,Crédito,Estado\r\n");
-        page.content().forEach(row -> line(lines, row.documentNumber(), row.occurredAt(), row.sellerName(), row.routeName(),
-                row.customerName(), row.productName(), row.presentationName(), row.presentationQuantity(), row.baseUnits(),
-                row.unitPrice(), row.lineTotal(), row.saleTotal(), row.paymentMethods(), row.cashAmount(),
-                row.transferAmount(), row.creditAmount(), row.saleStatus()));
-        return lines.toString();
-    }
-
-    private String wastesCsv(ReportPageResponse<WasteReportRow> page) {
-        ensureComplete(page);
-        var lines = new StringBuilder("Fecha,Vendedor,Ruta,Producto,Presentación,Tipo,Reportado,Aprobado,Estado,Motivo\r\n");
-        page.content().forEach(row -> line(lines, row.occurredAt(), row.sellerName(), row.routeName(), row.productName(),
-                row.presentationName(), row.wasteType(), row.reportedUnits(), row.approvedUnits(), row.status(), row.reason()));
-        return lines.toString();
-    }
-
-    private String settlementsCsv(ReportPageResponse<SettlementReportRow> page) {
-        ensureComplete(page);
-        var lines = new StringBuilder("Fecha,Vendedor,Ruta,Carga,Ventas,Efectivo esperado,Efectivo entregado,Transferencias,Crédito,Diferencia monetaria,Diferencia inventario,Estado\r\n");
-        page.content().forEach(row -> line(lines, row.occurredAt(), row.sellerName(), row.routeName(), row.loadNumber(),
-                row.salesTotal(), row.expectedCash(), row.deliveredCash(), row.transfers(), row.credit(),
-                row.monetaryDifference(), row.inventoryDifference(), row.status()));
-        return lines.toString();
-    }
-
     private void ensureComplete(ReportPageResponse<?> page) {
         if (page.totalElements() > EXPORT_LIMIT) {
             throw validation("REPORT_EXPORT_LIMIT", "El reporte supera 20,000 filas; reduzca el rango o los filtros.");
         }
     }
 
-    private void line(StringBuilder target, Object... values) {
-        target.append(String.join(",", List.of(values).stream().map(CsvCellEncoder::encode).toList())).append("\r\n");
+    private DocumentData documentData(ReportType type, ReportPageResponse<?> page) {
+        return switch (type) {
+            case SALES -> new DocumentData("Ventas", List.of("Documento", "Fecha", "Vendedor", "Ruta", "Cliente", "Producto", "Presentación", "Cantidad", "Unidades base", "Precio unitario", "Total línea", "Total venta", "Pagos", "Efectivo", "Transferencia", "Crédito", "Estado"),
+                    ((ReportPageResponse<SalesReportRow>) page).content().stream().map(row -> values(row.documentNumber(), row.occurredAt(), row.sellerName(), row.routeName(), row.customerName(), row.productName(), row.presentationName(), row.presentationQuantity(), row.baseUnits(), row.unitPrice(), row.lineTotal(), row.saleTotal(), row.paymentMethods(), row.cashAmount(), row.transferAmount(), row.creditAmount(), row.saleStatus())).toList());
+            case WASTES -> new DocumentData("Mermas", List.of("Fecha", "Vendedor", "Ruta", "Producto", "Presentación", "Tipo", "Reportado", "Aprobado", "Estado", "Motivo"),
+                    ((ReportPageResponse<WasteReportRow>) page).content().stream().map(row -> values(row.occurredAt(), row.sellerName(), row.routeName(), row.productName(), row.presentationName(), row.wasteType(), row.reportedUnits(), row.approvedUnits(), row.status(), row.reason())).toList());
+            case SETTLEMENTS -> new DocumentData("Liquidaciones", List.of("Fecha", "Vendedor", "Ruta", "Carga", "Ventas", "Efectivo esperado", "Efectivo entregado", "Transferencias", "Crédito", "Diferencia monetaria", "Diferencia inventario", "Estado"),
+                    ((ReportPageResponse<SettlementReportRow>) page).content().stream().map(row -> values(row.occurredAt(), row.sellerName(), row.routeName(), row.loadNumber(), row.salesTotal(), row.expectedCash(), row.deliveredCash(), row.transfers(), row.credit(), row.monetaryDifference(), row.inventoryDifference(), row.status())).toList());
+        };
     }
+
+    private String filterSummary(Filter filter) {
+        return String.join(" | ", List.of(
+                "Desde=" + value(filter.from()), "Hasta=" + value(filter.to()), "Vendedor=" + value(filter.seller()),
+                "Ruta=" + value(filter.route()), "Cliente=" + value(filter.customer()), "Producto=" + value(filter.product()),
+                "Presentación=" + value(filter.presentation()), "Pago=" + value(filter.paymentMethod()),
+                "Solo diferencias=" + filter.differenceOnly()));
+    }
+
+    private static String value(Object value) { return value == null ? "" : value.toString(); }
+    private static List<String> values(Object... values) { return Arrays.stream(values).map(ReportApplicationService::value).toList(); }
+
+    private record DocumentData(String title, List<String> headers, List<List<String>> rows) {}
 
     private BusinessException validation(String code, String message) {
         return new BusinessException(code, message, ErrorCategory.VALIDATION);
