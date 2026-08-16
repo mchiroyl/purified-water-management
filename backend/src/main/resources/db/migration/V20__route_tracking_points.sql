@@ -1,8 +1,11 @@
+ALTER TABLE route_load ADD CONSTRAINT uq_route_load_id_route UNIQUE (id, route_id);
+ALTER TABLE sale ADD CONSTRAINT uq_sale_id_route UNIQUE (id, route_id);
+
 CREATE TABLE route_tracking_point (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    route_load_id UUID NOT NULL REFERENCES route_load(id),
+    route_load_id UUID NOT NULL,
     route_id UUID NOT NULL REFERENCES route(id),
-    sale_id UUID REFERENCES sale(id),
+    sale_id UUID,
     point_type VARCHAR(10) NOT NULL,
     latitude NUMERIC(10,7) NOT NULL,
     longitude NUMERIC(10,7) NOT NULL,
@@ -18,7 +21,11 @@ CREATE TABLE route_tracking_point (
     CONSTRAINT ck_route_tracking_point_sale CHECK (
         (point_type = 'START' AND sale_id IS NULL) OR
         (point_type = 'SALE' AND sale_id IS NOT NULL)
-    )
+    ),
+    CONSTRAINT fk_route_tracking_point_load_route
+        FOREIGN KEY (route_load_id, route_id) REFERENCES route_load(id, route_id),
+    CONSTRAINT fk_route_tracking_point_sale_route
+        FOREIGN KEY (sale_id, route_id) REFERENCES sale(id, route_id)
 );
 
 CREATE UNIQUE INDEX uq_route_tracking_start ON route_tracking_point(route_id)

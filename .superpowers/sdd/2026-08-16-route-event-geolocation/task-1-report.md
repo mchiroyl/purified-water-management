@@ -24,3 +24,12 @@ The DTO is a Bean Validation record with required latitude/longitude/capturedAt,
 
 - Maven/JDK build verification is unavailable from this shell because `mvn` is not on PATH and the repository has no Maven wrapper. Run the mandated command in a Maven-enabled environment before integration.
 - Existing unrelated dirty changes were preserved and excluded from the commit.
+
+## Review fix
+
+The migration was corrected to prevent mismatched route/load and sale/route references. V20 now adds composite unique keys on `(id, route_id)` for `route_load` and `sale`, then uses composite foreign keys from tracking points. The existing direct `route_id` foreign key remains.
+
+Checks after the fix:
+
+- `git diff --check`: passed; only unrelated repository line-ending warnings were emitted.
+- `mvn -f backend/pom.xml -Dtest=GeoLocationRequestTest test`: still unavailable because Maven is not installed (`mvn: The term 'mvn' is not recognized...`).
