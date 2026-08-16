@@ -14,6 +14,7 @@ export const MOBILE_DB_NAME = 'agua-pura-mobile';
 export const MOBILE_DB_VERSION = 2;
 
 export type SyncStatus = 'PENDING' | 'SYNCING' | 'SYNCED' | 'FAILED_RETRYABLE' | 'CONFLICT' | 'REJECTED';
+export type GeoLocationSnapshot = { latitude: number; longitude: number; accuracyMeters: number | null; capturedAt: string };
 export type MetadataRecord = { key: string; value: unknown; updatedAt: string };
 export type UserContextSnapshot = { userId: string; username: string; roles: string[]; deviceId: string; cachedAt: string };
 export type CompanyConfigurationSnapshot = {
@@ -129,6 +130,7 @@ export type LocalSaleRecord = {
   subtotal: string;
   discountTotal: string;
   total: string;
+  location?: GeoLocationSnapshot | null;
   syncStatus: SyncStatus;
   occurredAtLocal: string;
 };

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
 import { apiRequest } from '../../services/apiClient';
+import { captureCurrentLocation } from '../../services/geolocation';
 
 type LoadItem = { id: string; productId: string; productCode: string; productName: string; baseUnitCode: string; quantityBaseUnits: number };
 type Correction = { id: string; productId: string; productName: string; quantityDelta: number; reason: string; actorUsername: string; createdAt: string };
@@ -30,13 +31,17 @@ export function RouteLoadsPage({ canPrepare, canConfirmWarehouse, canReceive, ca
   const [form, setForm] = useState({ routeId: '', sourceLocationId: '', plannedDate: dateInZone(), notes: '' });
   const [items, setItems] = useState<ItemForm[]>([{ productId: '', quantityBaseUnits: 1 }]);
   const [corrections, setCorrections] = useState<Record<string, CorrectionForm>>({});
+  const [locationError, setLocationError] = useState('');
+  const [isCapturingLocation, setIsCapturingLocation] = useState(false);
   const refresh = () => void client.invalidateQueries({ queryKey: ['route-loads'] });
   const create = useMutation({
     mutationFn: () => apiRequest<RouteLoad>('/loads', { method: 'POST', body: JSON.stringify({ ...form, items }) }),
     onSuccess: () => { setForm({ routeId: '', sourceLocationId: '', plannedDate: dateInZone(company.data?.timezone), notes: '' }); setItems([{ productId: '', quantityBaseUnits: 1 }]); refresh(); }
   });
   const transition = useMutation({
-    mutationFn: ({ id, action }: { id: string; action: string }) => apiRequest<RouteLoad>(`/loads/${id}/${action}`, { method: 'POST' }),
+    mutationFn: ({ id, action, body }: { id: string; action: string; body?: unknown }) => apiRequest<RouteLoad>(`/loads/${id}/${action}`, {
+      method: 'POST', body: body === undefined ? undefined : JSON.stringify(body),
+    }),
     onSuccess: refresh
   });
   const correct = useMutation({
@@ -44,6 +49,18 @@ export function RouteLoadsPage({ canPrepare, canConfirmWarehouse, canReceive, ca
     onSuccess: (_data, variables) => { setCorrections({ ...corrections, [variables.id]: { productId: '', quantityDelta: 0, reason: '' } }); refresh(); }
   });
   const submit = (event: FormEvent) => { event.preventDefault(); create.mutate(); };
+  const confirmReceipt = async (id: string) => {
+    setLocationError('');
+    setIsCapturingLocation(true);
+    try {
+      const location = await captureCurrentLocation('registrar la recepción de la carga');
+      transition.mutate({ id, action: 'receipt', body: { location } });
+    } catch (error) {
+      setLocationError(error instanceof Error ? error.message : 'No fue posible obtener la ubicación.');
+    } finally {
+      setIsCapturingLocation(false);
+    }
+  };
   useEffect(() => {
     if (company.data?.timezone) setForm(current => ({ ...current, plannedDate: dateInZone(company.data.timezone) }));
   }, [company.data?.timezone]);
@@ -71,13 +88,13 @@ export function RouteLoadsPage({ canPrepare, canConfirmWarehouse, canReceive, ca
           <p>{load.sourceLocationName} → {load.targetLocationName}</p><div className="data-list">{load.items.map(item => <div className="data-row" key={item.id}><span>{item.productName}</span><strong>{Number(item.quantityBaseUnits).toLocaleString('es-GT')} {item.baseUnitCode}</strong></div>)}</div>
           <p className="audit-line">Entrega: {load.warehouseConfirmedByUsername ?? 'pendiente'} · Recepción: {load.sellerReceivedByUsername ?? 'pendiente'} · Inicio: {load.startedByUsername ?? 'pendiente'}</p>
           <div className="form-actions">{load.status === 'PREPARED' && canConfirmWarehouse && <button className="primary" onClick={() => transition.mutate({ id: load.id, action: 'warehouse-confirmation' })}>Confirmar entrega de bodega</button>}
-            {load.status === 'WAREHOUSE_CONFIRMED' && canReceive && <button className="primary" onClick={() => transition.mutate({ id: load.id, action: 'receipt' })}>Confirmar recepción</button>}
+            {load.status === 'WAREHOUSE_CONFIRMED' && canReceive && <button className="primary" disabled={isCapturingLocation || transition.isPending} onClick={() => void confirmReceipt(load.id)}>{isCapturingLocation ? 'Obteniendo ubicación…' : 'Confirmar recepción'}</button>}
             {load.status === 'RECEIVED' && canStart && <button className="primary" onClick={() => transition.mutate({ id: load.id, action: 'start' })}>Iniciar recorrido</button>}
           </div>
           {canCorrect && ['RECEIVED', 'STARTED'].includes(load.status) && <div className="correction-form"><h3>Corrección compensatoria</h3><select aria-label={`Producto corrección ${load.loadNumber}`} value={correction.productId} onChange={event => setCorrections({ ...corrections, [load.id]: { ...correction, productId: event.target.value } })}>{load.items.map(item => <option value={item.productId} key={item.id}>{item.productName}</option>)}</select><input aria-label={`Cantidad corrección ${load.loadNumber}`} type="number" step="0.0001" value={correction.quantityDelta} onChange={event => setCorrections({ ...corrections, [load.id]: { ...correction, quantityDelta: Number(event.target.value) } })} /><input aria-label={`Motivo corrección ${load.loadNumber}`} placeholder="Motivo obligatorio" value={correction.reason} onChange={event => setCorrections({ ...corrections, [load.id]: { ...correction, reason: event.target.value } })} /><button className="secondary" disabled={!correction.productId || correction.quantityDelta === 0 || !correction.reason} onClick={() => correct.mutate({ id: load.id, value: correction })}>Registrar corrección</button></div>}
           {load.corrections.length > 0 && <div className="data-list"><h3>Correcciones</h3>{load.corrections.map(item => <div className="data-row" key={item.id}><span>{item.productName} · {item.reason} · {item.actorUsername}</span><strong>{Number(item.quantityDelta) > 0 ? '+' : ''}{Number(item.quantityDelta).toLocaleString('es-GT')}</strong></div>)}</div>}
         </article>;
-      })}</div>{(transition.error || correct.error) && <div className="alert error">{(transition.error ?? correct.error)?.message}</div>}
+      })}</div>{(locationError || transition.error || correct.error) && <div className="alert error">{locationError || (transition.error ?? correct.error)?.message}</div>}
     </section>
   </main>;
 }

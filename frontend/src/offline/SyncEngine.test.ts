@@ -35,6 +35,22 @@ afterEach(async () => {
 });
 
 describe('SyncEngine', () => {
+  it('conserva la ubicación de una venta al enviarla desde el outbox', async () => {
+    const db = await openMobileDatabase(newDatabaseName('sale-location'));
+    const repositories = createMobileRepositories(db);
+    const location = { latitude: 14.6349, longitude: -90.5069, accuracyMeters: 5, capturedAt: '2026-08-16T18:30:00.000Z' };
+    await repositories.outboxOperations.put({ ...operation('sale-location'), payload: { routeId: 'route-1', location } });
+    const send = vi.fn(async (operations: SyncRequestOperation[]): Promise<SyncBatchResult[]> => operations.map((item) => ({
+      clientOperationId: item.clientOperationId, status: 'ACCEPTED',
+    })));
+    const engine = new SyncEngine({ database: async () => db, checkConnection: async () => 'ONLINE', transport: { send } });
+
+    await engine.sync();
+
+    expect(send.mock.calls[0][0][0].payload).toEqual({ routeId: 'route-1', location });
+    db.close();
+  });
+
   it('ordena cliente provisional, venta y pago respetando dependencias', async () => {
     const db = await openMobileDatabase(newDatabaseName('dependencies'));
     const repositories = createMobileRepositories(db);

@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { apiBlob, apiRequest } from '../../services/apiClient';
-import { openMobileDatabase } from '../../offline/mobileDatabase';
+import { openMobileDatabase, type GeoLocationSnapshot } from '../../offline/mobileDatabase';
+import { captureCurrentLocation } from '../../services/geolocation';
 import { cacheReceipt, findCachedReceipt, markReceiptPending } from './receiptOffline';
 import { downloadReceiptFile, shareReceiptFile } from './receiptSharing';
 
@@ -30,11 +31,13 @@ export function SalesPage({ canSell }: { canSell: boolean }) {
   const [payments, setPayments] = useState<PaymentForm[]>([newPayment()]);
   const [receiptError, setReceiptError] = useState('');
   const [receiptMessage, setReceiptMessage] = useState('');
+  const [locationError, setLocationError] = useState('');
+  const [isCapturingLocation, setIsCapturingLocation] = useState(false);
   const create = useMutation({
-    mutationFn: () => apiRequest<Sale>('/sales', {
+    mutationFn: (location: GeoLocationSnapshot) => apiRequest<Sale>('/sales', {
       method: 'POST',
       body: JSON.stringify({ clientReference: crypto.randomUUID(), routeId, customerId, items,
-        payments: payments.map(payment => ({ ...payment, amount: payment.amount === '' ? null : Number(payment.amount) })) })
+        payments: payments.map(payment => ({ ...payment, amount: payment.amount === '' ? null : Number(payment.amount) })), location })
     }),
     onSuccess: async () => {
       setCustomerId('');
@@ -44,7 +47,19 @@ export function SalesPage({ canSell }: { canSell: boolean }) {
       await queryClient.invalidateQueries({ queryKey: ['inventory'] });
     }
   });
-  const submit = (event: FormEvent) => { event.preventDefault(); create.mutate(); };
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setLocationError('');
+    setIsCapturingLocation(true);
+    try {
+      const location = await captureCurrentLocation('confirmar la venta');
+      create.mutate(location);
+    } catch (error) {
+      setLocationError(error instanceof Error ? error.message : 'No fue posible obtener la ubicación.');
+    } finally {
+      setIsCapturingLocation(false);
+    }
+  };
   const presentations = products.data?.filter(product => product.active && product.controlsInventory)
     .flatMap(product => product.presentations.filter(item => item.active).map(item => ({ ...item, product }))) ?? [];
   const availableCustomers = customers.data?.filter(customer => customer.status === 'ACTIVE' && customer.routeId === routeId) ?? [];
@@ -132,8 +147,8 @@ export function SalesPage({ canSell }: { canSell: boolean }) {
         {payments.length > 1 && <button type="button" className="secondary" onClick={() => setPayments(current => current.filter((_row, position) => position !== index))}>Quitar pago</button>}
       </div>)}</div>
       <button type="button" className="secondary add-payment" disabled={!nextPaymentMethod} onClick={() => nextPaymentMethod && setPayments(current => [...current, newPayment(nextPaymentMethod)])}>Dividir pago</button>
-      <div className="form-actions"><button type="button" className="secondary" onClick={() => setItems(current => [...current, { presentationId: '', quantity: 1 }])}>Agregar producto</button><button className="primary" disabled={create.isPending}>{create.isPending ? 'Confirmando…' : 'Confirmar venta'}</button></div>
-      {create.error && <div className="alert error">{create.error.message}</div>}
+      <div className="form-actions"><button type="button" className="secondary" onClick={() => setItems(current => [...current, { presentationId: '', quantity: 1 }])}>Agregar producto</button><button className="primary" disabled={isCapturingLocation || create.isPending}>{isCapturingLocation ? 'Obteniendo ubicación…' : create.isPending ? 'Confirmando…' : 'Confirmar venta'}</button></div>
+      {(locationError || create.error) && <div className="alert error">{locationError || create.error?.message}</div>}
     </form>}
 
     <section className="section-panel"><div className="section-heading"><h2>Ventas confirmadas</h2><span>{sales.data?.length ?? 0} ventas</span></div>

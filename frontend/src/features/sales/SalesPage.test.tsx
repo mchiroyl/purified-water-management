@@ -3,7 +3,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, vi } from 'vitest';
 import { SalesPage } from './SalesPage';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  delete (navigator as { geolocation?: Geolocation }).geolocation;
+});
 
 describe('SalesPage', () => {
   it('muestra el número, precios y total calculados por el servidor', async () => {
@@ -50,5 +53,69 @@ describe('SalesPage', () => {
     await waitFor(() => expect(createUrl).toHaveBeenCalled());
     expect(click).toHaveBeenCalled();
     expect(revokeUrl).toHaveBeenCalledWith('blob:receipt');
+  });
+
+  it('envía la ubicación obtenida al confirmar una venta', async () => {
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: { getCurrentPosition: vi.fn((success: PositionCallback) => success({
+      coords: { latitude: 14.6349, longitude: -90.5069, accuracy: 7 },
+    } as GeolocationPosition)) } });
+    const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
+      const path = input.toString();
+      const value = path.endsWith('/routes') ? [{ id: 'route-1', code: 'R-01', name: 'Ruta norte', status: 'ACTIVE' }]
+        : path.endsWith('/customers') ? [{ id: 'customer-1', code: 'C-01', name: 'Tienda La Fuente', status: 'ACTIVE', routeId: 'route-1', customerType: 'OCCASIONAL', creditAllowed: false, creditLimit: 0, currentBalance: 0 }]
+        : path.endsWith('/products') ? [{ id: 'product-1', code: 'AGUA', name: 'Agua pura', active: true, controlsInventory: true, presentations: [{ id: 'presentation-1', code: 'BOT-600', name: 'Botella 600 ml', active: true }] }]
+        : path.endsWith('/sales') ? [] : [];
+      return Promise.resolve(new Response(JSON.stringify(value), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <SalesPage canSell={true} />
+    </QueryClientProvider>);
+    await screen.findByRole('option', { name: /r-01.*ruta norte/i });
+    fireEvent.change(screen.getByLabelText('Ruta'), { target: { value: 'route-1' } });
+    await waitFor(() => expect(screen.getByLabelText('Cliente')).not.toBeDisabled());
+    fireEvent.change(screen.getByLabelText('Cliente'), { target: { value: 'customer-1' } });
+    fireEvent.change(screen.getByLabelText('Presentación'), { target: { value: 'presentation-1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar venta' }));
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(([input, init]) => input.toString().endsWith('/sales') && (init as RequestInit | undefined)?.method === 'POST');
+      expect(call).toBeDefined();
+      expect(JSON.parse((call?.[1] as RequestInit).body as string)).toMatchObject({
+        routeId: 'route-1', customerId: 'customer-1', location: { latitude: 14.6349, longitude: -90.5069, accuracyMeters: 7 },
+      });
+    });
+  });
+
+  it('bloquea una segunda confirmación mientras obtiene la ubicación', async () => {
+    let resolvePosition!: PositionCallback;
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: { getCurrentPosition: vi.fn((success: PositionCallback) => { resolvePosition = success; }) } });
+    const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
+      const path = input.toString();
+      const value = path.endsWith('/routes') ? [{ id: 'route-1', code: 'R-01', name: 'Ruta norte', status: 'ACTIVE' }]
+        : path.endsWith('/customers') ? [{ id: 'customer-1', code: 'C-01', name: 'Tienda La Fuente', status: 'ACTIVE', routeId: 'route-1', customerType: 'OCCASIONAL', creditAllowed: false, creditLimit: 0, currentBalance: 0 }]
+        : path.endsWith('/products') ? [{ id: 'product-1', code: 'AGUA', name: 'Agua pura', active: true, controlsInventory: true, presentations: [{ id: 'presentation-1', code: 'BOT-600', name: 'Botella 600 ml', active: true }] }]
+        : [];
+      return Promise.resolve(new Response(JSON.stringify(value), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <SalesPage canSell={true} />
+    </QueryClientProvider>);
+    await screen.findByRole('option', { name: /r-01.*ruta norte/i });
+    fireEvent.change(screen.getByLabelText('Ruta'), { target: { value: 'route-1' } });
+    await waitFor(() => expect(screen.getByLabelText('Cliente')).not.toBeDisabled());
+    fireEvent.change(screen.getByLabelText('Cliente'), { target: { value: 'customer-1' } });
+    fireEvent.change(screen.getByLabelText('Presentación'), { target: { value: 'presentation-1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar venta' }));
+
+    const submit = await screen.findByRole('button', { name: 'Obteniendo ubicación…' });
+    expect(submit).toBeDisabled();
+    expect(fetchMock.mock.calls.some(([input, init]) => input.toString().endsWith('/sales') && (init as RequestInit | undefined)?.method === 'POST')).toBe(false);
+
+    resolvePosition({ coords: { latitude: 14.6349, longitude: -90.5069, accuracy: 7 } } as GeolocationPosition);
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => input.toString().endsWith('/sales') && (init as RequestInit | undefined)?.method === 'POST')).toBe(true));
   });
 });
