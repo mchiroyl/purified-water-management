@@ -22,10 +22,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 @Testcontainers(disabledWithoutDocker = true)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -87,8 +90,9 @@ class ReplenishmentSettlementConcurrencyIntegrationTest {
     }
 
     @AfterEach
-    void stopThreads() {
+    void stopThreads() throws InterruptedException {
         executor.shutdownNow();
+        assertTrue(executor.awaitTermination(TIMEOUT_SECONDS, TimeUnit.SECONDS), "Executor did not terminate");
     }
 
     @Test
@@ -97,7 +101,7 @@ class ReplenishmentSettlementConcurrencyIntegrationTest {
         insertInitialLoad(routeId, "SETTLED", "CLOSED");
         UUID currentLoad = insertInitialLoad(routeId, "STARTED", "BALANCED");
 
-        ReplenishmentOutcome outcome = createReplenishment(routeId, null, null);
+        ReplenishmentOutcome outcome = createReplenishment(routeId, null, null, null, null);
 
         assertEquals(ReplenishmentOutcome.CREATED, outcome);
         assertEquals(1, count("SELECT count(*) FROM replenishment WHERE initial_load_id=:id", currentLoad));
@@ -109,13 +113,18 @@ class ReplenishmentSettlementConcurrencyIntegrationTest {
         UUID currentLoad = insertInitialLoad(routeId, "STARTED", "BALANCED");
         CountDownLatch closeLockedLoad = new CountDownLatch(1);
         CountDownLatch allowClose = new CountDownLatch(1);
+        CountDownLatch replenishmentReadyToLock = new CountDownLatch(1);
+        AtomicReference<Integer> replenishmentBackendPid = new AtomicReference<>();
 
         Future<Void> closing = executor.submit(() -> {
-            closeSettlement(currentLoad, null, closeLockedLoad, allowClose);
+            closeSettlement(currentLoad, null, null, closeLockedLoad, allowClose);
             return null;
         });
         await(closeLockedLoad);
-        Future<ReplenishmentOutcome> replenishing = executor.submit(() -> createReplenishment(routeId, null, null));
+        Future<ReplenishmentOutcome> replenishing = executor.submit(() -> createReplenishment(
+                routeId, replenishmentReadyToLock, replenishmentBackendPid, null, null));
+        await(replenishmentReadyToLock);
+        assertBlockedOnPostgresqlLock(replenishmentBackendPid, replenishing);
 
         allowClose.countDown();
         closing.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
@@ -132,16 +141,18 @@ class ReplenishmentSettlementConcurrencyIntegrationTest {
         UUID currentLoad = insertInitialLoad(routeId, "STARTED", "BALANCED");
         CountDownLatch replenishmentLockedLoad = new CountDownLatch(1);
         CountDownLatch allowReplenishment = new CountDownLatch(1);
-        CountDownLatch closeAttempted = new CountDownLatch(1);
+        CountDownLatch closeReadyToLock = new CountDownLatch(1);
+        AtomicReference<Integer> closeBackendPid = new AtomicReference<>();
 
         Future<ReplenishmentOutcome> replenishing = executor.submit(
-                () -> createReplenishment(routeId, replenishmentLockedLoad, allowReplenishment));
+                () -> createReplenishment(routeId, null, null, replenishmentLockedLoad, allowReplenishment));
         await(replenishmentLockedLoad);
         Future<Void> closing = executor.submit(() -> {
-            closeSettlement(currentLoad, closeAttempted, null, null);
+            closeSettlement(currentLoad, closeReadyToLock, closeBackendPid, null, null);
             return null;
         });
-        await(closeAttempted);
+        await(closeReadyToLock);
+        assertBlockedOnPostgresqlLock(closeBackendPid, closing);
 
         allowReplenishment.countDown();
         assertEquals(ReplenishmentOutcome.CREATED, replenishing.get(TIMEOUT_SECONDS, TimeUnit.SECONDS));
@@ -162,8 +173,14 @@ class ReplenishmentSettlementConcurrencyIntegrationTest {
         return loadId;
     }
 
-    private ReplenishmentOutcome createReplenishment(UUID routeId, CountDownLatch lockedLoad, CountDownLatch continueAfterLock) {
+    private ReplenishmentOutcome createReplenishment(UUID routeId, CountDownLatch beforeLockSignal,
+                                                     AtomicReference<Integer> backendPid, CountDownLatch lockedLoad,
+                                                     CountDownLatch continueAfterLock) {
         return transaction.execute(status -> {
+            if (beforeLockSignal != null) {
+                backendPid.set(jdbc.sql("SELECT pg_backend_pid()").query(Integer.class).single());
+                beforeLockSignal.countDown();
+            }
             UUID currentLoad = routeLoads.lockCurrentStartedInitialLoad(routeId).orElse(null);
             if (currentLoad == null) return ReplenishmentOutcome.NOT_STARTED;
             if (routeLoads.routeLoadHasClosedSettlement(currentLoad)) return ReplenishmentOutcome.SETTLED;
@@ -177,9 +194,13 @@ class ReplenishmentSettlementConcurrencyIntegrationTest {
     }
 
     private void closeSettlement(UUID routeLoadId, CountDownLatch beforeLockSignal,
-                                 CountDownLatch afterLockSignal, CountDownLatch continueAfterLock) {
-        if (beforeLockSignal != null) beforeLockSignal.countDown();
+                                 AtomicReference<Integer> backendPid, CountDownLatch afterLockSignal,
+                                 CountDownLatch continueAfterLock) {
         transaction.executeWithoutResult(status -> {
+            if (beforeLockSignal != null) {
+                backendPid.set(jdbc.sql("SELECT pg_backend_pid()").query(Integer.class).single());
+                beforeLockSignal.countDown();
+            }
             UUID lockedInitialLoad = jdbc.sql(JdbcSettlementAdapter.CURRENT_STARTED_INITIAL_LOAD_LOCK_SQL)
                     .param("id", routeLoadId).query(UUID.class).optional().orElseThrow();
             if (afterLockSignal != null) afterLockSignal.countDown();
@@ -206,6 +227,35 @@ class ReplenishmentSettlementConcurrencyIntegrationTest {
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted while waiting for concurrent transaction", exception);
+        }
+    }
+
+    private void assertBlockedOnPostgresqlLock(AtomicReference<Integer> backendPid, Future<?> contender) {
+        Integer pid = backendPid.get();
+        assertNotNull(pid, "Contender did not publish its PostgreSQL backend PID");
+        assertFalse(contender.isDone(), "Contender finished before PostgreSQL lock contention was observed");
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS);
+        while (System.nanoTime() < deadline) {
+            String waitEventType = jdbc.sql("SELECT wait_event_type FROM pg_stat_activity WHERE pid=:pid")
+                    .param("pid", pid).query(String.class).optional().orElse(null);
+            if ("Lock".equals(waitEventType)) {
+                assertFalse(contender.isDone(), "Contender completed while it was expected to wait on the row lock");
+                return;
+            }
+            if (contender.isDone()) {
+                fail("Contender completed before PostgreSQL reported lock contention");
+            }
+            pauseBeforeNextLockPoll();
+        }
+        fail("Timed out waiting for PostgreSQL to report row-lock contention for backend PID " + pid);
+    }
+
+    private void pauseBeforeNextLockPoll() {
+        try {
+            Thread.sleep(25);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while polling PostgreSQL lock contention", exception);
         }
     }
 
