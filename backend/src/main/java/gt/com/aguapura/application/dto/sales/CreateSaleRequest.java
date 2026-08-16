@@ -1,5 +1,6 @@
 package gt.com.aguapura.application.dto.sales;
 
+import gt.com.aguapura.application.dto.location.GeoLocationRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
@@ -17,7 +18,8 @@ public record CreateSaleRequest(
         @NotNull UUID routeId,
         @NotNull UUID customerId,
         @NotEmpty @Size(max = 100) List<@Valid ItemRequest> items,
-        @NotEmpty @Size(max = 3) List<@Valid PaymentRequest> payments
+        @NotEmpty @Size(max = 3) List<@Valid PaymentRequest> payments,
+        @NotNull @Valid GeoLocationRequest location
 ) {
     public record ItemRequest(
             @NotNull UUID presentationId,

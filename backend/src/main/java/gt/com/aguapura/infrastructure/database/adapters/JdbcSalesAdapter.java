@@ -26,10 +26,14 @@ public class JdbcSalesAdapter implements SalesPort {
     @Override
     public Optional<SaleContext> findSaleContext(UUID routeId, UUID customerId) {
         return jdbc.sql("""
-                SELECT r.id route_id,il.id inventory_location_id,ra.seller_id,c.customer_type,
+                SELECT r.id route_id,il.id inventory_location_id,rl.id route_load_id,ra.seller_id,c.customer_type,
                        c.credit_allowed,c.credit_limit,c.current_balance
                 FROM route r
                 JOIN inventory_location il ON il.route_id=r.id AND il.active AND il.location_type='ROUTE'
+                JOIN LATERAL (
+                    SELECT id FROM route_load WHERE route_id=r.id AND status='STARTED'
+                    ORDER BY started_at DESC LIMIT 1
+                ) rl ON true
                 JOIN LATERAL (
                     SELECT seller_id FROM route_assignment current_ra WHERE current_ra.route_id=r.id
                       AND current_ra.valid_from<=current_date
@@ -41,11 +45,11 @@ public class JdbcSalesAdapter implements SalesPort {
                 JOIN customer c ON c.id=cr.customer_id AND c.status='ACTIVE'
                   AND c.registration_state IN ('ACTIVE','PENDING_REVIEW')
                 WHERE r.id=:routeId AND r.status='ACTIVE'
-                  AND EXISTS(SELECT 1 FROM route_load rl WHERE rl.route_id=r.id AND rl.status='STARTED')
                 FOR UPDATE OF c
                 """).param("routeId", routeId).param("customerId", customerId)
                 .query((rs, row) -> new SaleContext(rs.getObject("route_id", UUID.class),
                         rs.getObject("inventory_location_id", UUID.class),
+                        rs.getObject("route_load_id", UUID.class),
                         rs.getObject("seller_id", UUID.class), rs.getString("customer_type"),
                         rs.getBoolean("credit_allowed"), rs.getBigDecimal("credit_limit"),
                         rs.getBigDecimal("current_balance"))).optional();

@@ -14,7 +14,7 @@ public interface SalesPort {
     List<SaleView> findSales(Optional<UUID> sellerUserId);
     Optional<SaleView> findSale(UUID id, Optional<UUID> sellerUserId);
 
-    record SaleContext(UUID routeId, UUID inventoryLocationId, UUID sellerId, String customerType,
+    record SaleContext(UUID routeId, UUID inventoryLocationId, UUID routeLoadId, UUID sellerId, String customerType,
                        boolean creditAllowed, BigDecimal creditLimit, BigDecimal currentBalance) {
     }
 

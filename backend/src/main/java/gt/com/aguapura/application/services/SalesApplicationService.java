@@ -3,6 +3,7 @@ package gt.com.aguapura.application.services;
 import gt.com.aguapura.application.dto.pricing.ResolvePriceRequest;
 import gt.com.aguapura.application.dto.sales.CreateSaleRequest;
 import gt.com.aguapura.application.dto.sales.SaleResponse;
+import gt.com.aguapura.application.ports.RouteTrackingPort;
 import gt.com.aguapura.application.ports.SalesPort;
 import gt.com.aguapura.domain.exceptions.BusinessException;
 import gt.com.aguapura.domain.exceptions.ErrorCategory;
@@ -27,13 +28,16 @@ public class SalesApplicationService {
     private final PricingApplicationService pricing;
     private final InventoryApplicationService inventory;
     private final AuditApplicationService audit;
+    private final RouteTrackingPort tracking;
 
     public SalesApplicationService(SalesPort persistence, PricingApplicationService pricing,
-                                   InventoryApplicationService inventory, AuditApplicationService audit) {
+                                   InventoryApplicationService inventory, AuditApplicationService audit,
+                                   RouteTrackingPort tracking) {
         this.persistence = persistence;
         this.pricing = pricing;
         this.inventory = inventory;
         this.audit = audit;
+        this.tracking = tracking;
     }
 
     @Transactional
@@ -80,6 +84,10 @@ public class SalesApplicationService {
         var sale = persistence.createSale(new SalesPort.NewSale(saleId, request.clientReference(), request.routeId(),
                 context.inventoryLocationId(), context.sellerId(), request.customerId(), subtotal, subtotal,
                 actorId, deviceId, items, payments));
+        var location = request.location();
+        tracking.recordSale(context.routeLoadId(), request.routeId(), saleId, new RouteTrackingPort.GeoLocation(
+                location.latitude(), location.longitude(), location.accuracyMeters(), location.capturedAt()),
+                actorId, deviceId);
         items.stream().sorted((left, right) -> left.productId().compareTo(right.productId())).forEach(item ->
                 inventory.consume(context.inventoryLocationId(), item.productId(), item.quantityBaseUnits(),
                         "SALE_OUT", "Venta " + sale.documentNumber(), "SALE", saleId, actorId, deviceId));
