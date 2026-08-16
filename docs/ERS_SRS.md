@@ -131,7 +131,7 @@ El servidor es autoritativo. La PWA puede calcular valores para informar al usua
 | RF-LOD-003 | Una carga iniciada no podrá editarse silenciosamente. | Alta | Correcciones requieren movimiento compensatorio autorizado. |
 | RF-LOD-004 | Bodega podrá registrar una recarga para una ruta con recorrido iniciado. | Alta | La recarga usa doble confirmación, mueve inventario, queda auditada y se incorpora a la liquidación de la carga inicial. |
 | RF-LOD-005 | Una recarga no podrá iniciar un segundo recorrido ni registrarse después del cierre de la liquidación. | Alta | La API rechaza ambos casos y mantiene una sola liquidación por recorrido. |
-| RF-LOD-006 | Confirmar la recepción de una carga inicial requerirá una ubicación puntual y registrará el inicio de ruta en la misma transacción. | Alta | Sin `location` válida la recepción se rechaza; una ruta conserva un único punto `START`. |
+| RF-LOD-006 | Confirmar la recepción de una carga inicial requerirá una ubicación puntual y registrará el inicio de ruta en la misma transacción. | Alta | Sin `location` válida la recepción se rechaza; cada carga inicial conserva un único punto `START`. |
 
 ### 7.6 Ventas, pagos y crédito
 
@@ -252,7 +252,7 @@ El servidor es autoritativo. La PWA puede calcular valores para informar al usua
 | DAT-010 | Evidencias grandes se guardan mediante abstracción de archivos, no en columnas PostgreSQL. |
 | DAT-011 | Auditoría e historial financiero son inmutables. |
 | DAT-012 | Backup PostgreSQL es independiente del volumen Docker. |
-| DAT-013 | `route_tracking_point` es inmutable, aplica rangos geográficos y sólo permite una fila `START` por ruta y una `SALE` por venta. |
+| DAT-013 | `route_tracking_point` es inmutable, aplica rangos geográficos y sólo permite una fila `START` por carga inicial y una `SALE` por venta. |
 
 ## 11. Interfaces externas
 

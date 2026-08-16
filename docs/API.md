@@ -124,7 +124,7 @@ Los importes y cantidades se envían como decimal exacto cuando el DTO lo define
 
 `POST /loads/replenishments` recibe el mismo cuerpo de carga (`routeId`, `sourceLocationId`, `plannedDate`, `items` y `notes`), pero fuerza `loadType=REPLENISHMENT`. Solo se acepta cuando la carga `INITIAL` de la ruta está `STARTED`, exige confirmación de bodega y vendedor, se suma a la liquidación de la carga inicial y se rechaza después del cierre.
 
-`POST /loads/{id}/receipt` requiere el cuerpo `{"location": { ... }}`. Al confirmar la recepción de la carga inicial, el servidor persiste un único punto `START` de ruta en la misma transacción; la recarga conserva su propio flujo y no inicia otro recorrido.
+`POST /loads/{id}/receipt` requiere el cuerpo `{"location": { ... }}`. Al confirmar la recepción de una carga inicial, el servidor persiste un único punto `START` para esa carga en la misma transacción; la recarga conserva su propio flujo y no inicia otro recorrido.
 | GET/POST | `/sales` | consultar/crear venta online |
 | GET | `/sales/{id}` | detalle oficial |
 | GET | `/sales/{saleId}/receipt` | PDF interno inmutable con el logotipo histórico |
@@ -155,7 +155,7 @@ El monto `null` en un único medio permite que el servidor aplique el total calc
 
 Los cuerpos de recepción y de venta incluyen `location` con `latitude`, `longitude`, `accuracyMeters` opcional y `capturedAt` ISO-8601. Latitud debe estar entre `-90` y `90`, longitud entre `-180` y `180`, la precisión no puede ser negativa y los demás campos son obligatorios. Un cuerpo ausente o inválido devuelve `400 VALIDATION_ERROR` con `fieldErrors`.
 
-La PWA solicita una sola posición al pulsar **Confirmar recepción** y otra al pulsar **Confirmar venta**. Si el permiso de ubicación se deniega, no envía la solicitud ni confirma la operación; no existe endpoint de rastreo continuo, watcher ni captura en segundo plano. La API persiste filas inmutables en `route_tracking_point`: una `START` por ruta y una `SALE` por venta, vinculadas a carga, ruta, actor y dispositivo. Esos datos no forman parte de las respuestas de venta ni de los comprobantes o reportes dirigidos al cliente.
+La PWA solicita una sola posición al pulsar **Confirmar recepción** y otra al pulsar **Confirmar venta**. Si el permiso de ubicación se deniega, no envía la solicitud ni confirma la operación; no existe endpoint de rastreo continuo, watcher ni captura en segundo plano. La API persiste filas inmutables en `route_tracking_point`: una `START` por carga inicial y una `SALE` por venta, vinculadas a carga, ruta, actor y dispositivo. Esos datos no forman parte de las respuestas de venta ni de los comprobantes o reportes dirigidos al cliente.
 
 ## Offline y control operativo
 

@@ -126,7 +126,7 @@ Flyway es la única fuente ejecutable de esquema. V1–V20 crean 55 tablas y las
 
 V19 agrega las secuencias `customer_code_seq`, `seller_code_seq`, `route_code_seq` y `vehicle_code_seq`, además de `route_load.load_type` (`INITIAL` o `REPLENISHMENT`). Los códigos se reservan en PostgreSQL dentro de la inserción y no se renumeran los históricos.
 
-V20 crea `route_tracking_point` para los eventos inmutables `START` y `SALE`. Cada fila enlaza carga, ruta, actor y dispositivo con latitud, longitud, precisión opcional, instante de captura y de persistencia. Las restricciones de rango validan coordenadas y precisión; los índices parciales garantizan un `START` por ruta y un `SALE` por venta. El punto se escribe dentro de la transacción de recepción inicial o venta, por lo que un fallo revierte la operación completa.
+V20 crea `route_tracking_point` para los eventos inmutables `START` y `SALE`. Cada fila enlaza carga, ruta, actor y dispositivo con latitud, longitud, precisión opcional, instante de captura y de persistencia. Las restricciones de rango validan coordenadas y precisión. V21 sustituye el índice inicial por uno parcial que garantiza un `START` por carga inicial y conserva uno `SALE` por venta. El punto se escribe dentro de la transacción de recepción inicial o venta, por lo que un fallo revierte la operación completa.
 
 El ERD reconciliado está en `diagrams/erd/postgresql-erd.mmd`. `diagrams/erd/README.md` relaciona cada migración con su alcance.
 

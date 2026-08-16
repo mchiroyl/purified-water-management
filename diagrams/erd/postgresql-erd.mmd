@@ -499,7 +499,7 @@ erDiagram
     PRICE_TIER o|--o{ SALE_ITEM : tier
     CUSTOMER_SPECIAL_PRICE o|--o{ SALE_ITEM : special
     SALE ||--o{ PAYMENT : paid_by
-    SALE o|--o{ ROUTE_TRACKING_POINT : sale_event
+    SALE o|--o| ROUTE_TRACKING_POINT : sale_event
     PAYMENT ||--o| CREDIT_ACCOUNT_ENTRY : posts
     CUSTOMER ||--o{ CREDIT_ACCOUNT_ENTRY : account
 

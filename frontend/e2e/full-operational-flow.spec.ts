@@ -201,6 +201,9 @@ test('flujo completo 1-28, offline, idempotencia, antifraude, PDF y FEL', async 
   ];
   const firstSync = await body<Json[]>(await request.post('/api/sync/batch', authorized(seller.accessToken, { operations })), 'sincronizar offline');
   expect(firstSync.map(item => item.status)).toEqual(['ACCEPTED', 'ACCEPTED', 'ACCEPTED']);
+  const offlineSale = firstSync.find(item => item.clientOperationId === offlineSaleOperation);
+  expect(offlineSale?.serverEntityId).toBeTruthy();
+  expect(trackingPointCount(`sale_id = '${offlineSale!.serverEntityId}' AND point_type = 'SALE'`)).toBe(1);
   for (let replay = 0; replay < 4; replay += 1) {
     const repeated = await body<Json[]>(await request.post('/api/sync/batch', authorized(seller.accessToken, { operations })), 'repetir sincronizacion');
     expect(repeated.every(item => item.status === 'ALREADY_PROCESSED')).toBe(true);
