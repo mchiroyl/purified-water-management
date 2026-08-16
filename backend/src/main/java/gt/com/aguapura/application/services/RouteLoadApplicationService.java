@@ -52,10 +52,9 @@ public class RouteLoadApplicationService {
             throw validation("LOAD_ROUTE_NOT_FOUND", "No se encontró la ruta activa.");
         }
         if ("REPLENISHMENT".equals(loadType)) {
-            if (!persistence.activeInitialLoadExists(request.routeId())) {
-                throw conflict("REPLENISHMENT_ROUTE_NOT_STARTED", "La recarga requiere una ruta con recorrido iniciado.");
-            }
-            if (persistence.routeHasClosedSettlement(request.routeId())) {
+            UUID currentInitialLoad = persistence.lockCurrentStartedInitialLoad(request.routeId()).orElseThrow(() ->
+                    conflict("REPLENISHMENT_ROUTE_NOT_STARTED", "La recarga requiere una ruta con recorrido iniciado."));
+            if (persistence.routeLoadHasClosedSettlement(currentInitialLoad)) {
                 throw conflict("REPLENISHMENT_AFTER_SETTLEMENT", "No se puede recargar una ruta cuya liquidación ya fue cerrada.");
             }
         }

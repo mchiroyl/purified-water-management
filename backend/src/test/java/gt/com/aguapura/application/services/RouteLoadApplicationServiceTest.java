@@ -1,10 +1,12 @@
 package gt.com.aguapura.application.services;
 
 import gt.com.aguapura.application.dto.loading.ConfirmRouteLoadReceiptRequest;
+import gt.com.aguapura.application.dto.loading.CreateRouteLoadRequest;
 import gt.com.aguapura.application.dto.location.GeoLocationRequest;
 import gt.com.aguapura.application.ports.CompanyConfigurationPersistencePort;
 import gt.com.aguapura.application.ports.RouteLoadPort;
 import gt.com.aguapura.application.ports.RouteTrackingPort;
+import gt.com.aguapura.domain.exceptions.BusinessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,6 +18,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.eq;
@@ -23,6 +26,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -72,6 +76,43 @@ class RouteLoadApplicationServiceTest {
         service.confirmReceipt(loadId, new ConfirmRouteLoadReceiptRequest(location), actorId, deviceId, true);
 
         verify(tracking, never()).recordStart(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void historicalClosedRunDoesNotBlockReplenishmentForLaterStartedInitialLoad() {
+        UUID currentInitialLoad = UUID.randomUUID();
+        var request = new CreateRouteLoadRequest(routeId, UUID.randomUUID(), LocalDate.now(), "REPLENISHMENT", "", List.of(
+                new CreateRouteLoadRequest.ItemRequest(UUID.randomUUID(), BigDecimal.ONE)));
+        when(companyConfiguration.find()).thenReturn(Optional.empty());
+        when(persistence.activeRouteExists(routeId)).thenReturn(true);
+        when(persistence.lockCurrentStartedInitialLoad(routeId)).thenReturn(Optional.of(currentInitialLoad));
+        when(persistence.routeLoadHasClosedSettlement(currentInitialLoad)).thenReturn(false);
+        when(persistence.activeWarehouseLocationExists(request.sourceLocationId())).thenReturn(true);
+        when(persistence.findActiveRouteLocation(routeId)).thenReturn(Optional.of(UUID.randomUUID()));
+        when(persistence.activeInventoryProductExists(request.items().getFirst().productId())).thenReturn(true);
+        when(persistence.createLoad(any())).thenReturn(view("REPLENISHMENT", "PREPARED"));
+
+        service.createReplenishment(request, actorId);
+
+        InOrder order = inOrder(persistence);
+        order.verify(persistence).lockCurrentStartedInitialLoad(routeId);
+        order.verify(persistence).routeLoadHasClosedSettlement(currentInitialLoad);
+        verify(persistence, times(1)).createLoad(any());
+    }
+
+    @Test
+    void closedCurrentRunRejectsReplenishmentAfterLockingIt() {
+        UUID currentInitialLoad = UUID.randomUUID();
+        var request = new CreateRouteLoadRequest(routeId, UUID.randomUUID(), LocalDate.now(), "REPLENISHMENT", "", List.of(
+                new CreateRouteLoadRequest.ItemRequest(UUID.randomUUID(), BigDecimal.ONE)));
+        when(companyConfiguration.find()).thenReturn(Optional.empty());
+        when(persistence.activeRouteExists(routeId)).thenReturn(true);
+        when(persistence.lockCurrentStartedInitialLoad(routeId)).thenReturn(Optional.of(currentInitialLoad));
+        when(persistence.routeLoadHasClosedSettlement(currentInitialLoad)).thenReturn(true);
+
+        org.junit.jupiter.api.Assertions.assertThrows(BusinessException.class, () -> service.createReplenishment(request, actorId));
+
+        verify(persistence, never()).createLoad(any());
     }
 
     private RouteLoadPort.LoadView load(String loadType) {

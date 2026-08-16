@@ -16,12 +16,15 @@ import java.util.UUID;
 
 @Repository
 public class JdbcRouteLoadAdapter implements RouteLoadPort {
+    static final String CURRENT_STARTED_INITIAL_LOAD_LOCK_SQL = """
+            SELECT id FROM route_load
+            WHERE route_id=:routeId AND load_type='INITIAL' AND status='STARTED'
+            FOR UPDATE
+            """;
     static final String CURRENT_INITIAL_LOAD_CLOSED_SETTLEMENT_SQL = """
             SELECT EXISTS(
-                SELECT 1 FROM route_load rl
-                JOIN settlement s ON s.route_load_id=rl.id
-                WHERE rl.route_id=:routeId AND rl.load_type='INITIAL' AND rl.status='STARTED'
-                  AND s.status='CLOSED'
+                SELECT 1 FROM settlement
+                WHERE route_load_id=:routeLoadId AND status='CLOSED'
             )
             """;
     private final JdbcClient jdbc;
@@ -52,15 +55,14 @@ public class JdbcRouteLoadAdapter implements RouteLoadPort {
     }
 
     @Override
-    public boolean activeInitialLoadExists(UUID routeId) {
-        return Boolean.TRUE.equals(jdbc.sql("SELECT EXISTS(SELECT 1 FROM route_load WHERE route_id=:routeId AND load_type='INITIAL' AND status='STARTED')")
-                .param("routeId", routeId).query(Boolean.class).single());
+    public Optional<UUID> lockCurrentStartedInitialLoad(UUID routeId) {
+        return jdbc.sql(CURRENT_STARTED_INITIAL_LOAD_LOCK_SQL).param("routeId", routeId).query(UUID.class).optional();
     }
 
     @Override
-    public boolean routeHasClosedSettlement(UUID routeId) {
+    public boolean routeLoadHasClosedSettlement(UUID routeLoadId) {
         return Boolean.TRUE.equals(jdbc.sql(CURRENT_INITIAL_LOAD_CLOSED_SETTLEMENT_SQL)
-                .param("routeId", routeId).query(Boolean.class).single());
+                .param("routeLoadId", routeLoadId).query(Boolean.class).single());
     }
 
     @Override

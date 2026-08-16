@@ -12,8 +12,8 @@ public interface RouteLoadPort {
     boolean activeWarehouseLocationExists(UUID locationId);
     Optional<UUID> findActiveRouteLocation(UUID routeId);
     boolean activeInventoryProductExists(UUID productId);
-    boolean activeInitialLoadExists(UUID routeId);
-    boolean routeHasClosedSettlement(UUID routeId);
+    Optional<UUID> lockCurrentStartedInitialLoad(UUID routeId);
+    boolean routeLoadHasClosedSettlement(UUID routeLoadId);
     boolean sellerAssignedToRoute(UUID userId, UUID routeId);
     LoadView createLoad(NewLoad load);
     List<LoadView> findLoads(Optional<UUID> sellerUserId);

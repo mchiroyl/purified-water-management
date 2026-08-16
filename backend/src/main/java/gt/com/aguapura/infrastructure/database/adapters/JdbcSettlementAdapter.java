@@ -17,6 +17,12 @@ import java.util.UUID;
 
 @Repository
 public class JdbcSettlementAdapter implements SettlementPort {
+    static final String CURRENT_STARTED_INITIAL_LOAD_LOCK_SQL = """
+            SELECT id FROM route_load
+            WHERE id=:id AND load_type='INITIAL' AND status='STARTED'
+            FOR UPDATE
+            """;
+
     private final JdbcClient jdbc;
 
     public JdbcSettlementAdapter(JdbcClient jdbc) {
@@ -197,6 +203,9 @@ public class JdbcSettlementAdapter implements SettlementPort {
 
     @Override
     public SettlementView close(UUID routeLoadId, UUID actorId, UUID deviceId, String notes) {
+        UUID lockedLoad = jdbc.sql(CURRENT_STARTED_INITIAL_LOAD_LOCK_SQL)
+                .param("id", routeLoadId).query(UUID.class).optional().orElseThrow(() ->
+                new BusinessException("SETTLEMENT_NOT_READY", "La carga ya no está disponible para cierre.", ErrorCategory.CONFLICT));
         int changed = jdbc.sql("""
                 UPDATE settlement SET status='CLOSED',closed_by=:actor,closed_device_id=:device,
                   closed_at=now(),close_notes=:notes,version=version+1 WHERE route_load_id=:loadId
@@ -205,8 +214,10 @@ public class JdbcSettlementAdapter implements SettlementPort {
                 .param("loadId", routeLoadId).update();
         if (changed != 1) throw new BusinessException("SETTLEMENT_NOT_READY",
                 "La liquidación no está lista para cierre.", ErrorCategory.CONFLICT);
-        jdbc.sql("UPDATE route_load SET status='SETTLED',version=version+1 WHERE id=:id AND status='STARTED'")
-                .param("id", routeLoadId).update();
+        int loadChanged = jdbc.sql("UPDATE route_load SET status='SETTLED',version=version+1 WHERE id=:id AND status='STARTED'")
+                .param("id", lockedLoad).update();
+        if (loadChanged != 1) throw new BusinessException("SETTLEMENT_NOT_READY",
+                "La carga cambió de estado durante el cierre.", ErrorCategory.CONFLICT);
         return findOne(routeLoadId);
     }
 

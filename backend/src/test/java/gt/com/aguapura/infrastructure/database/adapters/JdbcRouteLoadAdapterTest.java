@@ -6,12 +6,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class JdbcRouteLoadAdapterTest {
     @Test
-    void closedSettlementCheckOnlyTargetsTheCurrentStartedInitialLoad() {
+    void currentInitialLoadLockAndSettlementCheckAreBoundToTheSameRun() {
+        String lockSql = JdbcRouteLoadAdapter.CURRENT_STARTED_INITIAL_LOAD_LOCK_SQL;
         String sql = JdbcRouteLoadAdapter.CURRENT_INITIAL_LOAD_CLOSED_SETTLEMENT_SQL;
 
-        assertTrue(sql.contains("JOIN settlement s ON s.route_load_id=rl.id"));
-        assertTrue(sql.contains("rl.load_type='INITIAL'"));
-        assertTrue(sql.contains("rl.status='STARTED'"));
-        assertTrue(sql.contains("s.status='CLOSED'"));
+        assertTrue(lockSql.contains("route_id=:routeId"));
+        assertTrue(lockSql.contains("load_type='INITIAL'"));
+        assertTrue(lockSql.contains("status='STARTED'"));
+        assertTrue(lockSql.contains("FOR UPDATE"));
+        assertTrue(sql.contains("route_load_id=:routeLoadId"));
+        assertTrue(sql.contains("status='CLOSED'"));
     }
 }
