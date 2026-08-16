@@ -2,50 +2,105 @@ import { ApiError, type ApiErrorPayload } from '../types/api';
 
 const baseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
 let accessToken: string | null = null;
+let refreshPromise: Promise<string> | null = null;
 
 export function setAccessToken(token: string | null): void {
   accessToken = token;
 }
 
-export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+function isAuthEndpoint(path: string): boolean {
+  return path.startsWith('/auth/');
+}
+
+function publish(name: string): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(name));
+}
+
+async function refreshAccessToken(): Promise<string> {
+  const response = await fetch(`${baseUrl}/auth/refresh`, {
+    method: 'POST',
+    headers: { Accept: 'application/json' },
+    credentials: 'include',
+  });
+  if (!response.ok) throw new Error('La sesión ya no está vigente.');
+  const payload = await response.json() as { accessToken?: string };
+  if (!payload.accessToken) throw new Error('El servidor no devolvió un token de sesión.');
+  setAccessToken(payload.accessToken);
+  return payload.accessToken;
+}
+
+async function refreshOnce(): Promise<string> {
+  if (!refreshPromise) {
+    refreshPromise = refreshAccessToken()
+      .catch(error => {
+        setAccessToken(null);
+        publish('agua-pura:session-expired');
+        throw error;
+      })
+      .finally(() => { refreshPromise = null; });
+  }
+  return refreshPromise;
+}
+
+function headersFor(init: RequestInit, accept: string): Headers {
   const headers = new Headers(init.headers);
-  headers.set('Accept', 'application/json');
+  headers.set('Accept', accept);
   if (init.body && !(init.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
-  if (accessToken) {
-    headers.set('Authorization', `Bearer ${accessToken}`);
-  }
+  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
+  else headers.delete('Authorization');
+  return headers;
+}
 
+async function fetchWithRefresh(path: string, init: RequestInit, accept: string): Promise<Response> {
   let response: Response;
   try {
     response = await fetch(`${baseUrl}${path}`, {
       ...init,
-      headers,
-      credentials: 'include'
+      headers: headersFor(init, accept),
+      credentials: 'include',
     });
   } catch (error) {
-    window.dispatchEvent(new CustomEvent('agua-pura:request-failure'));
+    publish('agua-pura:request-failure');
     throw error;
   }
+  if (response.status < 500) publish('agua-pura:request-success');
 
-  if (response.status >= 500) window.dispatchEvent(new CustomEvent('agua-pura:request-failure'));
-
-  if (response.status === 204) {
-    return undefined as T;
+  if (response.status === 401 && accessToken && !isAuthEndpoint(path)) {
+    try {
+      await refreshOnce();
+      response = await fetch(`${baseUrl}${path}`, {
+        ...init,
+        headers: headersFor(init, accept),
+        credentials: 'include',
+      });
+      if (response.status < 500) publish('agua-pura:request-success');
+    } catch (error) {
+      // A refresh failure means the session expired; it is not a network outage.
+      if (error instanceof TypeError) publish('agua-pura:request-failure');
+      throw error;
+    }
   }
+  return response;
+}
 
-  if (!response.ok) {
-    const fallback: ApiErrorPayload = {
-      code: 'HTTP_ERROR',
-      message: 'No fue posible completar la solicitud.',
-      correlationId: response.headers.get('X-Correlation-Id') ?? 'unknown',
-      timestamp: new Date().toISOString()
-    };
-    const payload = await response.json().catch(() => fallback) as ApiErrorPayload;
-    throw new ApiError(response.status, payload);
-  }
+async function throwApiError(response: Response, fallbackMessage: string): Promise<never> {
+  const fallback: ApiErrorPayload = {
+    code: 'HTTP_ERROR',
+    message: fallbackMessage,
+    correlationId: response.headers.get('X-Correlation-Id') ?? 'unknown',
+    timestamp: new Date().toISOString(),
+  };
+  const payload = await response.json().catch(() => fallback) as ApiErrorPayload;
+  throw new ApiError(response.status, payload);
+}
 
+export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetchWithRefresh(path, init, 'application/json');
+  if (response.status >= 500) publish('agua-pura:request-failure');
+  if (response.status === 204) return undefined as T;
+  if (!response.ok) return throwApiError(response, 'No fue posible completar la solicitud.');
   return response.json() as Promise<T>;
 }
 
@@ -54,25 +109,8 @@ export async function apiBlob(path: string, init: RequestInit = {}): Promise<Blo
 }
 
 export async function apiFile(path: string, accept = 'application/octet-stream', init: RequestInit = {}): Promise<Blob> {
-  const headers = new Headers(init.headers);
-  headers.set('Accept', accept);
-  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
-  let response: Response;
-  try {
-    response = await fetch(`${baseUrl}${path}`, { ...init, headers, credentials: 'include' });
-  } catch (error) {
-    window.dispatchEvent(new CustomEvent('agua-pura:request-failure'));
-    throw error;
-  }
-  if (!response.ok) {
-    const fallback: ApiErrorPayload = {
-      code: 'HTTP_ERROR',
-      message: 'No fue posible obtener el archivo solicitado.',
-      correlationId: response.headers.get('X-Correlation-Id') ?? 'unknown',
-      timestamp: new Date().toISOString()
-    };
-    const payload = await response.json().catch(() => fallback) as ApiErrorPayload;
-    throw new ApiError(response.status, payload);
-  }
+  const response = await fetchWithRefresh(path, init, accept);
+  if (response.status >= 500) publish('agua-pura:request-failure');
+  if (!response.ok) return throwApiError(response, 'No fue posible obtener el archivo solicitado.');
   return response.blob();
 }

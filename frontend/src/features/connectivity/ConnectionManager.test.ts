@@ -31,6 +31,28 @@ describe('ConnectionManager', () => {
     offline.stop();
   });
 
+  it('vuelve a ONLINE cuando una solicitud del backend tiene éxito y cancela el reintento', async () => {
+    vi.useFakeTimers();
+    const lifecycle = new EventTarget();
+    const fetcher = vi.fn().mockRejectedValue(new TypeError('network unavailable'));
+    const manager = new ConnectionManager({
+      fetcher,
+      lifecycleTarget: lifecycle,
+      retryBaseMs: 1_000,
+    });
+
+    manager.start();
+    await manager.check('STARTUP', true);
+    expect(manager.getSnapshot()).toMatchObject({ state: 'OFFLINE', retryCount: 1 });
+
+    lifecycle.dispatchEvent(new Event('agua-pura:request-success'));
+
+    expect(manager.getSnapshot()).toMatchObject({ state: 'ONLINE', reason: 'REQUEST_SUCCESS', retryCount: 0 });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    manager.stop();
+  });
+
   it('deduplica comprobaciones simultáneas y respeta el cooldown', async () => {
     let resolveResponse!: (value: Response) => void;
     const fetcher = vi.fn().mockImplementation(() => new Promise<Response>((resolve) => { resolveResponse = resolve; }));

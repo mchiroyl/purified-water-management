@@ -6,6 +6,7 @@ export type ConnectionCheckReason =
   | 'OFFLINE_EVENT'
   | 'BEFORE_SYNC'
   | 'REQUEST_FAILURE'
+  | 'REQUEST_SUCCESS'
   | 'MANUAL'
   | 'RETRY';
 
@@ -90,6 +91,7 @@ export class ConnectionManager {
     this.lifecycleTarget?.addEventListener('online', this.handleOnline);
     this.lifecycleTarget?.addEventListener('offline', this.handleOffline);
     this.lifecycleTarget?.addEventListener('agua-pura:request-failure', this.handleRequestFailure);
+    this.lifecycleTarget?.addEventListener('agua-pura:request-success', this.handleRequestSuccess);
     this.visibilityTarget?.addEventListener('visibilitychange', this.handleVisibilityChange);
     void this.check('STARTUP', true);
   }
@@ -99,6 +101,7 @@ export class ConnectionManager {
     this.lifecycleTarget?.removeEventListener('online', this.handleOnline);
     this.lifecycleTarget?.removeEventListener('offline', this.handleOffline);
     this.lifecycleTarget?.removeEventListener('agua-pura:request-failure', this.handleRequestFailure);
+    this.lifecycleTarget?.removeEventListener('agua-pura:request-success', this.handleRequestSuccess);
     this.visibilityTarget?.removeEventListener('visibilitychange', this.handleVisibilityChange);
     this.activeAbort?.abort();
     this.clearRetry();
@@ -145,6 +148,19 @@ export class ConnectionManager {
 
   private readonly handleRequestFailure = () => {
     void this.afterRequestFailure();
+  };
+
+  private readonly handleRequestSuccess = () => {
+    this.retryCount = 0;
+    this.clearRetry();
+    this.publish({
+      ...this.snapshot,
+      state: 'ONLINE',
+      reason: 'REQUEST_SUCCESS',
+      checkedAt: new Date(this.now()).toISOString(),
+      serverTime: null,
+      retryCount: 0,
+    });
   };
 
   private readonly handleVisibilityChange = () => {
