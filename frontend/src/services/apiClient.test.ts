@@ -39,11 +39,11 @@ describe('apiClient', () => {
     vi.stubGlobal('fetch', fetcher);
 
     await expect(apiRequest<{ ok: boolean }>('/dashboard')).resolves.toEqual({ ok: true });
-    expect(success).toHaveBeenCalledTimes(2);
-    expect(callsAtSuccess).toEqual([1, 3]);
+    expect(success).toHaveBeenCalledTimes(3);
+    expect(callsAtSuccess).toEqual([1, 2, 3]);
 
     await expect(apiRequest<void>('/sync')).resolves.toBeUndefined();
-    expect(success).toHaveBeenCalledTimes(3);
+    expect(success).toHaveBeenCalledTimes(4);
     window.removeEventListener('agua-pura:request-success', success);
   });
 
@@ -56,6 +56,58 @@ describe('apiClient', () => {
 
     expect(failure).toHaveBeenCalledTimes(1);
     window.removeEventListener('agua-pura:request-failure', failure);
+  });
+
+  it('publica éxito cuando la renovación responde 400 y conserva la expiración de sesión', async () => {
+    const success = vi.fn();
+    const expired = vi.fn();
+    window.addEventListener('agua-pura:request-success', success);
+    window.addEventListener('agua-pura:session-expired', expired);
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockResolvedValueOnce(new Response(null, { status: 400 })));
+
+    await expect(apiRequest('/dashboard')).rejects.toThrow('La sesión ya no está vigente.');
+
+    expect(success).toHaveBeenCalledTimes(2);
+    expect(expired).toHaveBeenCalledTimes(1);
+    window.removeEventListener('agua-pura:request-success', success);
+    window.removeEventListener('agua-pura:session-expired', expired);
+  });
+
+  it('publica éxito cuando la renovación responde 204 aunque no entregue token', async () => {
+    const success = vi.fn();
+    window.addEventListener('agua-pura:request-success', success);
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 })));
+
+    await expect(apiRequest('/dashboard')).rejects.toThrow();
+
+    expect(success).toHaveBeenCalledTimes(2);
+    window.removeEventListener('agua-pura:request-success', success);
+  });
+
+  it('publica fallo y conserva la sesión cuando la renovación responde 5xx', async () => {
+    const failure = vi.fn();
+    const expired = vi.fn();
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    window.addEventListener('agua-pura:request-failure', failure);
+    window.addEventListener('agua-pura:session-expired', expired);
+    vi.stubGlobal('fetch', fetcher);
+
+    await expect(apiRequest('/dashboard')).rejects.toThrow();
+    expect(failure).toHaveBeenCalledTimes(1);
+    expect(expired).not.toHaveBeenCalled();
+
+    await expect(apiRequest<{ ok: boolean }>('/health')).resolves.toEqual({ ok: true });
+    const preservedHeaders = fetcher.mock.calls[2][1]?.headers as Headers;
+    expect(preservedHeaders.get('Authorization')).toBe('Bearer expired-token');
+    window.removeEventListener('agua-pura:request-failure', failure);
+    window.removeEventListener('agua-pura:session-expired', expired);
   });
 
   it('comparte la renovación cuando varias solicitudes vencen juntas', async () => {

@@ -16,12 +16,24 @@ function publish(name: string): void {
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(name));
 }
 
+class RefreshUnavailableError extends Error {
+  constructor() {
+    super('El servicio de renovación no está disponible.');
+    this.name = 'RefreshUnavailableError';
+  }
+}
+
 async function refreshAccessToken(): Promise<string> {
   const response = await fetch(`${baseUrl}/auth/refresh`, {
     method: 'POST',
     headers: { Accept: 'application/json' },
     credentials: 'include',
   });
+  if (response.status < 500) publish('agua-pura:request-success');
+  if (response.status >= 500) {
+    publish('agua-pura:request-failure');
+    throw new RefreshUnavailableError();
+  }
   if (!response.ok) throw new Error('La sesión ya no está vigente.');
   const payload = await response.json() as { accessToken?: string };
   if (!payload.accessToken) throw new Error('El servidor no devolvió un token de sesión.');
@@ -33,6 +45,7 @@ async function refreshOnce(): Promise<string> {
   if (!refreshPromise) {
     refreshPromise = refreshAccessToken()
       .catch(error => {
+        if (error instanceof RefreshUnavailableError) throw error;
         setAccessToken(null);
         publish('agua-pura:session-expired');
         throw error;
