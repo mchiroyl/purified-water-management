@@ -122,7 +122,7 @@ Cuando una implementación cambie una relación, estado o actor, actualice el di
 Para el PDF del manual:
 
 ```powershell
-& 'C:\Users\DEV-WS-00\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' scripts/generate_user_manual_pdf.py
+python scripts/generate_user_manual_pdf.py
 ```
 
 Renderice con Poppler y revise páginas, imágenes, texto extraíble y número de páginas antes de entregar.
