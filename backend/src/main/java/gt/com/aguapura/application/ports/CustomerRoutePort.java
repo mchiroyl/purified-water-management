@@ -15,9 +15,13 @@ public interface CustomerRoutePort {
     RouteView assignCustomerRoute(NewCustomerRoute assignment);
     boolean routeCodeExists(String code);
     RouteView createRoute(NewRoute route);
+    RouteView updateRouteIfUnassigned(UUID id, NewRoute route);
+    RouteView setRouteActiveIfUnassigned(UUID id, boolean active);
     List<RouteView> findRoutes(Optional<UUID> sellerId);
     boolean vehicleCodeExists(String code);
     VehicleView createVehicle(NewVehicle vehicle);
+    VehicleView updateVehicleIfUnassigned(UUID id, NewVehicle vehicle);
+    VehicleView setVehicleActiveIfUnassigned(UUID id, boolean active);
     List<VehicleView> findVehicles();
     List<SellerOption> findSellers();
     RouteView assignRoute(NewRouteAssignment assignment);

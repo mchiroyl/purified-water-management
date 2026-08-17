@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { PageHeader } from '../../app/PageHeader';
 import { useState, type FormEvent } from 'react';
 import { apiBlob, apiRequest } from '../../services/apiClient';
 import { openMobileDatabase, type GeoLocationSnapshot } from '../../offline/mobileDatabase';
@@ -114,9 +115,7 @@ export function SalesPage({ canSell }: { canSell: boolean }) {
   };
 
   return <main>
-    <p className="eyebrow">Operación en ruta</p>
-    <h1>Ventas</h1>
-    <p className="muted">Los precios, conversiones, totales, correlativos e inventario se calculan y confirman en el servidor.</p>
+    <PageHeader eyebrow="Operación en ruta" title="Ventas" description="Los precios, conversiones, totales, correlativos e inventario se calculan y confirman en el servidor." />
 
     {canSell && <form className="panel section-panel" onSubmit={submit}>
       <h2>Nueva venta</h2>

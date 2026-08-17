@@ -1,6 +1,7 @@
 package gt.com.aguapura.application.services;
 
 import gt.com.aguapura.application.dto.catalog.CreateProductRequest;
+import gt.com.aguapura.application.dto.catalog.CreatePresentationTemplateRequest;
 import gt.com.aguapura.application.dto.catalog.UpdatePresentationConversionRequest;
 import gt.com.aguapura.application.ports.ProductCatalogPersistencePort;
 import gt.com.aguapura.domain.exceptions.BusinessException;
@@ -18,20 +19,20 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ProductCatalogApplicationServiceTest {
 
     @Test
-    void createsProductWithNormalizedCodesAndBaseUnitConversion() {
+    void assignsTheNextProductCodeWhenTheClientDoesNotProvideOne() {
         var persistence = new FakeCatalogPersistence();
         var service = new ProductCatalogApplicationService(persistence);
-        var request = new CreateProductRequest(" agua-600 ", "Agua pura 600 ml", "",
-                "botella", true, List.of(
-                new CreateProductRequest.PresentationRequest("fardo-12", "Fardo x12", "fardo", new BigDecimal("12"))
+        var request = new CreateProductRequest(null, "Agua pura 600 ml", "",
+                "botella", true, null, List.of(
+                new CreateProductRequest.PresentationRequest(null, "Fardo x12", "fardo", new BigDecimal("12"))
         ));
 
         var created = service.create(request);
 
-        assertThat(created.code()).isEqualTo("AGUA-600");
+        assertThat(created.code()).isEqualTo("PRD-0001");
         assertThat(created.baseUnitCode()).isEqualTo("BOTELLA");
         assertThat(created.presentations()).singleElement().satisfies(presentation -> {
-            assertThat(presentation.code()).isEqualTo("FARDO-12");
+            assertThat(presentation.code()).isEqualTo("PRE-0001");
             assertThat(presentation.conversionFactor()).isEqualByComparingTo("12.000000");
         });
     }
@@ -39,7 +40,7 @@ class ProductCatalogApplicationServiceTest {
     @Test
     void rejectsDuplicatePresentationCodesInSameProduct() {
         var service = new ProductCatalogApplicationService(new FakeCatalogPersistence());
-        var request = new CreateProductRequest("AGUA", "Agua", "", "BOTELLA", true, List.of(
+        var request = new CreateProductRequest("AGUA", "Agua", "", "BOTELLA", true, null, List.of(
                 new CreateProductRequest.PresentationRequest("UNIDAD", "Unidad", "BOTELLA", BigDecimal.ONE),
                 new CreateProductRequest.PresentationRequest("unidad", "Unidad repetida", "BOTELLA", BigDecimal.ONE)
         ));
@@ -54,7 +55,7 @@ class ProductCatalogApplicationServiceTest {
     void updatesCurrentConversionThroughPersistenceHistoryOperation() {
         var persistence = new FakeCatalogPersistence();
         var service = new ProductCatalogApplicationService(persistence);
-        var product = service.create(new CreateProductRequest("AGUA", "Agua", "", "BOTELLA", true, List.of(
+        var product = service.create(new CreateProductRequest("AGUA", "Agua", "", "BOTELLA", true, null, List.of(
                 new CreateProductRequest.PresentationRequest("FARDO", "Fardo", "FARDO", new BigDecimal("12"))
         )));
 
@@ -70,7 +71,7 @@ class ProductCatalogApplicationServiceTest {
     void deactivatesPresentationWithoutDeletingIt() {
         var persistence = new FakeCatalogPersistence();
         var service = new ProductCatalogApplicationService(persistence);
-        var product = service.create(new CreateProductRequest("AGUA", "Agua", "", "BOTELLA", true, List.of(
+        var product = service.create(new CreateProductRequest("AGUA", "Agua", "", "BOTELLA", true, null, List.of(
                 new CreateProductRequest.PresentationRequest("UNIDAD", "Unidad", "BOTELLA", BigDecimal.ONE)
         )));
         var presentationId = product.presentations().getFirst().id();
@@ -81,8 +82,24 @@ class ProductCatalogApplicationServiceTest {
         assertThat(updated.presentations().getFirst().id()).isEqualTo(presentationId);
     }
 
+    @Test
+    void rejectsTheSameActivePresentationDefinitionTwice() {
+        var persistence = new FakeCatalogPersistence();
+        var service = new PresentationCatalogApplicationService(persistence);
+        var request = new CreatePresentationTemplateRequest(null, "BOTELLA", new BigDecimal("600"),
+                "ML", "BOTELLA", BigDecimal.ONE);
+
+        service.create(request);
+
+        assertThatThrownBy(() -> service.create(request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("code")
+                .isEqualTo("DUPLICATE_PRESENTATION");
+    }
+
     private static final class FakeCatalogPersistence implements ProductCatalogPersistencePort {
         private final List<CatalogProduct> products = new ArrayList<>();
+        private final List<CatalogPresentationTemplate> presentationTemplates = new ArrayList<>();
         private int conversionUpdates;
 
         @Override
@@ -93,6 +110,50 @@ class ProductCatalogApplicationServiceTest {
         @Override
         public boolean productCodeExists(String code) {
             return products.stream().anyMatch(product -> product.code().equals(code));
+        }
+
+        @Override
+        public String nextProductCode() {
+            return "PRD-%04d".formatted(products.size() + 1);
+        }
+
+        @Override
+        public String nextPresentationCode() {
+            return "PRE-%04d".formatted(products.stream().mapToInt(product -> product.presentations().size()).sum() + 1);
+        }
+
+        @Override
+        public CatalogPresentationTemplate createPresentationTemplate(NewPresentationTemplate presentation) {
+            var created = new CatalogPresentationTemplate(UUID.randomUUID(), presentation.code(), presentation.name(),
+                    presentation.presentationType(), presentation.contentQuantity(), presentation.contentUnit(),
+                    presentation.unitCode(), presentation.conversionFactor(), true);
+            presentationTemplates.add(created);
+            return created;
+        }
+
+        @Override
+        public List<CatalogPresentationTemplate> findPresentationTemplates(String query) {
+            return List.copyOf(presentationTemplates);
+        }
+
+        @Override
+        public List<CatalogPresentationTemplate> findPresentationTemplatesByIds(List<UUID> ids) {
+            return List.of();
+        }
+
+        @Override
+        public CatalogPresentationTemplate updatePresentationTemplate(UUID id, NewPresentationTemplate presentation) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public CatalogPresentationTemplate setPresentationTemplateActive(UUID id, boolean active) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void deletePresentationTemplate(UUID id) {
+            throw new UnsupportedOperationException();
         }
 
         @Override
@@ -119,6 +180,16 @@ class ProductCatalogApplicationServiceTest {
 
         @Override
         public CatalogProduct setActive(UUID id, boolean active) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public CatalogProduct updateProduct(UUID id, String name, String description, String baseUnitCode, boolean controlsInventory) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void deleteProduct(UUID id) {
             throw new UnsupportedOperationException();
         }
 

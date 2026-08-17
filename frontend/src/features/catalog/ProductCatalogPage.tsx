@@ -1,119 +1,27 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { PageHeader } from '../../app/PageHeader';
 import { apiRequest } from '../../services/apiClient';
 
-type Presentation = {
-  id: string;
-  code: string;
-  name: string;
-  unitCode: string;
-  conversionFactor: number;
-  active: boolean;
-};
+type Presentation = { id: string; code: string; name: string; presentationType?: string; contentQuantity?: number; contentUnit?: string; unitCode: string; conversionFactor: number; active: boolean };
+type Product = { id: string; code: string; name: string; description: string; baseUnitCode: string; active: boolean; controlsInventory: boolean; presentations: Presentation[] };
 
-type Product = {
-  id: string;
-  code: string;
-  name: string;
-  description: string;
-  baseUnitCode: string;
-  active: boolean;
-  controlsInventory: boolean;
-  presentations: Presentation[];
-};
-
-type PresentationDraft = Omit<Presentation, 'id' | 'active'>;
-
-const emptyPresentation = (): PresentationDraft => ({ code: '', name: '', unitCode: 'BOTELLA', conversionFactor: 1 });
-
-export function ProductCatalogPage() {
-  const queryClient = useQueryClient();
+export function ProductCatalogPage({ view = 'create' }: { view?: 'create' | 'list' }) {
+  const queryClient = useQueryClient(); const navigate = useNavigate();
   const products = useQuery({ queryKey: ['products'], queryFn: () => apiRequest<Product[]>('/products') });
-  const [code, setCode] = useState('');
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [baseUnitCode, setBaseUnitCode] = useState('BOTELLA');
-  const [controlsInventory, setControlsInventory] = useState(true);
-  const [presentations, setPresentations] = useState<PresentationDraft[]>([emptyPresentation()]);
-
-  const createProduct = useMutation({
-    mutationFn: () => apiRequest<Product>('/products', {
-      method: 'POST',
-      body: JSON.stringify({ code, name, description, baseUnitCode, controlsInventory, presentations })
-    }),
-    onSuccess: async () => {
-      setCode(''); setName(''); setDescription(''); setBaseUnitCode('BOTELLA'); setControlsInventory(true);
-      setPresentations([emptyPresentation()]);
-      await queryClient.invalidateQueries({ queryKey: ['products'] });
-    }
-  });
-
-  const changeStatus = useMutation({
-    mutationFn: (product: Product) => apiRequest<Product>(`/products/${product.id}/status`, {
-      method: 'PATCH', body: JSON.stringify({ active: !product.active })
-    }),
-    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['products'] })
-  });
-
-  function updatePresentation(index: number, field: keyof PresentationDraft, value: string | number) {
-    setPresentations(current => current.map((item, position) => position === index ? { ...item, [field]: value } : item));
-  }
-
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    createProduct.mutate();
-  }
-
-  return (
-    <main>
-      <p className="eyebrow">Catálogo</p>
-      <h1>Productos y presentaciones</h1>
-      <p className="muted">Cada presentación conserva su conversión oficial a la unidad base del producto.</p>
-
-      <form className="panel catalog-form" onSubmit={submit}>
-        <h2>Nuevo producto</h2>
-        <div className="form-grid compact-grid">
-          <label>Código<input required value={code} onChange={event => setCode(event.target.value)} /></label>
-          <label>Nombre<input required value={name} onChange={event => setName(event.target.value)} /></label>
-          <label>Unidad base<input required value={baseUnitCode} onChange={event => setBaseUnitCode(event.target.value.toUpperCase())} /></label>
-          <label className="checkbox"><input type="checkbox" checked={controlsInventory} onChange={event => setControlsInventory(event.target.checked)} /> Controla inventario</label>
-          <label className="wide">Descripción<textarea value={description} onChange={event => setDescription(event.target.value)} /></label>
-        </div>
-        <h3>Presentaciones</h3>
-        <div className="presentation-editor">
-          {presentations.map((item, index) => (
-            <div className="presentation-row" key={index}>
-              <label>Código<input required value={item.code} onChange={event => updatePresentation(index, 'code', event.target.value)} /></label>
-              <label>Nombre<input required value={item.name} onChange={event => updatePresentation(index, 'name', event.target.value)} /></label>
-              <label>Unidad<input required value={item.unitCode} onChange={event => updatePresentation(index, 'unitCode', event.target.value.toUpperCase())} /></label>
-              <label>Factor<input required type="number" min="0.000001" step="0.000001" value={item.conversionFactor} onChange={event => updatePresentation(index, 'conversionFactor', Number(event.target.value))} /></label>
-              {presentations.length > 1 && <button type="button" className="secondary" onClick={() => setPresentations(current => current.filter((_, position) => position !== index))}>Quitar</button>}
-            </div>
-          ))}
-        </div>
-        <div className="form-actions">
-          <button type="button" className="secondary" onClick={() => setPresentations(current => [...current, emptyPresentation()])}>Agregar presentación</button>
-          <button type="submit" className="primary" disabled={createProduct.isPending}>Guardar producto</button>
-        </div>
-        {createProduct.error && <div className="alert error">{createProduct.error.message}</div>}
-      </form>
-
-      <section className="catalog-list" aria-label="Productos registrados">
-        {products.isLoading && <p>Cargando productos…</p>}
-        {products.error && <div className="alert error">{products.error.message}</div>}
-        {products.data?.map(product => (
-          <article className="panel product-card" key={product.id}>
-            <div>
-              <span className={`status ${product.active ? 'active' : 'inactive'}`}>{product.active ? 'Activo' : 'Inactivo'}</span>
-              <h2>{product.name}</h2>
-              <p className="muted">{product.code} · Unidad base: {product.baseUnitCode}</p>
-              <ul>{product.presentations.map(item => <li key={item.id}>{item.name} · {item.conversionFactor} {product.baseUnitCode}</li>)}</ul>
-            </div>
-            <button className="secondary" onClick={() => changeStatus.mutate(product)}>{product.active ? 'Desactivar' : 'Activar'}</button>
-          </article>
-        ))}
-        {products.data?.length === 0 && <p className="muted">Aún no hay productos registrados.</p>}
-      </section>
-    </main>
-  );
+  const [name, setName] = useState(''); const [description, setDescription] = useState(''); const [baseUnitCode, setBaseUnitCode] = useState(''); const [controlsInventory, setControlsInventory] = useState(true); const [query, setQuery] = useState(''); const [selectedId, setSelectedId] = useState<string | null>(null); const [editing, setEditing] = useState<Product | null>(null);
+  const presentations = useQuery({ queryKey: ['presentation-catalog', query], queryFn: () => apiRequest<Presentation[]>(`/presentation-catalog?query=${encodeURIComponent(query)}`) });
+  const reset = () => { setEditing(null); setName(''); setDescription(''); setBaseUnitCode(''); setControlsInventory(true); setSelectedId(null); setQuery(''); };
+  const save = useMutation({ mutationFn: () => apiRequest<Product>(editing ? `/products/${editing.id}` : '/products', { method: editing ? 'PUT' : 'POST', body: JSON.stringify(editing ? { name, description, baseUnitCode, controlsInventory } : { name, description, baseUnitCode, controlsInventory, presentationIds: [selectedId] }) }), onSuccess: async () => { reset(); await queryClient.invalidateQueries({ queryKey: ['products'] }); } });
+  const status = useMutation({ mutationFn: (product: Product) => apiRequest<Product>(`/products/${product.id}/status`, { method: 'PATCH', body: JSON.stringify({ active: !product.active }) }), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['products'] }) });
+  const remove = useMutation({ mutationFn: (id: string) => apiRequest<void>(`/products/${id}`, { method: 'DELETE' }), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['products'] }) });
+  const edit = (product: Product) => { setEditing(product); setName(product.name); setDescription(product.description); setBaseUnitCode(product.baseUnitCode); setControlsInventory(product.controlsInventory); setSelectedId(product.presentations[0]?.id ?? null); };
+  const submit = (event: FormEvent) => { event.preventDefault(); if (selectedId || editing) save.mutate(); };
+  const presentationLabel = (item: Presentation) => `${item.presentationType ?? item.name} ${item.contentQuantity ?? ''} ${item.contentUnit ?? ''}`.trim();
+  return <main className={`product-page ${view}`}><PageHeader eyebrow="Catálogo" title="Productos" description="Registre el producto y seleccione las presentaciones ya creadas en su catálogo." actions={<button type="button" className="secondary" onClick={() => navigate(view === 'create' ? '/products/list' : '/products')}>{view === 'create' ? 'Ver productos registrados' : 'Nuevo producto'}</button>} />
+    {view === 'create' && <form className="panel catalog-form product-form" onSubmit={submit}><h2>Nuevo producto</h2><div className="form-grid compact-grid"><label>Nombre del producto<input required value={name} placeholder="Ej.: Agua Pura Salvavidas" onChange={event => setName(event.target.value)} /></label><p className="field-hint">Código: se asigna automáticamente al guardar.</p><p className="field-hint">Unidad de inventario: <strong>{baseUnitCode || 'se asigna al seleccionar'}</strong>.</p><label className="checkbox"><input type="checkbox" checked={controlsInventory} onChange={event => setControlsInventory(event.target.checked)} /> Controla inventario</label><label className="wide">Descripción (opcional)<textarea placeholder="Ej.: Agua purificada marca Salvavidas." value={description} onChange={event => setDescription(event.target.value)} /></label></div><h3>Presentación del producto</h3><label>Buscar y seleccionar presentación<input required role="combobox" aria-expanded={Boolean(query && presentations.data?.length)} aria-controls="presentation-suggestions" value={query} placeholder="Ej.: botella" onChange={event => { setQuery(event.target.value); setSelectedId(null); setBaseUnitCode(''); }} /></label><div id="presentation-suggestions" className="presentation-suggestions" role="listbox">{presentations.isLoading && <p>Cargando presentaciones…</p>}{query && presentations.data?.map(item => <button key={item.id} type="button" className="presentation-suggestion" role="option" aria-selected={selectedId === item.id} onClick={() => { setSelectedId(item.id); setBaseUnitCode(item.unitCode); setQuery(presentationLabel(item)); }}>{presentationLabel(item)} <small>{item.code} · Inventario: {item.unitCode}</small></button>)}{query && presentations.data?.length === 0 && <p className="muted">No hay coincidencias.</p>}</div>{!selectedId && <p className="field-error">Seleccione una presentación.</p>}<div className="form-actions"><button className="primary" disabled={save.isPending || !selectedId}>Guardar producto</button></div>{save.error && <div className="alert error">{save.error.message}</div>}</form>}
+    {view === 'list' && <section className="catalog-list" aria-label="Productos registrados">{products.isLoading && <p>Cargando productos…</p>}{products.error && <div className="alert error">{products.error.message}</div>}{products.data && products.data.length > 0 && <div className="table-wrap"><table><thead><tr><th>Código</th><th>Producto</th><th>Inventario</th><th>Presentación</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>{products.data.map(product => <tr key={product.id}><td>{product.code}</td><td>{product.name}</td><td>{product.baseUnitCode}</td><td>{product.presentations.map(item => item.presentationType ?? item.name).join(', ')}</td><td><span className={`status ${product.active ? 'active' : 'inactive'}`}>{product.active ? 'Activo' : 'Inactivo'}</span></td><td><div className="row-actions"><button className="secondary" onClick={() => edit(product)}>Modificar</button><button className="secondary" onClick={() => status.mutate(product)}>{product.active ? 'Desactivar' : 'Activar'}</button><button className="secondary danger-button" onClick={() => { if (confirm(`¿Eliminar ${product.name}?`)) remove.mutate(product.id); }}>Eliminar</button></div></td></tr>)}</tbody></table></div>}{products.data?.length === 0 && <p className="muted">Aún no hay productos registrados.</p>}</section>}
+    {editing && <div className="modal-backdrop" role="presentation"><form className="modal-panel" onSubmit={submit} aria-modal="true" role="dialog" aria-labelledby="modify-product-title"><h2 id="modify-product-title">Modificar producto</h2><p className="muted">Código: {editing.code}</p><div className="form-grid compact-grid"><label>Nombre del producto<input required value={name} onChange={event => setName(event.target.value)} /></label><p className="field-hint">Unidad de inventario: <strong>{baseUnitCode}</strong></p><label className="wide">Descripción (opcional)<textarea value={description} onChange={event => setDescription(event.target.value)} /></label><label className="checkbox"><input type="checkbox" checked={controlsInventory} onChange={event => setControlsInventory(event.target.checked)} /> Controla inventario</label></div><div className="form-actions"><button type="button" className="secondary" onClick={reset}>Cancelar</button><button className="primary" disabled={save.isPending}>Guardar cambios</button></div>{save.error && <div className="alert error">{save.error.message}</div>}</form></div>}
+  </main>;
 }

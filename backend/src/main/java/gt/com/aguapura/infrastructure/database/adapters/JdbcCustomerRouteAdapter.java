@@ -94,6 +94,25 @@ public class JdbcCustomerRouteAdapter implements CustomerRoutePort {
     }
 
     @Override
+    public RouteView updateRouteIfUnassigned(UUID id, NewRoute item) {
+        int updated = jdbc.sql("""
+                UPDATE route SET name = :name, description = :description
+                WHERE id = :id AND NOT EXISTS (
+                    SELECT 1 FROM route_assignment ra WHERE ra.route_id = :id
+                    AND ra.valid_from <= current_date AND (ra.valid_to IS NULL OR ra.valid_to >= current_date)
+                )
+                """).param("id", id).param("name", item.name()).param("description", item.description()).update();
+        if (updated == 0) throw new BusinessException("ROUTE_ASSIGNED", "La ruta no se puede modificar mientras esté asignada.", ErrorCategory.CONFLICT);
+        return findRoute(id);
+    }
+
+    @Override
+    public RouteView setRouteActiveIfUnassigned(UUID id, boolean active) {
+        updateUnassigned("route", "route_id", id, "status", active ? "ACTIVE" : "INACTIVE");
+        return findRoute(id);
+    }
+
+    @Override
     public List<RouteView> findRoutes(Optional<UUID> sellerId) {
         String filter = sellerId.isPresent() ? " WHERE ra.seller_id = :sellerId" : "";
         var statement = jdbc.sql(routeSelect() + filter + " ORDER BY r.name, r.code");
@@ -108,6 +127,26 @@ public class JdbcCustomerRouteAdapter implements CustomerRoutePort {
                 .param("id", id)
                 .param("plate", item.licensePlate().isBlank() ? null : item.licensePlate(), Types.VARCHAR)
                 .param("description", item.description()).update();
+        return findVehicle(id);
+    }
+
+    @Override
+    public VehicleView updateVehicleIfUnassigned(UUID id, NewVehicle item) {
+        int updated = jdbc.sql("""
+                UPDATE vehicle SET license_plate = :plate, description = :description
+                WHERE id = :id AND NOT EXISTS (
+                    SELECT 1 FROM route_assignment ra WHERE ra.vehicle_id = :id
+                    AND ra.valid_from <= current_date AND (ra.valid_to IS NULL OR ra.valid_to >= current_date)
+                )
+                """).param("id", id).param("plate", item.licensePlate().isBlank() ? null : item.licensePlate(), Types.VARCHAR)
+                .param("description", item.description()).update();
+        if (updated == 0) throw new BusinessException("VEHICLE_ASSIGNED", "El vehículo no se puede modificar mientras esté asignado.", ErrorCategory.CONFLICT);
+        return findVehicle(id);
+    }
+
+    @Override
+    public VehicleView setVehicleActiveIfUnassigned(UUID id, boolean active) {
+        updateUnassigned("vehicle", "vehicle_id", id, "status", active ? "ACTIVE" : "INACTIVE");
         return findVehicle(id);
     }
 
@@ -272,6 +311,15 @@ public class JdbcCustomerRouteAdapter implements CustomerRoutePort {
             default -> throw new IllegalArgumentException("Asignación no permitida");
         };
         jdbc.sql(sql).param("validTo", newFrom.minusDays(1)).param("id", entityId).update();
+    }
+
+    private void updateUnassigned(String table, String assignmentColumn, UUID id, String column, String value) {
+        String sql = "UPDATE " + table + " SET " + column + " = :value WHERE id = :id AND NOT EXISTS ("
+                + "SELECT 1 FROM route_assignment ra WHERE ra." + assignmentColumn + " = :id "
+                + "AND ra.valid_from <= current_date AND (ra.valid_to IS NULL OR ra.valid_to >= current_date))";
+        if (jdbc.sql(sql).param("id", id).param("value", value).update() == 0) {
+            throw new BusinessException(table.toUpperCase() + "_ASSIGNED", "No se puede cambiar mientras esté asignado.", ErrorCategory.CONFLICT);
+        }
     }
 
     private BusinessException notFound(String code, String message) {

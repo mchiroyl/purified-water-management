@@ -1,4 +1,5 @@
 import { useSync } from './SyncContext';
+import { PageHeader } from '../app/PageHeader';
 import type { SyncStatus } from './mobileDatabase';
 
 const statusLabels: Record<SyncStatus, string> = {
@@ -17,16 +18,14 @@ export function PendingOperationsPage() {
 
   return (
     <>
-      <p className="eyebrow">Sincronización</p>
-      <div className="section-heading">
-        <div>
-          <h1>Operaciones pendientes</h1>
-          <p className="muted">Cada registro conserva su resultado independiente y sus dependencias.</p>
-        </div>
-        <button className="primary" type="button" disabled={isRunning} onClick={() => void syncNow()}>
+      <PageHeader
+        eyebrow="Sincronización"
+        title="Operaciones pendientes"
+        description="Cada registro conserva su resultado independiente y sus dependencias."
+        actions={<button className="primary" type="button" disabled={isRunning} onClick={() => void syncNow()}>
           {isRunning ? 'Sincronizando…' : 'Sincronizar ahora'}
-        </button>
-      </div>
+        </button>}
+      />
 
       <section className="metric-grid sync-metrics" aria-label="Resumen de sincronización">
         <article><span>Pendientes</span><strong>{unfinished.length}</strong></article>

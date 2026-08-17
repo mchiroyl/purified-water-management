@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { PageHeader } from '../../app/PageHeader';
 import { useMemo, useState, type FormEvent } from 'react';
 import { apiRequest } from '../../services/apiClient';
 import { queueWaste } from './wasteOffline';
@@ -74,9 +75,7 @@ export function WastePage({ canReport, canReview, canManageCatalog, deviceId }: 
   });
 
   return <main>
-    <p className="eyebrow">Control físico</p>
-    <h1>Mermas</h1>
-    <p className="muted">Registra producto dañado en unidades base. Solo la cantidad aprobada afecta inventario; ventas y pagos permanecen intactos.</p>
+    <PageHeader eyebrow="Control físico" title="Mermas" description="Registra producto dañado en unidades base. Solo la cantidad aprobada afecta inventario; ventas y pagos permanecen intactos." />
 
     {canReport && <form className="panel section-panel" onSubmit={saveOffline}>
       <h2>Reportar pérdida física</h2>

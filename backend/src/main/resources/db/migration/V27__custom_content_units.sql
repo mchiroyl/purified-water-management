@@ -1,0 +1,1 @@
+ALTER TABLE presentation_catalog DROP CONSTRAINT IF EXISTS ck_presentation_catalog_content_unit;

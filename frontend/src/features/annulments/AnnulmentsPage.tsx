@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
+import { PageHeader } from '../../app/PageHeader';
 import { apiRequest } from '../../services/apiClient';
 
 type Sale = { id: string; documentNumber: string; customerName: string; total: number };
@@ -79,11 +80,7 @@ export function AnnulmentsPage({ canRequest, canDecide }: { canRequest: boolean;
 
   return (
     <main>
-      <p className="eyebrow">Corrección compensatoria</p>
-      <h1>Anulaciones</h1>
-      <p className="muted">
-        La venta original nunca se elimina. Una aprobación crea reversiones de inventario, pago y crédito exactamente una vez.
-      </p>
+      <PageHeader eyebrow="Corrección compensatoria" title="Anulaciones" description="La venta original nunca se elimina. Una aprobación crea reversiones de inventario, pago y crédito exactamente una vez." />
       {canRequest && (
         <form className="panel section-panel" onSubmit={submit}>
           <h2>Solicitar anulación</h2>

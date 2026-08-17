@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+﻿import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { PageHeader } from '../../app/PageHeader';
 import { getMobileDatabase } from '../../offline/SyncContext';
@@ -88,86 +88,235 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
   };
   const submit = (event: FormEvent) => { event.preventDefault(); create.mutate(); };
 
-  return <main>
-    <PageHeader eyebrow="Maestros operativos" title="Clientes" description="Clientes permanentes, datos de contacto, crédito autorizado y ruta vigente." />
-    {canManage && <form className="form-grid panel" onSubmit={submit}>
-      <h2 className="wide">Nuevo cliente</h2>
-      <p className="muted wide">El código de cliente se asigna automáticamente al guardar (CLI-000001).</p>
-      <label>Nombre comercial<input required value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} /></label>
-      <label>Contacto<input value={form.contactName} onChange={event => setForm({ ...form, contactName: event.target.value })} /></label>
-      <label>Teléfono<input value={form.phone} onChange={event => setForm({ ...form, phone: event.target.value })} /></label>
-      <label>WhatsApp<input value={form.whatsapp} onChange={event => setForm({ ...form, whatsapp: event.target.value })} /></label>
-      <label className="wide">Dirección o referencia<textarea required value={form.addressReference} onChange={event => setForm({ ...form, addressReference: event.target.value })} /></label>
-      <label className="checkbox"><input type="checkbox" checked={form.creditAllowed} onChange={event => setForm({ ...form, creditAllowed: event.target.checked, creditLimit: event.target.checked ? form.creditLimit : 0 })} />Permitir crédito</label>
-      {form.creditAllowed && <label>Límite de crédito<input type="number" min="0" step="0.01" value={form.creditLimit} onChange={event => setForm({ ...form, creditLimit: Number(event.target.value) })} /></label>}
-      {create.error && <div className="alert error wide">{create.error.message}</div>}
-      <button className="primary" disabled={create.isPending}>{create.isPending ? 'Guardando…' : 'Guardar cliente'}</button>
-    </form>}
+  return (
+    <main>
+      <PageHeader
+        eyebrow="Maestros operativos"
+        title="Clientes"
+        description="Clientes permanentes, datos de contacto, crédito autorizado y ruta vigente."
+      />
 
-    {canCreateRouteCustomer && <section className="panel section-panel">
-      <div className="section-heading"><div><h2>Cliente encontrado en ruta</h2><span>Ocasional o provisional</span></div></div>
-      <p className="muted">El ocasional compra sin registro permanente. El provisional se guarda primero en este teléfono y queda pendiente de revisión.</p>
-      <div className="form-grid compact-form">
-        <label>Ruta<select required value={routeCustomer.routeId} onChange={event => setRouteCustomer({ ...routeCustomer, routeId: event.target.value })}>
-          <option value="">Seleccionar ruta</option>{routes.data?.map(route => <option value={route.id} key={route.id}>{route.code} · {route.name}</option>)}</select></label>
-        <label>Nombre<input required value={routeCustomer.name} onChange={event => setRouteCustomer({ ...routeCustomer, name: event.target.value })} /></label>
-        <label>Teléfono<input value={routeCustomer.phone} onChange={event => setRouteCustomer({ ...routeCustomer, phone: event.target.value })} /></label>
-        <label>WhatsApp<input value={routeCustomer.whatsapp} onChange={event => setRouteCustomer({ ...routeCustomer, whatsapp: event.target.value })} /></label>
-        <label className="wide">Dirección o referencia<textarea required value={routeCustomer.addressReference} onChange={event => setRouteCustomer({ ...routeCustomer, addressReference: event.target.value })} /></label>
-        <div className="row-actions wide">
-          <button type="button" className="primary" disabled={!routeCustomer.routeId || !routeCustomer.name.trim() || !routeCustomer.addressReference.trim()} onClick={() => void saveProvisional()}>Guardar provisional offline</button>
-          <button type="button" className="secondary" disabled={!routeCustomer.routeId || !routeCustomer.name.trim() || !routeCustomer.addressReference.trim() || createOccasional.isPending} onClick={() => createOccasional.mutate()}>Registrar ocasional</button>
-        </div>
-      </div>
-      {localMessage && <div className="alert">{localMessage}</div>}
-      {createOccasional.error && <div className="alert error">{createOccasional.error.message}</div>}
-      {localCustomers.length > 0 && <div className="data-list"><h3>Provisionales guardados en el teléfono</h3>{localCustomers.map(customer =>
-        <article className="data-row" key={customer.localCustomerId}><div><strong>{customer.name}</strong><span>{customer.addressReference}</span></div>
-          <span className={`status ${customer.syncStatus === 'SYNCED' ? 'active' : 'inactive'}`}>{customer.syncStatus === 'SYNCED' ? 'Enviado' : 'Pendiente'}</span></article>)}</div>}
-    </section>}
+      {/* ── Formulario nuevo cliente ── */}
+      {canManage && (
+        <form className="panel catalog-form" onSubmit={submit}>
+          <h2>Nuevo cliente</h2>
+          <p className="field-hint">El código de cliente se asigna automáticamente al guardar (CLI-000001).</p>
+          <div className="form-grid compact-grid customer-create-grid">
+            <label>
+              Nombre del cliente
+              <input required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+            </label>
+            <label>
+              Teléfono
+              <input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
+            </label>
+            <label className="wide">
+              Dirección o referencia
+              <textarea required value={form.addressReference} onChange={e => setForm({ ...form, addressReference: e.target.value })} />
+            </label>
 
-    {canReviewProvisional && <section className="panel section-panel">
-      <div className="section-heading"><h2>Revisión de clientes provisionales</h2><span>{reviews.data?.length ?? 0} pendientes</span></div>
-      {reviews.error && <div className="alert error">{reviews.error.message}</div>}
-      <div className="data-list">{reviews.data?.map(review => {
-        const values = reviewForms[review.customer.id] ?? { targetCustomerId: '', reason: '' };
-        const permanentCustomers = customers.data?.filter(item => item.customerType === 'PERMANENT' && item.registrationState === 'ACTIVE') ?? [];
-        return <article className="data-row customer-review" key={review.customer.id}>
-          <div><strong>{review.customer.name}</strong><span>{review.customer.phone || 'Sin teléfono'} · {review.customer.routeName ?? 'Sin ruta'}</span>
-            <small>{review.duplicateCandidates.length ? `Posibles duplicados: ${review.duplicateCandidates.map(item => `${item.code} ${item.name}`).join(', ')}` : 'Sin coincidencias automáticas'}</small></div>
-          <div className="inline-assignment">
-            <select aria-label={`Cliente definitivo para ${review.customer.name}`} value={values.targetCustomerId} onChange={event => setReviewForms({ ...reviewForms, [review.customer.id]: { ...values, targetCustomerId: event.target.value } })}>
-              <option value="">Cliente definitivo para fusionar</option>{permanentCustomers.map(item => <option value={item.id} key={item.id}>{item.code} · {item.name}</option>)}</select>
-            <input aria-label={`Motivo para ${review.customer.name}`} placeholder="Motivo para rechazo o fusión" value={values.reason} onChange={event => setReviewForms({ ...reviewForms, [review.customer.id]: { ...values, reason: event.target.value } })} />
-            <button className="primary" disabled={decideReview.isPending} onClick={() => decideReview.mutate({ customerId: review.customer.id, decision: 'APPROVED' })}>Aprobar</button>
-            <button className="secondary" disabled={!values.reason.trim() || decideReview.isPending} onClick={() => decideReview.mutate({ customerId: review.customer.id, decision: 'REJECTED' })}>Rechazar</button>
-            <button className="secondary" disabled={!values.targetCustomerId || !values.reason.trim() || decideReview.isPending} onClick={() => decideReview.mutate({ customerId: review.customer.id, decision: 'MERGED' })}>Fusionar</button>
+            <label className="checkbox wide">
+              <input
+                type="checkbox"
+                checked={form.creditAllowed}
+                onChange={e => setForm({ ...form, creditAllowed: e.target.checked, creditLimit: e.target.checked ? form.creditLimit : 0 })}
+              />
+              Permitir crédito
+            </label>
+
+            {form.creditAllowed && (
+              <label>
+                Límite de crédito
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.creditLimit}
+                  onChange={e => setForm({ ...form, creditLimit: Number(e.target.value) })}
+                />
+              </label>
+            )}
+
           </div>
-        </article>;
-      })}</div>
-      {decideReview.error && <div className="alert error">{decideReview.error.message}</div>}
-    </section>}
 
-    <section className="panel section-panel">
-      <div className="section-heading"><h2>Clientes registrados</h2><span>{customers.data?.length ?? 0} clientes</span></div>
-      {customers.isLoading && <p>Cargando clientes…</p>}
-      {customers.error && <div className="alert error">{customers.error.message}</div>}
-      <div className="data-list">{customers.data?.map(customer => {
-        const selection = assignments[customer.id] ?? { routeId: customer.routeId ?? '', validFrom: localDate() };
-        return <article className="data-row customer-row" key={customer.id}>
-          <div><strong>{customer.name}</strong><span>{customer.code} · {customer.contactName || 'Sin contacto'} · {customer.phone || 'Sin teléfono'}</span>
-            <small>{customer.routeName ? `${customer.routeName} · ${customer.sellerName ?? 'Sin vendedor'}` : 'Sin ruta asignada'} · Saldo Q{customer.currentBalance.toFixed(2)}</small></div>
-          <span className={`status ${customer.status === 'ACTIVE' ? 'active' : 'inactive'}`}>{customer.registrationState === 'PENDING_REVIEW' ? 'Pendiente de revisión' : customer.status === 'ACTIVE' ? 'Activo' : 'Inactivo'}</span>
-          {canManage && <div className="inline-assignment">
-            <select aria-label={`Ruta de ${customer.name}`} value={selection.routeId} onChange={event => setAssignments({ ...assignments, [customer.id]: { ...selection, routeId: event.target.value } })}>
-              <option value="">Seleccionar ruta</option>{routes.data?.map(route => <option value={route.id} key={route.id}>{route.code} · {route.name}</option>)}
-            </select>
-            <input aria-label={`Vigencia de ruta de ${customer.name}`} type="date" value={selection.validFrom} onChange={event => setAssignments({ ...assignments, [customer.id]: { ...selection, validFrom: event.target.value } })} />
-            <button className="secondary" disabled={!selection.routeId || assign.isPending} onClick={() => assign.mutate({ customerId: customer.id, ...selection })}>Asignar ruta</button>
-          </div>}
-        </article>;
-      })}</div>
-      {assign.error && <div className="alert error">{assign.error.message}</div>}
-    </section>
-  </main>;
+          {create.error && <div className="alert error">{create.error.message}</div>}
+
+          <div className="form-actions customer-form-actions">
+            <button className="primary" disabled={create.isPending}>
+              {create.isPending ? 'Guardando…' : 'Guardar cliente'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* ── Cliente en ruta (ocasional / provisional) ── */}
+      {canCreateRouteCustomer && (
+        <section className="panel section-panel">
+          <div className="section-heading">
+            <div>
+              <h2>Cliente encontrado en ruta</h2>
+              <span>Ocasional o provisional</span>
+            </div>
+          </div>
+          <p className="muted">El ocasional compra sin registro permanente. El provisional se guarda primero en este teléfono y queda pendiente de revisión.</p>
+          <div className="form-grid compact-form">
+            <label>
+              Ruta
+              <select required value={routeCustomer.routeId} onChange={e => setRouteCustomer({ ...routeCustomer, routeId: e.target.value })}>
+                <option value="">Seleccionar ruta</option>
+                {routes.data?.map(route => <option value={route.id} key={route.id}>{route.code} · {route.name}</option>)}
+              </select>
+            </label>
+            <label>
+              Nombre
+              <input required value={routeCustomer.name} onChange={e => setRouteCustomer({ ...routeCustomer, name: e.target.value })} />
+            </label>
+            <label>
+              Teléfono
+              <input value={routeCustomer.phone} onChange={e => setRouteCustomer({ ...routeCustomer, phone: e.target.value })} />
+            </label>
+            <label>
+              WhatsApp
+              <input value={routeCustomer.whatsapp} onChange={e => setRouteCustomer({ ...routeCustomer, whatsapp: e.target.value })} />
+            </label>
+            <label className="wide">
+              Dirección o referencia
+              <textarea required value={routeCustomer.addressReference} onChange={e => setRouteCustomer({ ...routeCustomer, addressReference: e.target.value })} />
+            </label>
+            <div className="row-actions wide">
+              <button
+                type="button"
+                className="primary"
+                disabled={!routeCustomer.routeId || !routeCustomer.name.trim() || !routeCustomer.addressReference.trim()}
+                onClick={() => void saveProvisional()}
+              >
+                Guardar provisional offline
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                disabled={!routeCustomer.routeId || !routeCustomer.name.trim() || !routeCustomer.addressReference.trim() || createOccasional.isPending}
+                onClick={() => createOccasional.mutate()}
+              >
+                Registrar ocasional
+              </button>
+            </div>
+          </div>
+          {localMessage && <div className="alert">{localMessage}</div>}
+          {createOccasional.error && <div className="alert error">{createOccasional.error.message}</div>}
+          {localCustomers.length > 0 && (
+            <div className="data-list">
+              <h3>Provisionales guardados en el teléfono</h3>
+              {localCustomers.map(customer => (
+                <article className="data-row" key={customer.localCustomerId}>
+                  <div>
+                    <strong>{customer.name}</strong>
+                    <span>{customer.addressReference}</span>
+                  </div>
+                  <span className={`status ${customer.syncStatus === 'SYNCED' ? 'active' : 'inactive'}`}>
+                    {customer.syncStatus === 'SYNCED' ? 'Enviado' : 'Pendiente'}
+                  </span>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ── Revisión de provisionales ── */}
+      {canReviewProvisional && (
+        <section className="panel section-panel">
+          <div className="section-heading">
+            <h2>Revisión de clientes provisionales</h2>
+            <span>{reviews.data?.length ?? 0} pendientes</span>
+          </div>
+          {reviews.error && <div className="alert error">{reviews.error.message}</div>}
+          <div className="data-list">
+            {reviews.data?.map(review => {
+              const values = reviewForms[review.customer.id] ?? { targetCustomerId: '', reason: '' };
+              const permanentCustomers = customers.data?.filter(item => item.customerType === 'PERMANENT' && item.registrationState === 'ACTIVE') ?? [];
+              return (
+                <article className="data-row customer-review" key={review.customer.id}>
+                  <div>
+                    <strong>{review.customer.name}</strong>
+                    <span>{review.customer.phone || 'Sin teléfono'} · {review.customer.routeName ?? 'Sin ruta'}</span>
+                    <small>{review.duplicateCandidates.length ? `Posibles duplicados: ${review.duplicateCandidates.map(item => `${item.code} ${item.name}`).join(', ')}` : 'Sin coincidencias automáticas'}</small>
+                  </div>
+                  <div className="inline-assignment">
+                    <select
+                      aria-label={`Cliente definitivo para ${review.customer.name}`}
+                      value={values.targetCustomerId}
+                      onChange={e => setReviewForms({ ...reviewForms, [review.customer.id]: { ...values, targetCustomerId: e.target.value } })}
+                    >
+                      <option value="">Cliente definitivo para fusionar</option>
+                      {permanentCustomers.map(item => <option value={item.id} key={item.id}>{item.code} · {item.name}</option>)}
+                    </select>
+                    <input
+                      aria-label={`Motivo para ${review.customer.name}`}
+                      placeholder="Motivo para rechazo o fusión"
+                      value={values.reason}
+                      onChange={e => setReviewForms({ ...reviewForms, [review.customer.id]: { ...values, reason: e.target.value } })}
+                    />
+                    <button className="primary" disabled={decideReview.isPending} onClick={() => decideReview.mutate({ customerId: review.customer.id, decision: 'APPROVED' })}>Aprobar</button>
+                    <button className="secondary" disabled={!values.reason.trim() || decideReview.isPending} onClick={() => decideReview.mutate({ customerId: review.customer.id, decision: 'REJECTED' })}>Rechazar</button>
+                    <button className="secondary" disabled={!values.targetCustomerId || !values.reason.trim() || decideReview.isPending} onClick={() => decideReview.mutate({ customerId: review.customer.id, decision: 'MERGED' })}>Fusionar</button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+          {decideReview.error && <div className="alert error">{decideReview.error.message}</div>}
+        </section>
+      )}
+
+      {/* ── Lista de clientes ── */}
+      <section className="panel section-panel">
+        <div className="section-heading">
+          <h2>Clientes registrados</h2>
+          <span>{customers.data?.length ?? 0} clientes</span>
+        </div>
+        {customers.isLoading && <p>Cargando clientes…</p>}
+        {customers.error && <div className="alert error">{customers.error.message}</div>}
+        <div className="data-list">
+          {customers.data?.map(customer => {
+            const selection = assignments[customer.id] ?? { routeId: customer.routeId ?? '', validFrom: localDate() };
+            return (
+              <article className="data-row customer-row" key={customer.id}>
+                <div>
+                  <strong>{customer.name}</strong>
+                  <span>{customer.code} · {customer.contactName || 'Sin contacto'} · {customer.phone || 'Sin teléfono'}</span>
+                  <small>{customer.routeName ? `${customer.routeName} · ${customer.sellerName ?? 'Sin vendedor'}` : 'Sin ruta asignada'} · Saldo Q{customer.currentBalance.toFixed(2)}</small>
+                </div>
+                <span className={`status ${customer.status === 'ACTIVE' ? 'active' : 'inactive'}`}>
+                  {customer.registrationState === 'PENDING_REVIEW' ? 'Pendiente de revisión' : customer.status === 'ACTIVE' ? 'Activo' : 'Inactivo'}
+                </span>
+                {canManage && (
+                  <div className="inline-assignment">
+                    <select
+                      aria-label={`Ruta de ${customer.name}`}
+                      value={selection.routeId}
+                      onChange={e => setAssignments({ ...assignments, [customer.id]: { ...selection, routeId: e.target.value } })}
+                    >
+                      <option value="">Seleccionar ruta</option>
+                      {routes.data?.map(route => <option value={route.id} key={route.id}>{route.code} · {route.name}</option>)}
+                    </select>
+                    <input
+                      aria-label={`Vigencia de ruta de ${customer.name}`}
+                      type="date"
+                      value={selection.validFrom}
+                      onChange={e => setAssignments({ ...assignments, [customer.id]: { ...selection, validFrom: e.target.value } })}
+                    />
+                    <button className="secondary" disabled={!selection.routeId || assign.isPending} onClick={() => assign.mutate({ customerId: customer.id, ...selection })}>
+                      Asignar ruta
+                    </button>
+                  </div>
+                )}
+              </article>
+            );
+          })}
+        </div>
+        {assign.error && <div className="alert error">{assign.error.message}</div>}
+      </section>
+    </main>
+  );
 }

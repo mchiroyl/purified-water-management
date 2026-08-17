@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { PageHeader } from '../../app/PageHeader';
 import { apiRequest } from '../../services/apiClient';
 
 const schema = z.object({
@@ -52,9 +53,7 @@ export function CompanyConfigurationPage() {
 
   return (
     <main>
-      <p className="eyebrow">Configuración</p>
-      <h1>Datos de la empresa</h1>
-      <p className="muted">Esta información se utilizará en la aplicación y en todos los comprobantes.</p>
+      <PageHeader eyebrow="Configuración" title="Datos de la empresa" description="Esta información se utilizará en la aplicación y en todos los comprobantes." />
       <form className="form-grid panel" onSubmit={handleSubmit((data) => mutation.mutate(data))} noValidate>
         <div className="logo-editor wide">
           <div className="company-logo-preview">{query.data?.logoUrl ? <img src={`${query.data.logoUrl}?v=${query.data.version}`} alt="Logotipo actual" /> : <span>Sin logotipo</span>}</div>

@@ -95,7 +95,7 @@ Verificación: cálculo backend, historia y manipulación de precio rechazada.
 
 ### FASE 10 — Clientes/Rutas
 
-Entregables: clientes, rutas, vehículos, asignaciones históricas y detección de duplicados.  
+Entregables: clientes, rutas, vehículos, asignaciones históricas, detección de duplicados y códigos operativos asignados por servidor (`CLI-`, `VND-`, `RUT-`, `VEH-`).
 Verificación: aislamiento por ruta y conservación de historial.
 
 ### FASE 11 — Inventario
@@ -105,7 +105,7 @@ Verificación: concurrencia y prevención de stock negativo.
 
 ### FASE 12 — Carga de ruta
 
-Entregables: carga, ítems, doble confirmación e inicio de recorrido.  
+Entregables: cargas iniciales, recargas durante el recorrido, ítems, doble confirmación e inicio de recorrido.
 Verificación: actores/dispositivos registrados y corrección compensatoria.
 
 ### FASE 13 — Ventas online
@@ -250,11 +250,10 @@ Verificación: resultados por vendedor, ruta, fecha, producto, pago y diferencia
 
 Estado: **completada**. El módulo de reportes ofrece ventas por ítem, mermas y liquidaciones con
 rango inclusivo según la zona horaria empresarial, paginación, filtros textuales parametrizados y
-filtros específicos de forma de pago y diferencias. Los tres reportes se exportan como CSV UTF-8
-con límite explícito y protección contra inyección de fórmulas de hoja de cálculo. La interfaz
-adaptable permite filtrar, paginar y descargar. El servidor aplica el alcance del vendedor antes de
-consultar y exportar. Las consultas reales de los tres reportes y la descarga CSV respondieron HTTP
-200 aun usando una cadena de prueba SQLi como filtro, sin alterar la consulta.
+filtros específicos de forma de pago y diferencias. Los tres reportes se exportan como Excel `.xlsx`
+y PDF imprimible, con identidad empresarial, filtros aplicados y límite explícito. La interfaz
+adaptable permite filtrar, paginar, descargar e imprimir. El servidor aplica el alcance del vendedor
+antes de consultar y exportar y no expone CSV como formato operativo.
 
 ### FASE 30 — Auditoría
 
@@ -353,10 +352,10 @@ Verificación: tests backend/frontend/integración/E2E, Docker build, Compose, h
 | 30 | Completada | Auditoría inmutable, filtrable, correlacionada y sanitizada con cobertura de eventos críticos. |
 | 31 | Completada | Escaneo de seguridad y remediación: secretos obligatorios/rotados, puertos internos no publicados, rate limiting, límites JSON, cambio obligatorio de contraseña, revocación JWT inmediata, refresh serializado, aislamiento IndexedDB, TLS productivo y auditoría ampliada; pruebas y contenedores saludables. |
 | 32 | Completada | Playwright ejecuta en Docker y base aislada los 28 pasos: configuración, catálogo, precios, vendedor, ruta, carga, venta online/offline, persistencia PWA, sincronización idempotente, revisiones, devolución, liquidación sin diferencias, PDF interno, Web Share, bloqueo FEL y controles HTTP. |
-| 33 | Completada | Diagramas de contexto, arquitectura, componentes, casos de uso, operación, seguridad y sincronización actualizados; ERD PostgreSQL reconciliado 1:1 con las 54 tablas Flyway V1–V18 y ERD IndexedDB con sus 26 stores v2. |
+| 33 | Completada | Diagramas de contexto, arquitectura, componentes, casos de uso, operación, seguridad y sincronización actualizados; ERD PostgreSQL reconciliado con Flyway V1–V19 y ERD IndexedDB con sus 26 stores v2. |
 | 34 | Completada | Manual de usuario en Markdown y PDF con 11 capturas reales generadas por la aceptación E2E; PDF de 17 páginas renderizado y revisado visualmente. |
 | 35 | Completada | Manual técnico creado con stack versionado, arquitectura, seguridad, esquema, invariantes, IndexedDB, sincronización, archivos/FEL, auditoría, pruebas y despliegue. |
 | 36 | Completada | Guía de instalación local/productiva y script PowerShell seguro para crear `.env`, secretos aleatorios y contraseña temporal sin sobrescritura ni exposición. |
 | 37 | Completada | Scripts y guía de respaldo/restauración integral PostgreSQL + archivos, manifiesto con SHA-256, respaldo previo, confirmación destructiva y healthchecks. |
 | 38 | Completada | README, API REST, guía de desarrollo y SECURITY.md agregados; documentación de contratos, flujo de contribución, seguridad y operación enlazada sin duplicar funciones. |
-| 39 | Completada | Verificación integral final, informe de evidencias, salud Compose y entrega documentadas en INFORME_VERIFICACION_FINAL.md. |
+| 39 | Completada | Verificación integral final, informe de evidencias, salud Compose y entrega documentadas en INFORME_VERIFICACION_FINAL.md; la reconstrucción de Docker debe repetirse cuando el daemon local esté disponible para validar V19 en el despliegue actual. |

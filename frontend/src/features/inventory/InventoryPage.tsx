@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { PageHeader } from '../../app/PageHeader';
 import { useState, type FormEvent } from 'react';
 import { apiRequest } from '../../services/apiClient';
 
@@ -37,8 +38,7 @@ export function InventoryPage({ canManage }: { canManage: boolean }) {
   const submitAdjustment = (event: FormEvent) => { event.preventDefault(); adjust.mutate(); };
 
   return <main>
-    <p className="eyebrow">Control físico</p><h1>Inventario</h1>
-    <p className="muted">Cada cambio queda registrado en unidades base y ninguna operación puede dejar stock negativo.</p>
+    <PageHeader eyebrow="Control físico" title="Inventario" description="Cada cambio queda registrado en unidades base y ninguna operación puede dejar stock negativo." />
     {canManage && <div className="dual-panels">
       <form className="panel form-grid compact-form" onSubmit={submitLocation}><h2 className="wide">Nueva ubicación</h2>
         <label>Código<input required value={locationForm.code} onChange={event => setLocationForm({ ...locationForm, code: event.target.value })} /></label>

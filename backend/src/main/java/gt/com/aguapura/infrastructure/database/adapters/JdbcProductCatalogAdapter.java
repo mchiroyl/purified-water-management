@@ -1,6 +1,9 @@
 package gt.com.aguapura.infrastructure.database.adapters;
 
 import gt.com.aguapura.application.ports.ProductCatalogPersistencePort;
+import gt.com.aguapura.domain.exceptions.BusinessException;
+import gt.com.aguapura.domain.exceptions.ErrorCategory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -28,6 +31,85 @@ public class JdbcProductCatalogAdapter implements ProductCatalogPersistencePort 
     public boolean productCodeExists(String code) {
         return Boolean.TRUE.equals(jdbc.sql("SELECT EXISTS(SELECT 1 FROM product WHERE code = :code)")
                 .param("code", code).query(Boolean.class).single());
+    }
+
+    @Override
+    public String nextProductCode() {
+        return jdbc.sql("SELECT 'PRD-' || LPAD(nextval('product_code_seq')::text, 4, '0')")
+                .query(String.class).single();
+    }
+
+    @Override
+    public String nextPresentationCode() {
+        return jdbc.sql("SELECT 'PRE-' || LPAD(nextval('presentation_code_seq')::text, 4, '0')")
+                .query(String.class).single();
+    }
+
+    @Override
+    public CatalogPresentationTemplate createPresentationTemplate(NewPresentationTemplate presentation) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO presentation_catalog(id, code, name, presentation_type, content_quantity, content_unit, unit_id, conversion_factor)
+                VALUES (:id, :code, :name, :presentationType, :contentQuantity, :contentUnit, :unitId, :factor)
+                """).params(Map.of("id", id, "code", presentation.code(), "name", presentation.name(),
+                "presentationType", presentation.presentationType(), "contentQuantity", presentation.contentQuantity(),
+                "contentUnit", presentation.contentUnit(), "unitId", unitId(presentation.unitCode()),
+                "factor", presentation.conversionFactor())).update();
+        return findPresentationTemplatesByIds(List.of(id)).getFirst();
+    }
+
+    @Override
+    public CatalogPresentationTemplate updatePresentationTemplate(UUID id, NewPresentationTemplate presentation) {
+        int changed = jdbc.sql("""
+                UPDATE presentation_catalog SET name=:name,presentation_type=:presentationType,content_quantity=:contentQuantity,
+                content_unit=:contentUnit,unit_id=:unitId,conversion_factor=:factor,updated_at=now()
+                WHERE id=:id
+                """).params(Map.of("id", id, "name", presentation.name(), "presentationType", presentation.presentationType(),
+                "contentQuantity", presentation.contentQuantity(), "contentUnit", presentation.contentUnit(),
+                "unitId", unitId(presentation.unitCode()), "factor", presentation.conversionFactor())).update();
+        if (changed != 1) throw new BusinessException("PRESENTATION_NOT_FOUND", "La presentación no existe.", ErrorCategory.NOT_FOUND);
+        return findPresentationTemplatesByIds(List.of(id)).getFirst();
+    }
+
+    @Override
+    public CatalogPresentationTemplate setPresentationTemplateActive(UUID id, boolean active) {
+        int changed = jdbc.sql("UPDATE presentation_catalog SET active=:active,updated_at=now() WHERE id=:id")
+                .param("id", id).param("active", active).update();
+        if (changed != 1) throw new BusinessException("PRESENTATION_NOT_FOUND", "La presentación no existe.", ErrorCategory.NOT_FOUND);
+        return jdbc.sql("""
+                SELECT pc.id,pc.code,pc.name,pc.presentation_type,pc.content_quantity,pc.content_unit,u.code unit_code,pc.conversion_factor,pc.active
+                FROM presentation_catalog pc JOIN unit_of_measure u ON u.id=pc.unit_id WHERE pc.id=:id
+                """).param("id", id).query((rs, row) -> templateRow(rs)).single();
+    }
+
+    @Override
+    public void deletePresentationTemplate(UUID id) {
+        if (jdbc.sql("DELETE FROM presentation_catalog WHERE id=:id").param("id", id).update() != 1) {
+            throw new BusinessException("PRESENTATION_NOT_FOUND", "La presentación no existe.", ErrorCategory.NOT_FOUND);
+        }
+    }
+
+    @Override
+    public List<CatalogPresentationTemplate> findPresentationTemplates(String query) {
+        String filter = query == null ? "" : query.trim().toUpperCase();
+        return jdbc.sql("""
+                SELECT pc.id,pc.code,pc.name,pc.presentation_type,pc.content_quantity,pc.content_unit,u.code unit_code,pc.conversion_factor,pc.active
+                FROM presentation_catalog pc JOIN unit_of_measure u ON u.id=pc.unit_id
+                WHERE pc.active AND (:filter='' OR upper(pc.code) LIKE '%' || :filter || '%'
+                   OR upper(pc.name) LIKE '%' || :filter || '%' OR upper(pc.presentation_type) LIKE '%' || :filter || '%'
+                   OR upper(pc.content_unit) LIKE '%' || :filter || '%' OR upper(u.code) LIKE '%' || :filter || '%')
+                ORDER BY pc.name,pc.code
+                """).param("filter", filter).query((rs, row) -> templateRow(rs)).list();
+    }
+
+    @Override
+    public List<CatalogPresentationTemplate> findPresentationTemplatesByIds(List<UUID> ids) {
+        if (ids.isEmpty()) return List.of();
+        return jdbc.sql("""
+                SELECT pc.id,pc.code,pc.name,pc.presentation_type,pc.content_quantity,pc.content_unit,u.code unit_code,pc.conversion_factor,pc.active
+                FROM presentation_catalog pc JOIN unit_of_measure u ON u.id=pc.unit_id
+                WHERE pc.active AND pc.id IN (:ids)
+                """).param("ids", ids).query((rs, row) -> templateRow(rs)).list();
     }
 
     @Override
@@ -101,6 +183,32 @@ public class JdbcProductCatalogAdapter implements ProductCatalogPersistencePort 
     }
 
     @Override
+    public CatalogProduct updateProduct(UUID id, String name, String description, String baseUnitCode, boolean controlsInventory) {
+        int changed = jdbc.sql("""
+                UPDATE product SET name=:name,description=:description,base_unit_id=:unitId,
+                controls_inventory=:controlsInventory,updated_at=now(),version=version+1 WHERE id=:id
+                """).params(Map.of("id", id, "name", name, "description", description,
+                "unitId", unitId(baseUnitCode), "controlsInventory", controlsInventory)).update();
+        if (changed != 1) throw new BusinessException("PRODUCT_NOT_FOUND", "El producto no existe.", ErrorCategory.NOT_FOUND);
+        return findById(id).orElseThrow();
+    }
+
+    @Override
+    public void deleteProduct(UUID id) {
+        try {
+            jdbc.sql("DELETE FROM presentation_conversion WHERE presentation_id IN (SELECT id FROM product_presentation WHERE product_id=:id)")
+                    .param("id", id).update();
+            jdbc.sql("DELETE FROM product_presentation WHERE product_id=:id").param("id", id).update();
+            if (jdbc.sql("DELETE FROM product WHERE id=:id").param("id", id).update() != 1) {
+                throw new BusinessException("PRODUCT_NOT_FOUND", "El producto no existe.", ErrorCategory.NOT_FOUND);
+            }
+        } catch (DataIntegrityViolationException exception) {
+            throw new BusinessException("PRODUCT_DELETE_BLOCKED", "El producto tiene movimientos registrados; desactívelo en lugar de eliminarlo.",
+                    ErrorCategory.VALIDATION);
+        }
+    }
+
+    @Override
     public CatalogProduct updateConversion(UUID productId, UUID presentationId, java.math.BigDecimal factor) {
         int closed = jdbc.sql("""
                 UPDATE presentation_conversion pc
@@ -165,6 +273,13 @@ public class JdbcProductCatalogAdapter implements ProductCatalogPersistencePort 
     private UUID unitId(String code) {
         return jdbc.sql("SELECT id FROM unit_of_measure WHERE code = :code AND active")
                 .param("code", code).query(UUID.class).single();
+    }
+
+    private CatalogPresentationTemplate templateRow(java.sql.ResultSet rs) throws java.sql.SQLException {
+        return new CatalogPresentationTemplate(rs.getObject("id", UUID.class), rs.getString("code"),
+                rs.getString("name"), rs.getString("presentation_type"), rs.getBigDecimal("content_quantity"),
+                rs.getString("content_unit"), rs.getString("unit_code"), rs.getBigDecimal("conversion_factor"),
+                rs.getBoolean("active"));
     }
 
     private record ProductRow(UUID id, String code, String name, String description, String baseUnitCode,

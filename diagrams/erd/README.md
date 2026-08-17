@@ -49,7 +49,7 @@ IndexedDB no es una base relacional y no aplica claves foráneas. El diagrama us
 | `priceVersions` | `id` | `priceListId`, `status`, `validFrom`, `validTo` | servidor |
 | `priceTiers` | `id` | `priceVersionId`, `presentationId` | servidor |
 | `specialPrices` | `id` | `customerId`, `presentationId`, `status` | servidor |
-| `routeLoads` | `id` | `routeRunId`, `status` | servidor |
+| `routeLoads` | `id` | `routeRunId`, `loadType`, `status` | servidor; `INITIAL` o `REPLENISHMENT` |
 | `routeLoadItems` | `id` | `routeLoadId`, `presentationId` | servidor |
 | `routeInventory` | `inventoryKey` | `[routeRunId, productId]`, `productId` | servidor/local derivado |
 | `localSales` | `localSaleId` | `clientOperationId`, `routeRunId`, `customerId`, `provisionalCustomerId`, `syncStatus` | local |

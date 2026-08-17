@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { PageHeader } from '../../app/PageHeader';
 import { useEffect, useState, type FormEvent } from 'react';
 import { apiRequest } from '../../services/apiClient';
 
@@ -42,8 +43,7 @@ export function PricingPage({ canManage, canApprove, canRequestDiscount }: { can
   const submit = (event: FormEvent, action: () => void) => { event.preventDefault(); action(); };
   const updateTier = (index: number, patch: Partial<DraftTier>) => setTiers(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item));
 
-  return <main><p className="eyebrow">Reglas comerciales</p><h1>Precios y mayoreo</h1>
-    <p className="muted">Los precios se versionan y el servidor vuelve a calcular cada operación.</p>
+  return <main><PageHeader eyebrow="Reglas comerciales" title="Precios y mayoreo" description="Los precios se versionan y el servidor vuelve a calcular cada operación." />
     {canManage && <>
       <form className="panel inline-form" onSubmit={event => submit(event, () => createList.mutate())}><h2>Nueva lista</h2>
         <label>Código<input required value={listForm.code} onChange={event => setListForm({ ...listForm, code: event.target.value })} /></label>

@@ -5,6 +5,8 @@ import { PasswordChangePage } from '../features/auth/PasswordChangePage';
 import { CompanyConfigurationPage } from '../features/company/CompanyConfigurationPage';
 import { FelConfigurationPage } from '../features/company/FelConfigurationPage';
 import { ProductCatalogPage } from '../features/catalog/ProductCatalogPage';
+import { VehiclesPage } from '../features/routes/VehiclesPage';
+import { PresentationCatalogPage } from '../features/catalog/PresentationCatalogPage';
 import { AdministrationPage } from '../features/administration/AdministrationPage';
 import { CustomersPage } from '../features/routes/CustomersPage';
 import { RoutesPage } from '../features/routes/RoutesPage';
@@ -54,11 +56,17 @@ export function App() {
         <Route path="company" element={isAdmin ? <CompanyConfigurationPage /> : <Navigate to="/" replace />} />
         <Route path="fel-configuration" element={isAdmin ? <FelConfigurationPage /> : <Navigate to="/" replace />} />
         <Route path="products" element={<ProductCatalogPage />} />
+        <Route path="products/list" element={<ProductCatalogPage view="list" />} />
+        <Route path="presentations" element={<PresentationCatalogPage />} />
+        <Route path="presentations/list" element={<PresentationCatalogPage view="list" />} />
         <Route path="administration" element={isAdmin ? <AdministrationPage /> : <Navigate to="/" replace />} />
         <Route path="customers" element={canSeeCustomers ? <CustomersPage canManage={isAdmin}
           canCreateRouteCustomer={isAdmin || isSeller} canReviewProvisional={canReviewProvisional}
           deviceId={user.deviceId} /> : <Navigate to="/" replace />} />
         <Route path="routes" element={canSeeRoutes ? <RoutesPage canManage={isAdmin} /> : <Navigate to="/" replace />} />
+        <Route path="routes/list" element={canSeeRoutes ? <RoutesPage canManage={isAdmin} view="list" /> : <Navigate to="/" replace />} />
+        <Route path="vehicles" element={canSeeRoutes ? <VehiclesPage /> : <Navigate to="/" replace />} />
+        <Route path="vehicles/list" element={canSeeRoutes ? <VehiclesPage view="list" /> : <Navigate to="/" replace />} />
         <Route path="pricing" element={canSeePricing ? <PricingPage canManage={isAdmin} canApprove={isAdmin || user.roles.includes('SUPERVISOR')} canRequestDiscount={user.roles.includes('VENDEDOR')} /> : <Navigate to="/" replace />} />
         <Route path="inventory" element={canSeeInventory ? <InventoryPage canManage={canManageInventory} /> : <Navigate to="/" replace />} />
         <Route path="loads" element={canSeeLoads ? <RouteLoadsPage canPrepare={isAdmin || isWarehouse} canConfirmWarehouse={isAdmin || isWarehouse} canReceive={isAdmin || isSeller} canStart={isAdmin || isSeller} canCorrect={isAdmin || isWarehouse} /> : <Navigate to="/" replace />} />

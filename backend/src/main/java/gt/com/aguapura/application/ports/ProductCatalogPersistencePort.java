@@ -11,6 +11,22 @@ public interface ProductCatalogPersistencePort {
 
     boolean productCodeExists(String code);
 
+    String nextProductCode();
+
+    String nextPresentationCode();
+
+    CatalogPresentationTemplate createPresentationTemplate(NewPresentationTemplate presentation);
+
+    CatalogPresentationTemplate updatePresentationTemplate(UUID id, NewPresentationTemplate presentation);
+
+    CatalogPresentationTemplate setPresentationTemplateActive(UUID id, boolean active);
+
+    void deletePresentationTemplate(UUID id);
+
+    List<CatalogPresentationTemplate> findPresentationTemplates(String query);
+
+    List<CatalogPresentationTemplate> findPresentationTemplatesByIds(List<UUID> ids);
+
     CatalogProduct create(NewProduct product);
 
     List<CatalogProduct> findAll();
@@ -18,6 +34,10 @@ public interface ProductCatalogPersistencePort {
     Optional<CatalogProduct> findById(UUID id);
 
     CatalogProduct setActive(UUID id, boolean active);
+
+    CatalogProduct updateProduct(UUID id, String name, String description, String baseUnitCode, boolean controlsInventory);
+
+    void deleteProduct(UUID id);
 
     CatalogProduct updateConversion(UUID productId, UUID presentationId, BigDecimal factor);
 
@@ -28,6 +48,15 @@ public interface ProductCatalogPersistencePort {
     }
 
     record NewPresentation(String code, String name, String unitCode, BigDecimal conversionFactor) {
+    }
+
+    record NewPresentationTemplate(String code, String name, String presentationType, BigDecimal contentQuantity,
+                                   String contentUnit, String unitCode, BigDecimal conversionFactor) {
+    }
+
+    record CatalogPresentationTemplate(UUID id, String code, String name, String presentationType,
+                                       BigDecimal contentQuantity, String contentUnit, String unitCode,
+                                       BigDecimal conversionFactor, boolean active) {
     }
 
     record CatalogProduct(UUID id, String code, String name, String description, String baseUnitCode,

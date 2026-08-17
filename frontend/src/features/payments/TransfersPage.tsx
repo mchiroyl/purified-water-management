@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { PageHeader } from '../../app/PageHeader';
 import { useState } from 'react';
 import { apiRequest } from '../../services/apiClient';
 
@@ -17,8 +18,7 @@ export function TransfersPage() {
   });
 
   return <main>
-    <p className="eyebrow">Segregación de funciones</p><h1>Transferencias</h1>
-    <p className="muted">La persona que registró la transferencia no puede verificarla. Toda decisión queda identificada y fechada por el servidor.</p>
+    <PageHeader eyebrow="Segregación de funciones" title="Transferencias" description="La persona que registró la transferencia no puede verificarla. Toda decisión queda identificada y fechada por el servidor." />
     {transfers.error && <div className="alert error">{transfers.error.message}</div>}
     <section className="transfer-grid">{transfers.data?.map(item => <article className="panel transfer-card" key={item.id}>
       <div className="section-heading"><div><strong>{item.reference}</strong><span>{item.documentNumber} · {item.customerCode} · {item.customerName}</span></div><span className={`status ${item.status === 'VERIFIED' ? 'active' : item.status === 'REJECTED' ? 'rejected' : ''}`}>{statusLabel[item.status] ?? item.status}</span></div>

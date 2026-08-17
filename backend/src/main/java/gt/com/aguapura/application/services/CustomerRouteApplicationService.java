@@ -63,6 +63,15 @@ public class CustomerRouteApplicationService {
                 CustomerIdentityNormalizer.safe(request.description()))));
     }
 
+    @Transactional
+    public RouteResponse updateRoute(UUID id, UpdateRouteRequest request) {
+        return route(persistence.updateRouteIfUnassigned(id, new CustomerRoutePort.NewRoute("", request.name().trim(),
+                CustomerIdentityNormalizer.safe(request.description()))));
+    }
+
+    @Transactional
+    public RouteResponse setRouteActive(UUID id, boolean active) { return route(persistence.setRouteActiveIfUnassigned(id, active)); }
+
     @Transactional(readOnly = true)
     public List<RouteResponse> findRoutes(UUID userId, boolean restrictedToSeller) {
         Optional<UUID> sellerId = restrictedToSeller ? Optional.of(resolveSeller(userId)) : Optional.empty();
@@ -82,6 +91,16 @@ public class CustomerRouteApplicationService {
                 CustomerIdentityNormalizer.safe(request.description())));
         return vehicle(item);
     }
+
+    @Transactional
+    public VehicleResponse updateVehicle(UUID id, UpdateVehicleRequest request) {
+        return vehicle(persistence.updateVehicleIfUnassigned(id, new CustomerRoutePort.NewVehicle("",
+                CustomerIdentityNormalizer.safe(request.licensePlate()).toUpperCase(Locale.ROOT),
+                CustomerIdentityNormalizer.safe(request.description()))));
+    }
+
+    @Transactional
+    public VehicleResponse setVehicleActive(UUID id, boolean active) { return vehicle(persistence.setVehicleActiveIfUnassigned(id, active)); }
 
     @Transactional(readOnly = true)
     public List<VehicleResponse> findVehicles() { return persistence.findVehicles().stream().map(this::vehicle).toList(); }

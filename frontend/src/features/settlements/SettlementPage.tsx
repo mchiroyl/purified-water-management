@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { PageHeader } from '../../app/PageHeader';
 import { useSync } from '../../offline/SyncContext';
 import { apiRequest } from '../../services/apiClient';
 
@@ -49,9 +50,7 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
   const activeLoads = loads.data?.filter(item => item.status === 'STARTED') ?? [];
 
   return <main>
-    <p className="eyebrow">Conciliación independiente</p>
-    <h1>Liquidaciones</h1>
-    <p className="muted">El servidor calcula todas las fuentes oficiales. La diferencia física nunca compensa un faltante de efectivo.</p>
+    <PageHeader eyebrow="Conciliación independiente" title="Liquidaciones" description="El servidor calcula todas las fuentes oficiales. La diferencia física nunca compensa un faltante de efectivo." />
 
     {pendingLocalOperations > 0 && <div className="alert error">Existen operaciones pendientes de sincronización ({pendingLocalOperations}). La liquidación no puede cerrarse definitivamente. <button className="secondary" onClick={() => void syncNow()}>Sincronizar ahora</button></div>}
 

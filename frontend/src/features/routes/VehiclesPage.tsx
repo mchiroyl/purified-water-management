@@ -1,0 +1,20 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { PageHeader } from '../../app/PageHeader';
+import { apiRequest } from '../../services/apiClient';
+import type { Route, Vehicle } from './types';
+
+export function VehiclesPage({ view = 'create' }: { view?: 'create' | 'list' }) {
+  const navigate = useNavigate(); const client = useQueryClient(); const vehicles = useQuery({ queryKey: ['routes', 'vehicles'], queryFn: () => apiRequest<Vehicle[]>('/routes/vehicles') }); const routes = useQuery({ queryKey: ['routes'], queryFn: () => apiRequest<Route[]>('/routes') });
+  const [form, setForm] = useState({ licensePlate: '', description: '' }); const [editing, setEditing] = useState<Vehicle | null>(null); const refresh = () => client.invalidateQueries({ queryKey: ['routes', 'vehicles'] });
+  const create = useMutation({ mutationFn: () => apiRequest<Vehicle>('/routes/vehicles', { method: 'POST', body: JSON.stringify(form) }), onSuccess: () => { setForm({ licensePlate: '', description: '' }); void refresh(); } });
+  const update = useMutation({ mutationFn: () => apiRequest<Vehicle>(`/routes/vehicles/${editing?.id}`, { method: 'PUT', body: JSON.stringify(editing) }), onSuccess: () => { setEditing(null); void refresh(); } });
+  const status = useMutation({ mutationFn: (item: Vehicle) => apiRequest<Vehicle>(`/routes/vehicles/${item.id}/status`, { method: 'PATCH', body: JSON.stringify({ active: item.status !== 'ACTIVE' }) }), onSuccess: refresh });
+  const assigned = (item: Vehicle) => Boolean(routes.data?.some(route => route.vehicleId === item.id));
+  return <main><PageHeader eyebrow="Operación de reparto" title="Vehículos" description="Registre vehículos disponibles para las rutas." actions={<button type="button" className="secondary" onClick={() => navigate(view === 'create' ? '/vehicles/list' : '/vehicles')}>{view === 'create' ? 'Ver vehículos registrados' : 'Nuevo vehículo'}</button>} />
+    {view === 'create' && <form className="panel catalog-form" onSubmit={(event: FormEvent) => { event.preventDefault(); create.mutate(); }}><h2>Nuevo vehículo</h2><p className="muted">Código automático. La placa es manual y única.</p><label>Placa<input required value={form.licensePlate} onChange={event => setForm({ ...form, licensePlate: event.target.value.toUpperCase() })} /></label><label>Descripción<textarea value={form.description} onChange={event => setForm({ ...form, description: event.target.value })} /></label><button className="primary">Crear vehículo</button>{create.error && <div className="alert error">{create.error.message}</div>}</form>}
+    {view === 'list' && <section className="catalog-list"><div className="table-wrap"><table><thead><tr><th>Código</th><th>Placa</th><th>Descripción</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>{vehicles.data?.map(item => <tr key={item.id}><td>{item.code}</td><td>{item.licensePlate}</td><td>{item.description}</td><td>{item.status}</td><td>{assigned(item) ? 'Asignado' : <><button className="secondary" onClick={() => setEditing(item)}>Modificar</button><button className="secondary" onClick={() => status.mutate(item)}>{item.status === 'ACTIVE' ? 'Desactivar' : 'Activar'}</button></>}</td></tr>)}</tbody></table></div></section>}
+    {editing && <div className="modal-backdrop"><form className="modal-panel" onSubmit={(event: FormEvent) => { event.preventDefault(); update.mutate(); }}><h2>Modificar vehículo</h2><label>Placa<input required value={editing.licensePlate ?? ''} onChange={event => setEditing({ ...editing, licensePlate: event.target.value.toUpperCase() })} /></label><label>Descripción<textarea value={editing.description} onChange={event => setEditing({ ...editing, description: event.target.value })} /></label><button type="button" className="secondary" onClick={() => setEditing(null)}>Cancelar</button><button className="primary">Guardar cambios</button></form></div>}
+  </main>;
+}

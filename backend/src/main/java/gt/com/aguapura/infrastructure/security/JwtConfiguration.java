@@ -5,6 +5,7 @@ import gt.com.aguapura.infrastructure.configuration.SecurityProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.DelegatingPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -26,7 +27,8 @@ public class JwtConfiguration {
     @Bean
     PasswordEncoder passwordEncoder() {
         var argon2 = Argon2PasswordEncoder.defaultsForSpringSecurity_v5_8();
-        return new DelegatingPasswordEncoder("argon2", Map.of("argon2", argon2));
+        var bcrypt = new BCryptPasswordEncoder();
+        return new DelegatingPasswordEncoder("argon2", Map.of("argon2", argon2, "bcrypt", bcrypt));
     }
 
     @Bean

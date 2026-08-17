@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState, type FormEvent } from 'react';
+import { PageHeader } from '../../app/PageHeader';
 import { apiRequest } from '../../services/apiClient';
 
 type AuditEvent = { id: string; username: string; deviceName: string; action: string; entityType: string;
@@ -23,8 +24,7 @@ export function AuditPage() {
   const events = useQuery({ queryKey: ['audit', query], queryFn: () => apiRequest<Page>(`/audit?${query}`) });
   const submit = (event: FormEvent) => { event.preventDefault(); setPage(0); setFilters({ ...draft }); };
   return <main>
-    <p className="eyebrow">Trazabilidad inmutable</p><h1>Auditoría</h1>
-    <p className="muted">Cada consulta también queda auditada. Contraseñas, tokens y credenciales se eliminan antes de almacenar o mostrar datos.</p>
+    <PageHeader eyebrow="Trazabilidad inmutable" title="Auditoría" description="Cada consulta también queda auditada. Contraseñas, tokens y credenciales se eliminan antes de almacenar o mostrar datos." />
     <form className="panel audit-filters" onSubmit={submit}>
       <label>Desde<input type="date" value={draft.from} onChange={event => setDraft({ ...draft, from: event.target.value })} required /></label>
       <label>Hasta<input type="date" value={draft.to} onChange={event => setDraft({ ...draft, to: event.target.value })} required /></label>

@@ -3,6 +3,7 @@ package gt.com.aguapura.presentation.controllers;
 import gt.com.aguapura.application.dto.catalog.CreateProductRequest;
 import gt.com.aguapura.application.dto.catalog.ProductResponse;
 import gt.com.aguapura.application.dto.catalog.UpdatePresentationConversionRequest;
+import gt.com.aguapura.application.dto.catalog.UpdateProductRequest;
 import gt.com.aguapura.application.services.ProductCatalogApplicationService;
 import gt.com.aguapura.application.services.AuditApplicationService;
 import jakarta.validation.Valid;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 
 import java.util.List;
 import java.util.Map;
@@ -62,6 +64,23 @@ public class ProductCatalogController {
         audit.record(actor(jwt), device(jwt), "PRODUCT_STATUS_CHANGE", "PRODUCT", id, Map.of(),
                 Map.of("active", result.active()));
         return result;
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR','BODEGA')")
+    public ProductResponse update(@PathVariable UUID id, @Valid @RequestBody UpdateProductRequest request,
+                                  @AuthenticationPrincipal Jwt jwt) {
+        var result = service.update(id, request);
+        audit.record(actor(jwt), device(jwt), "UPDATE_PRODUCT", "PRODUCT", id, Map.of(), Map.of("name", result.name()));
+        return result;
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR','BODEGA')")
+    public void delete(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
+        service.delete(id);
+        audit.record(actor(jwt), device(jwt), "DELETE_PRODUCT", "PRODUCT", id, Map.of(), Map.of());
     }
 
     @PutMapping("/{productId}/presentations/{presentationId}/conversion")

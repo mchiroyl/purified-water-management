@@ -41,6 +41,8 @@ Fuente: `docs/ERS_SRS.md` y `PROMPT_MAESTRO_SISTEMA_AGUA_PURA.md`.
 - **RB-023:** Bodega confirma entrega y vendedor confirma recepción de la carga por separado.
 - **RB-024:** Una carga iniciada no se edita; se corrige con movimiento compensatorio autorizado.
 - **RB-025:** Cantidades se verifican en frontend, dominio y transacción PostgreSQL.
+- **RB-025A:** Una recarga solo puede crearse para una ruta con carga inicial en estado `STARTED`, sigue la doble confirmación de bodega/vendedor y mueve inventario mediante movimientos auditables.
+- **RB-025B:** Una recarga se suma a la carga inicial para la liquidación, no inicia otro recorrido y queda bloqueada cuando la liquidación de la ruta está cerrada.
 
 ## Ventas y pagos
 
@@ -102,13 +104,15 @@ Fuente: `docs/ERS_SRS.md` y `PROMPT_MAESTRO_SISTEMA_AGUA_PURA.md`.
 - **RB-061:** El dashboard excluye ventas con anulación aprobada y no acepta totales calculados por el frontend.
 - **RB-062:** Un vendedor solo consulta métricas de sus rutas y sus propias operaciones pendientes.
 - **RB-063:** Las alertas del dashboard se derivan de diferencias y pendientes autoritativos del servidor.
+- **RB-063A:** Un `401` por expiración del access token se reintenta una sola vez tras renovar la sesión; no cambia el estado de conectividad. Solo una falla de red, timeout o respuesta 5xx activa la alerta de conexión.
 
 ## Reportes
 
 - **RB-064:** Todo rango de reporte usa fechas locales inclusivas en la zona empresarial y no puede superar 366 días.
 - **RB-065:** Los filtros y la exportación aplican exactamente el mismo alcance de autorización en el servidor.
 - **RB-066:** La exportación se rechaza si supera 20,000 filas; no se entrega un archivo silenciosamente incompleto.
-- **RB-067:** Toda celda CSV potencialmente interpretada como fórmula se neutraliza antes de descargarla.
+- **RB-067:** Los reportes operativos se entregan en Excel `.xlsx` y PDF imprimible; ambos incluyen la identidad empresarial y los filtros aplicados.
+- **RB-067A:** El servidor asigna los códigos `CLI-`, `VND-`, `RUT-` y `VEH-`; ningún formulario puede imponer o reutilizar un código operativo.
 
 ## Auditoría operativa
 

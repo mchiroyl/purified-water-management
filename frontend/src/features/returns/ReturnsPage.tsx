@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState, type FormEvent } from 'react';
+import { PageHeader } from '../../app/PageHeader';
 import { apiRequest } from '../../services/apiClient';
 import type { Customer, Route } from '../routes/types';
 import { queueReturn } from './returnOffline';
@@ -79,9 +80,7 @@ export function ReturnsPage({ canReport, canReceive, deviceId }: {
   });
 
   return <main>
-    <p className="eyebrow">Control de retorno</p>
-    <h1>Devoluciones</h1>
-    <p className="muted">Producto en buen estado pendiente de recepción física. No se registra como merma ni modifica inventario hasta que bodega lo confirme.</p>
+    <PageHeader eyebrow="Control de retorno" title="Devoluciones" description="Producto en buen estado pendiente de recepción física. No se registra como merma ni modifica inventario hasta que bodega lo confirme." />
 
     {canReport && <form className="panel section-panel" onSubmit={report}>
       <h2>Reportar retorno de producto</h2>

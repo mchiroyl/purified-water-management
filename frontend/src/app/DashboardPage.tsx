@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '../services/apiClient';
+import { PageHeader } from './PageHeader';
 
 type DashboardAlert = { code: string; severity: string; title: string; count: number };
 type Dashboard = {
@@ -23,9 +24,7 @@ export function DashboardPage() {
   });
   const data = dashboard.data;
   return <main>
-    <p className="eyebrow">Resumen oficial</p>
-    <h1>Panel operativo</h1>
-    <p className="muted">Indicadores calculados por el servidor para el día operativo en {data?.timezone ?? 'la zona configurada'}.</p>
+    <PageHeader eyebrow="Resumen oficial" title="Panel operativo" description={`Indicadores calculados por el servidor para el día operativo en ${data?.timezone ?? 'la zona configurada'}.`} />
     {dashboard.isLoading && <div className="panel">Calculando indicadores…</div>}
     {dashboard.error && <div className="alert error">{dashboard.error.message}</div>}
     {data && <>

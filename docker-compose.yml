@@ -1,6 +1,8 @@
 services:
   postgres:
     image: postgres:18.4-alpine
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-15432}:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-agua_pura}
       POSTGRES_USER: ${POSTGRES_USER:-agua_pura_app}

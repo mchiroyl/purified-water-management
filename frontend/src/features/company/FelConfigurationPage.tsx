@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { PageHeader } from '../../app/PageHeader';
 import { apiRequest } from '../../services/apiClient';
 
 type FelConfiguration = {
@@ -37,9 +38,7 @@ export function FelConfigurationPage() {
 
   const item = configuration.data;
   return <main>
-    <p className="eyebrow">Configuración fiscal independiente</p>
-    <h1>FEL opcional</h1>
-    <p className="muted">Esta sección reutiliza la identidad configurada en Datos de la empresa, pero protege por separado proveedor y credenciales.</p>
+    <PageHeader eyebrow="Configuración fiscal independiente" title="FEL opcional" description="Esta sección reutiliza la identidad configurada en Datos de la empresa, pero protege por separado proveedor y credenciales." />
     <section className="panel section-panel">
       <div className="section-heading"><h2>Estado de certificación</h2><span className="status-pill">{item?.enabled ? 'Activo' : 'Desactivado'}</span></div>
       {configuration.isLoading && <p>Cargando configuración…</p>}

@@ -105,6 +105,9 @@ export class ConnectionManager {
     this.lifecycleTarget?.removeEventListener('agua-pura:request-success', this.handleRequestSuccess);
     this.visibilityTarget?.removeEventListener('visibilitychange', this.handleVisibilityChange);
     this.activeAbort?.abort();
+    this.activeAbort = undefined;
+    this.inFlight = undefined;
+    this.lastStartedAt = Number.NEGATIVE_INFINITY;
     this.clearRetry();
   }
 
@@ -127,10 +130,12 @@ export class ConnectionManager {
     this.lastStartedAt = startedAt;
     this.publish({ ...this.snapshot, state: 'CHECKING', reason });
     const generation = this.requestSuccessGeneration;
-    this.inFlight = this.performCheck(reason, startedAt, generation).finally(() => {
-      this.inFlight = undefined;
+    const flight = this.performCheck(reason, startedAt, generation);
+    this.inFlight = flight;
+    void flight.finally(() => {
+      if (this.inFlight === flight) this.inFlight = undefined;
     });
-    return this.inFlight;
+    return flight;
   }
 
   private readonly handleOnline = () => {

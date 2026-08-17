@@ -36,13 +36,33 @@ describe('AppShell navegación móvil', () => {
 
     const menu = screen.getByRole('dialog', { name: 'Menú principal' });
     expect(menu).toHaveClass('mobile-menu-panel');
-    for (const label of ['Usuarios', 'Datos de la empresa', 'FEL opcional', 'Auditoría', 'Reportes', 'Anulaciones']) {
+    const catalog = within(menu).getByRole('button', { name: 'Catálogo y planificación' });
+    expect(catalog).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(catalog);
+    expect(catalog).toHaveAttribute('aria-expanded', 'true');
+    for (const label of ['Productos', 'Clientes', 'Rutas', 'Precios']) {
       expect(within(menu).getByRole('link', { name: label })).toBeInTheDocument();
     }
+    expect(within(menu).getByRole('button', { name: 'Administración' })).toBeInTheDocument();
     expect(within(menu).getByRole('button', { name: 'Cerrar sesión' })).toBeInTheDocument();
 
     fireEvent.click(within(menu).getByRole('button', { name: 'Cerrar menú' }));
     expect(screen.queryByRole('dialog', { name: 'Menú principal' })).not.toBeInTheDocument();
+  });
+
+  it('cierra el menú con Escape y devuelve el foco al disparador', () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter><AppShell /></MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    const trigger = screen.getByRole('button', { name: 'Menú' });
+    fireEvent.click(trigger);
+    expect(screen.getByRole('button', { name: 'Cerrar menú' })).toHaveFocus();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Menú principal' })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
   });
 
   it('permite cerrar sesión desde el menú móvil', () => {

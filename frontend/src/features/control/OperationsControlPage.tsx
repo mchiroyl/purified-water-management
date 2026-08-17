@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { PageHeader } from '../../app/PageHeader';
 import { useState, type FormEvent } from 'react';
 import { apiRequest } from '../../services/apiClient';
 
@@ -31,8 +32,7 @@ export function OperationsControlPage({ canDecide }: { canDecide: boolean }) {
   const submitIncident=(event:FormEvent)=>{event.preventDefault();report.mutate();};
 
   return <main>
-    <p className="eyebrow">Control segregado</p><h1>Autorizaciones e incidencias</h1>
-    <p className="muted">Quien solicita o reporta no puede decidir su propio caso. Las decisiones expiran y quedan auditadas.</p>
+    <PageHeader eyebrow="Control segregado" title="Autorizaciones e incidencias" description="Quien solicita o reporta no puede decidir su propio caso. Las decisiones expiran y quedan auditadas." />
     <div className="dual-panels">
       <form className="panel section-panel" onSubmit={submitAuthorization}><h2>Nueva solicitud</h2><div className="form-grid compact-grid">
         <label>Tipo<select value={authorization.authorizationType} onChange={event=>setAuthorization({...authorization,authorizationType:event.target.value})}><option value="LOAD_CORRECTION">Corrección de carga</option><option value="SETTLEMENT_DIFFERENCE">Liquidación con diferencia</option><option value="CREDIT_LIMIT_CHANGE">Cambio de límite</option><option value="OTHER_OPERATION">Otra operación</option></select></label>

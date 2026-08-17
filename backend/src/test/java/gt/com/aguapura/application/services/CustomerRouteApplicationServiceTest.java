@@ -61,9 +61,13 @@ class CustomerRouteApplicationServiceTest {
         @Override public RouteView assignCustomerRoute(NewCustomerRoute item) { assignment = item; return routeView(item.routeId()); }
         @Override public boolean routeCodeExists(String code) { return false; }
         @Override public RouteView createRoute(NewRoute route) { return null; }
+        @Override public RouteView updateRouteIfUnassigned(UUID id, NewRoute route) { return routeView(id); }
+        @Override public RouteView setRouteActiveIfUnassigned(UUID id, boolean active) { return routeView(id); }
         @Override public List<RouteView> findRoutes(Optional<UUID> sellerId) { return new ArrayList<>(); }
         @Override public boolean vehicleCodeExists(String code) { return false; }
         @Override public VehicleView createVehicle(NewVehicle vehicle) { return null; }
+        @Override public VehicleView updateVehicleIfUnassigned(UUID id, NewVehicle vehicle) { return new VehicleView(id, "VEH-1", vehicle.licensePlate(), vehicle.description(), "ACTIVE", java.time.Instant.now()); }
+        @Override public VehicleView setVehicleActiveIfUnassigned(UUID id, boolean active) { return new VehicleView(id, "VEH-1", "", "", "ACTIVE", java.time.Instant.now()); }
         @Override public List<VehicleView> findVehicles() { return new ArrayList<>(); }
         @Override public List<SellerOption> findSellers() { return new ArrayList<>(); }
         @Override public RouteView assignRoute(NewRouteAssignment assignment) { return null; }

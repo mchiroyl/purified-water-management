@@ -4,6 +4,7 @@ import gt.com.aguapura.application.dto.route.*;
 import gt.com.aguapura.application.services.CustomerRouteApplicationService;
 import gt.com.aguapura.application.services.AuditApplicationService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -40,6 +41,21 @@ public class RouteController {
         return result;
     }
 
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    public RouteResponse update(@PathVariable UUID id, @Valid @RequestBody UpdateRouteRequest request,
+                                @AuthenticationPrincipal Jwt jwt) {
+        var result = service.updateRoute(id, request);
+        audit.record(actor(jwt), device(jwt), "UPDATE_ROUTE", "ROUTE", id, Map.of(), Map.of("name", result.name()));
+        return result;
+    }
+
+    @PatchMapping("/{id}/status")
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    public RouteResponse setRouteStatus(@PathVariable UUID id, @Valid @RequestBody StatusRequest request) {
+        return service.setRouteActive(id, request.active());
+    }
+
     @PostMapping("/{id}/assignment")
     @PreAuthorize("hasRole('ADMINISTRADOR')")
     public RouteResponse assign(@PathVariable UUID id, @Valid @RequestBody AssignRouteRequest request,
@@ -66,6 +82,21 @@ public class RouteController {
         return result;
     }
 
+    @PutMapping("/vehicles/{id}")
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    public VehicleResponse updateVehicle(@PathVariable UUID id, @Valid @RequestBody UpdateVehicleRequest request,
+                                         @AuthenticationPrincipal Jwt jwt) {
+        var result = service.updateVehicle(id, request);
+        audit.record(actor(jwt), device(jwt), "UPDATE_VEHICLE", "VEHICLE", id, Map.of(), Map.of("code", result.code()));
+        return result;
+    }
+
+    @PatchMapping("/vehicles/{id}/status")
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    public VehicleResponse setVehicleStatus(@PathVariable UUID id, @Valid @RequestBody StatusRequest request) {
+        return service.setVehicleActive(id, request.active());
+    }
+
     @GetMapping("/sellers")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','SUPERVISOR','BODEGA')")
     public List<SellerOptionResponse> findSellers() { return service.findSellers(); }
@@ -77,4 +108,5 @@ public class RouteController {
         return roles.contains("VENDEDOR") && roles.stream().noneMatch(role ->
                 role.equals("ADMINISTRADOR") || role.equals("SUPERVISOR") || role.equals("BODEGA"));
     }
+    public record StatusRequest(@NotNull Boolean active) {}
 }
