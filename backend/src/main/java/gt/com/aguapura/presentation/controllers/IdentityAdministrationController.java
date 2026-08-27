@@ -1,9 +1,12 @@
 package gt.com.aguapura.presentation.controllers;
 
 import gt.com.aguapura.application.dto.identity.CreateUserRequest;
+import gt.com.aguapura.application.dto.identity.CreateDeviceEnrollmentRequest;
+import gt.com.aguapura.application.dto.identity.DeviceEnrollmentInvitationResponse;
 import gt.com.aguapura.application.dto.identity.DeviceAdministrationResponse;
 import gt.com.aguapura.application.dto.identity.UserAdministrationResponse;
 import gt.com.aguapura.application.services.IdentityAdministrationApplicationService;
+import gt.com.aguapura.application.services.DeviceEnrollmentApplicationService;
 import gt.com.aguapura.application.services.AuditApplicationService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -26,11 +29,14 @@ public class IdentityAdministrationController {
 
     private final IdentityAdministrationApplicationService service;
     private final AuditApplicationService audit;
+    private final DeviceEnrollmentApplicationService enrollment;
 
     public IdentityAdministrationController(IdentityAdministrationApplicationService service,
-                                            AuditApplicationService audit) {
+                                            AuditApplicationService audit,
+                                            DeviceEnrollmentApplicationService enrollment) {
         this.service = service;
         this.audit = audit;
+        this.enrollment = enrollment;
     }
 
     @GetMapping("/users")
@@ -65,6 +71,24 @@ public class IdentityAdministrationController {
         audit.record(actor(jwt), device(jwt), "DEVICE_REVOKED", "DEVICE", id, Map.of(),
                 Map.of("status", result.status(), "username", result.username()));
         return result;
+    }
+
+    @GetMapping("/device-enrollment/invitations")
+    public List<DeviceEnrollmentInvitationResponse> findEnrollmentInvitations() {
+        return enrollment.findAll();
+    }
+
+    @PostMapping("/device-enrollment/invitations")
+    @ResponseStatus(HttpStatus.CREATED)
+    public DeviceEnrollmentInvitationResponse createEnrollmentInvitation(
+            @Valid @RequestBody CreateDeviceEnrollmentRequest request, @AuthenticationPrincipal Jwt jwt) {
+        return enrollment.create(actor(jwt), request);
+    }
+
+    @PostMapping("/device-enrollment/invitations/{id}/revoke")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void revokeEnrollmentInvitation(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
+        enrollment.revoke(actor(jwt), id);
     }
 
     private UUID actor(Jwt jwt) { return UUID.fromString(jwt.getClaimAsString("userId")); }

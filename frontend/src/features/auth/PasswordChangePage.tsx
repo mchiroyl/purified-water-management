@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { useSession } from './SessionContext';
 
@@ -16,12 +17,14 @@ type FormValues = z.infer<typeof schema>;
 
 export function PasswordChangePage() {
   const { changePassword, busy, logout } = useSession();
+  const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const { register, handleSubmit, formState: { errors } } = useForm<FormValues>({ resolver: zodResolver(schema) });
   const submit = handleSubmit(async ({ currentPassword, newPassword }) => {
     setError(null);
     try {
       await changePassword(currentPassword, newPassword);
+      navigate('/', { replace: true });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No fue posible cambiar la contrasena.');
     }

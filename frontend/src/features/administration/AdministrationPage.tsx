@@ -3,6 +3,7 @@ import { useState, type FormEvent } from 'react';
 import { PageHeader } from '../../app/PageHeader';
 import { StatusPanel } from '../../app/StatusPanel';
 import { apiRequest } from '../../services/apiClient';
+import { QrCodeVisual } from './QrCodeVisual';
 
 type UserAdmin = {
   id: string; username: string; email: string; status: string; mustChangePassword: boolean;
@@ -12,13 +13,20 @@ type DeviceAdmin = {
   id: string; userId: string; username: string; friendlyName: string; status: string; appVersion?: string;
   firstSeenAt: string; lastSeenAt: string; revokedAt?: string;
 };
+type EnrollmentInvitation = {
+  id: string; userId: string; username: string; status: string; createdAt: string; expiresAt: string;
+  token?: string; payload?: string;
+};
 const roleOptions = ['ADMINISTRADOR', 'BODEGA', 'VENDEDOR', 'SUPERVISOR'];
 
 export function AdministrationPage() {
   const queryClient = useQueryClient();
   const users = useQuery({ queryKey: ['administration', 'users'], queryFn: () => apiRequest<UserAdmin[]>('/administration/users') });
   const devices = useQuery({ queryKey: ['administration', 'devices'], queryFn: () => apiRequest<DeviceAdmin[]>('/administration/devices') });
+  const invitations = useQuery({ queryKey: ['administration', 'enrollment'], queryFn: () => apiRequest<EnrollmentInvitation[]>('/administration/device-enrollment/invitations') });
   const [form, setForm] = useState({ username: '', email: '', password: '', roles: ['VENDEDOR'], sellerDisplayName: '' });
+  const [enrollmentUserId, setEnrollmentUserId] = useState('');
+  const [createdInvitation, setCreatedInvitation] = useState<EnrollmentInvitation | null>(null);
   const create = useMutation({
     mutationFn: () => apiRequest<UserAdmin>('/administration/users', { method: 'POST', body: JSON.stringify(form) }),
     onSuccess: () => {
@@ -33,6 +41,19 @@ export function AdministrationPage() {
   const revoke = useMutation({
     mutationFn: (id: string) => apiRequest<DeviceAdmin>(`/administration/devices/${id}/revoke`, { method: 'POST' }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['administration', 'devices'] })
+  });
+  const createInvitation = useMutation({
+    mutationFn: () => apiRequest<EnrollmentInvitation>('/administration/device-enrollment/invitations', {
+      method: 'POST', body: JSON.stringify({ userId: enrollmentUserId })
+    }),
+    onSuccess: invitation => {
+      setCreatedInvitation(invitation);
+      void queryClient.invalidateQueries({ queryKey: ['administration', 'enrollment'] });
+    }
+  });
+  const revokeInvitation = useMutation({
+    mutationFn: (id: string) => apiRequest<void>(`/administration/device-enrollment/invitations/${id}/revoke`, { method: 'POST' }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['administration', 'enrollment'] })
   });
   const toggleRole = (role: string) => setForm(current => ({
     ...current, roles: current.roles.includes(role) ? current.roles.filter(item => item !== role) : [...current.roles, role]
@@ -74,6 +95,34 @@ export function AdministrationPage() {
         <div className="row-actions"><span className={`status ${device.status === 'ACTIVE' ? 'active' : 'inactive'}`}>{device.status === 'ACTIVE' ? 'Activo' : 'Revocado'}</span>
           {device.status !== 'REVOKED' && <button className="secondary danger-button" onClick={() => revoke.mutate(device.id)}>Revocar</button>}</div>
       </article>)}</div>
+    </section>
+    <section className="panel section-panel">
+      <h2>Invitar dispositivo por QR</h2>
+      <p className="muted">La invitación dura 10 minutos y solo puede utilizarse una vez.</p>
+      <div className="inline-form">
+        <label>Usuario<select value={enrollmentUserId} onChange={event => setEnrollmentUserId(event.target.value)}>
+          <option value="">Seleccione un usuario</option>
+          {users.data?.filter(user => user.status === 'ACTIVE').map(user => <option key={user.id} value={user.id}>{user.username}</option>)}
+        </select></label>
+        <button className="primary" type="button" disabled={!enrollmentUserId || createInvitation.isPending}
+          onClick={() => createInvitation.mutate()}>{createInvitation.isPending ? 'Generando…' : 'Generar invitación'}</button>
+      </div>
+      {createInvitation.error && <div className="alert error">{createInvitation.error.message}</div>}
+      {createdInvitation?.token && <div className="enrollment-result">
+        <QrCodeVisual value={`${window.location.origin}/enroll?token=${encodeURIComponent(createdInvitation.token)}`} />
+        <div><strong>QR para {createdInvitation.username}</strong>
+          <p className="muted">Expira: {new Date(createdInvitation.expiresAt).toLocaleString('es-GT')}</p>
+          <code>{`${window.location.origin}/enroll?token=${encodeURIComponent(createdInvitation.token)}`}</code>
+          <code>{createdInvitation.token}</code>
+        </div>
+      </div>}
+      <div className="data-list">
+        {invitations.data?.map(invitation => <article className="data-row" key={invitation.id}>
+          <div><strong>{invitation.username}</strong><small>Expira: {new Date(invitation.expiresAt).toLocaleString('es-GT')}</small></div>
+          <div className="row-actions"><span className={`status ${invitation.status.toLowerCase()}`}>{invitation.status}</span>
+            {invitation.status === 'PENDING' && <button className="secondary danger-button" onClick={() => revokeInvitation.mutate(invitation.id)}>Revocar</button>}</div>
+        </article>)}
+      </div>
     </section>
   </main>;
 }

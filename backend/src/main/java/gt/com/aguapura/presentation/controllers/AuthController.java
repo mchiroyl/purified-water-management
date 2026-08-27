@@ -3,8 +3,10 @@ package gt.com.aguapura.presentation.controllers;
 import gt.com.aguapura.application.dto.auth.AuthResponse;
 import gt.com.aguapura.application.dto.auth.ChangePasswordRequest;
 import gt.com.aguapura.application.dto.auth.LoginRequest;
+import gt.com.aguapura.application.dto.auth.DeviceEnrollmentRequest;
 import gt.com.aguapura.application.services.AuthApplicationService;
 import gt.com.aguapura.application.services.AuditApplicationService;
+import gt.com.aguapura.application.services.DeviceEnrollmentApplicationService;
 import gt.com.aguapura.infrastructure.configuration.SecurityProperties;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
@@ -29,12 +31,14 @@ public class AuthController {
     private final AuthApplicationService service;
     private final SecurityProperties properties;
     private final AuditApplicationService audit;
+    private final DeviceEnrollmentApplicationService enrollment;
 
     public AuthController(AuthApplicationService service, SecurityProperties properties,
-                          AuditApplicationService audit) {
+                          AuditApplicationService audit, DeviceEnrollmentApplicationService enrollment) {
         this.service = service;
         this.properties = properties;
         this.audit = audit;
+        this.enrollment = enrollment;
     }
 
     @PostMapping("/login")
@@ -49,6 +53,12 @@ public class AuthController {
     @PostMapping("/refresh")
     public ResponseEntity<AuthResponse> refresh(@CookieValue(name = REFRESH_COOKIE, required = false) String refreshToken) {
         var result = service.refresh(refreshToken);
+        return withRefreshCookie(result.response(), result.refreshToken());
+    }
+
+    @PostMapping("/device-enrollment")
+    public ResponseEntity<AuthResponse> deviceEnrollment(@Valid @RequestBody DeviceEnrollmentRequest request) {
+        var result = enrollment.accept(request);
         return withRefreshCookie(result.response(), result.refreshToken());
     }
 

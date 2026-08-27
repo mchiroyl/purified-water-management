@@ -82,8 +82,15 @@ public class AuthApplicationService {
             throw invalidCredentials();
         }
         user.registerSuccessfulLogin();
-        var device = persistence.findActiveDevice(user.getId(), request.deviceName())
-                .orElseGet(() -> persistence.createDevice(user.getId(), request.deviceName(), request.appVersion()));
+        var existingDevice = persistence.findActiveDevice(user.getId(), request.deviceName());
+        if (user.getRoleCodes().contains("VENDEDOR") && existingDevice.isEmpty()) {
+            audit.record(user.getId(), null, "LOGIN_FAILED", "AUTHENTICATION", user.getId(), Map.of(),
+                    Map.of("username", username, "reason", "DEVICE_ENROLLMENT_REQUIRED"));
+            throw new BusinessException("DEVICE_ENROLLMENT_REQUIRED",
+                    "Este dispositivo debe ser autorizado por el administrador mediante una invitación QR.",
+                    ErrorCategory.UNAUTHORIZED);
+        }
+        var device = existingDevice.orElseGet(() -> persistence.createDevice(user.getId(), request.deviceName(), request.appVersion()));
         device.seen(request.appVersion());
         persistence.saveDevice(device);
         persistence.saveUser(user);

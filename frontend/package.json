@@ -19,6 +19,7 @@
     "react-dom": "19.2.8",
     "react-hook-form": "7.85.0",
     "react-router-dom": "7.18.2",
+    "qrcode": "1.5.4",
     "zod": "4.4.3"
   },
   "devDependencies": {
@@ -28,6 +29,7 @@
     "@types/node": "26.2.0",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
+    "@types/qrcode": "1.5.5",
     "@vitejs/plugin-react": "6.0.5",
     "fake-indexeddb": "6.2.5",
     "jsdom": "30.0.1",

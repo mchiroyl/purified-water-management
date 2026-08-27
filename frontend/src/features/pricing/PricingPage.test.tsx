@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, vi } from 'vitest';
 import { PricingPage } from './PricingPage';
 
@@ -17,10 +18,32 @@ describe('PricingPage', () => {
       return Promise.resolve(new Response(JSON.stringify(value), { status: 200, headers: { 'Content-Type': 'application/json' } }));
     }));
     render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <PricingPage canManage={false} canApprove={false} canRequestDiscount={false} />
+      <MemoryRouter><PricingPage view="list" canManage={false} canApprove={false} canRequestDiscount={false} /></MemoryRouter>
     </QueryClientProvider>);
-    expect(screen.getByRole('heading', { name: /precios y mayoreo/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /precios registrados/i })).toBeInTheDocument();
     expect(await screen.findByText('Lista general')).toBeInTheDocument();
     expect(screen.getByText(/Fardo x12.*1–5.*Q12.00/i)).toBeInTheDocument();
+  });
+
+  it('ofrece una vista separada para consultar precios registrados', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify([]), { status: 200 }))));
+    render(<MemoryRouter><QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <PricingPage view="list" canManage={false} canApprove={false} canRequestDiscount={false} />
+    </QueryClientProvider></MemoryRouter>);
+    expect(screen.getByRole('heading', { name: 'Precios registrados' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Registrar nuevos precios' })).toBeInTheDocument();
+    expect(screen.getByText('Listas y versiones registradas')).toBeInTheDocument();
+  });
+
+  it('mantiene los formularios separados de los precios registrados', () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify([]), { status: 200 }))));
+    render(<MemoryRouter><QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <PricingPage canManage canApprove canRequestDiscount />
+    </QueryClientProvider></MemoryRouter>);
+    expect(screen.getByRole('heading', { name: 'Registrar precios' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Nueva lista' })).toBeInTheDocument();
+    expect(screen.queryByText('Resumen de listas')).not.toBeInTheDocument();
+    expect(screen.queryByText('Precios especiales registrados')).not.toBeInTheDocument();
+    expect(screen.queryByText('Solicitudes de descuento registradas')).not.toBeInTheDocument();
   });
 });
