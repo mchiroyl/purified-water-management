@@ -26,7 +26,7 @@ export function InventoryPage({ canManage }: { canManage: boolean }) {
   const createLocation = useMutation({
     mutationFn: () => apiRequest<Location>('/inventory/locations', {
       method: 'POST',
-      body: JSON.stringify({ ...locationForm, routeId: locationForm.locationType === 'ROUTE' ? locationForm.routeId : null })
+      body: JSON.stringify({ ...locationForm, locationType: 'WAREHOUSE', routeId: null })
     }),
     onSuccess: () => { setLocationForm({ code: '', name: '', locationType: 'WAREHOUSE', routeId: '' }); refresh(); }
   });
@@ -40,13 +40,12 @@ export function InventoryPage({ canManage }: { canManage: boolean }) {
   return <main>
     <PageHeader eyebrow="Control físico" title="Inventario" description="Cada cambio queda registrado en unidades base y ninguna operación puede dejar stock negativo." />
     {canManage && <div className="dual-panels">
-      <form className="panel form-grid compact-form" onSubmit={submitLocation}><h2 className="wide">Nueva ubicación</h2>
+      <form className="panel form-grid compact-form" onSubmit={submitLocation}><h2 className="wide">Nueva bodega</h2>
         <label>Código<input required value={locationForm.code} onChange={event => setLocationForm({ ...locationForm, code: event.target.value })} /></label>
         <label>Nombre<input required value={locationForm.name} onChange={event => setLocationForm({ ...locationForm, name: event.target.value })} /></label>
-        <label>Tipo<select value={locationForm.locationType} onChange={event => setLocationForm({ ...locationForm, locationType: event.target.value, routeId: '' })}><option value="WAREHOUSE">Bodega</option><option value="ROUTE">Ruta</option></select></label>
-        {locationForm.locationType === 'ROUTE' && <label>Ruta<select required value={locationForm.routeId} onChange={event => setLocationForm({ ...locationForm, routeId: event.target.value })}><option value="">Seleccionar</option>{routes.data?.filter(route => route.status === 'ACTIVE').map(route => <option value={route.id} key={route.id}>{route.code} · {route.name}</option>)}</select></label>}
+        <p className="muted wide">El inventario se gestiona desde la bodega. Las rutas se asignan por carga diaria y no se crean como ubicaciones de stock.</p>
         {createLocation.error && <div className="alert error wide">{createLocation.error.message}</div>}
-        <button className="primary" disabled={createLocation.isPending}>Crear ubicación</button>
+        <button className="primary" disabled={createLocation.isPending}>Crear bodega</button>
       </form>
       <form className="panel form-grid compact-form" onSubmit={submitAdjustment}><h2 className="wide">Ajuste de inventario</h2>
         <label>Ubicación<select required value={adjustment.locationId} onChange={event => setAdjustment({ ...adjustment, locationId: event.target.value })}><option value="">Seleccionar</option>{locations.data?.filter(item => item.active).map(item => <option value={item.id} key={item.id}>{item.code} · {item.name}</option>)}</select></label>
@@ -57,10 +56,10 @@ export function InventoryPage({ canManage }: { canManage: boolean }) {
         <button className="primary" disabled={adjust.isPending || adjustment.quantityDelta === 0}>Registrar ajuste</button>
       </form>
     </div>}
-    <section className="panel section-panel"><div className="section-heading"><h2>Ubicaciones y saldos</h2><span>{locations.data?.length ?? 0} ubicaciones</span></div>
+    <section className="panel section-panel"><div className="section-heading"><h2>Inventario de bodega</h2><span>{locations.data?.filter(item => item.locationType === 'WAREHOUSE').length ?? 0} bodegas</span></div>
       {locations.error && <div className="alert error">{locations.error.message}</div>}
-      <div className="inventory-grid">{locations.data?.map(location => <article className="route-card" key={location.id}>
-        <div className="route-card-title"><div><strong>{location.name}</strong><span>{location.code} · {location.locationType === 'ROUTE' ? `Ruta ${location.routeCode ?? ''}` : 'Bodega'}</span></div><span className={`status ${location.active ? 'active' : 'inactive'}`}>{location.active ? 'Activa' : 'Inactiva'}</span></div>
+      <div className="inventory-grid">{locations.data?.filter(location => location.locationType === 'WAREHOUSE').map(location => <article className="route-card" key={location.id}>
+        <div className="route-card-title"><div><strong>{location.name}</strong><span>{location.code} · Bodega</span></div><span className={`status ${location.active ? 'active' : 'inactive'}`}>{location.active ? 'Activa' : 'Inactiva'}</span></div>
         <div className="data-list">{location.balances.length ? location.balances.map(balance => <div className="data-row" key={balance.productId}><span>{balance.productName}</span><strong>{Number(balance.quantityBaseUnits).toLocaleString('es-GT')} {balance.baseUnitCode}</strong></div>) : <span className="muted">Sin existencias registradas</span>}</div>
         <button className="secondary" onClick={() => setSelectedLocation(location.id)}>Ver movimientos</button>
       </article>)}</div>
