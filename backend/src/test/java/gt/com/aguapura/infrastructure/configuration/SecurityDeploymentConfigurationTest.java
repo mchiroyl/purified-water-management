@@ -14,7 +14,8 @@ class SecurityDeploymentConfigurationTest {
         String application = Files.readString(Path.of("src/main/resources/application.yml"));
         String compose = Files.readString(Path.of("../docker-compose.yml"));
         String production = Files.readString(Path.of("../docker-compose.prod.yml"));
-        String productionApplication = Files.readString(Path.of("src/main/resources/application-prod.yml"));
+        String productionApplication = Files.readString(Path.of("src/main/resources/application-prod.yml"))
+                .replace("\r\n", "\n");
         String nginx = Files.readString(Path.of("../frontend/nginx.conf"));
 
         assertThat(application).doesNotContain("change-this-database-password")

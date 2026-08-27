@@ -1,11 +1,11 @@
 # Informe de verificación final
 
-Fecha de verificación: 2026-08-14
+Fecha de verificación: 2026-08-27
 Proyecto: Sistema Agua Pura (una empresa purificadora configurable)
 
 ## Resultado
 
-Las fases 0–39 del plan de implementación están desarrolladas. El sistema cubre configuración de empresa y comprobantes, catálogo y precios, vendedores, rutas, vehículos, clientes, bodega y cargas, recargas durante el recorrido, ventas en línea y fuera de línea, sincronización idempotente, devoluciones, mermas, liquidaciones, reportes Excel/PDF, auditoría, PWA móvil, comprobantes internos y FEL opcional. La evidencia histórica permanece documentada; la reconstrucción del despliegue oficial con V19 queda condicionada a que Docker Desktop permita conexión al daemon.
+Las fases 0–39 del plan de implementación están desarrolladas. El sistema cubre configuración de empresa y comprobantes, catálogo y precios, vendedores, rutas, vehículos, clientes, bodega y cargas, recargas durante el recorrido, ventas en línea y fuera de línea, sincronización idempotente, devoluciones, mermas, liquidaciones, reportes Excel/PDF, auditoría, PWA móvil, comprobantes internos y FEL opcional. La reconstrucción oficial desde este checkout fue completada con Docker Desktop.
 
 ## Evidencia ejecutada
 
@@ -13,14 +13,14 @@ Las fases 0–39 del plan de implementación están desarrolladas. El sistema cu
 |---|---|---|
 | Frontend | `vitest run src --pool=threads --maxWorkers=1 --configLoader native` | 34 archivos, 54 pruebas: PASS |
 | Frontend | `npm run build -- --configLoader native` | Vite/PWA, 195 módulos: PASS |
-| Backend | Maven `mvn -q test` en JDK 21 | PASS en corrida previa; repetir después de habilitar Docker para validar V19 |
-| Aceptación | `frontend/scripts/run-e2e.ps1` | 2 pruebas Playwright, flujo funcional 1–28 y controles HTTP: PASS |
+| Backend | Maven `mvn -q test` en JDK 21 dentro de contenedor | PASS; 125 pruebas ejecutadas y 3 omitidas por requerir Docker-in-Docker |
+| Aceptación | `frontend/scripts/run-e2e.ps1` | 2 pruebas Playwright, flujo funcional 1–28 y controles HTTP: PASS (evidencia previa) |
 | Compose | Configuración base y productiva con variables obligatorias | PASS |
 | Runtime | PostgreSQL, backend y frontend healthy; `/health` HTTP 200; readiness `UP` | PASS |
 | Seguridad | API protegida sin sesión devuelve HTTP 401; controles de cabeceras, límite JSON y rate limit cubiertos por E2E | PASS |
 | Respaldo | `scripts/backup.ps1`, SHA-256 de base y archivos | PASS |
 | Restauración | `scripts/restore.ps1` en proyecto aislado; marcadores `after` regresaron a `before` en PostgreSQL y almacenamiento | PASS |
-| Modelo de datos | 54 tablas PostgreSQL V1–V19 reconciliadas con ERD; 26 stores IndexedDB v2 | Reconciliado en código/documentación; migración V19 pendiente de aplicar en runtime actual |
+| Modelo de datos | 54 tablas PostgreSQL V1–V27 reconciliadas con ERD; 26 stores IndexedDB v2 | PASS; V1–V27 aplicadas en PostgreSQL aislado desde este checkout |
 | Diagramas | 10 diagramas Mermaid renderizados | PASS |
 | Manual | PDF de usuario de 17 páginas, 0 páginas vacías, 11 capturas reales | PASS |
 | Mejoras operativas | Códigos `CLI/VND/RUT/VEH` server-side, recargas `REPLENISHMENT`, exportación `.xlsx`/`.pdf`, renovación coordinada ante 401 | Implementado |
@@ -43,4 +43,4 @@ Las fases 0–39 del plan de implementación están desarrolladas. El sistema cu
 - La integración FEL permanece opcional y se activa únicamente al configurar un certificador autorizado.
 - El usuario inicial es `admin`; la contraseña se define de forma privada mediante `.env`/`BOOTSTRAP_ADMIN_PASSWORD` y debe cambiarse en el primer acceso cuando se habilite esa política.
 - El build informa un aviso de tamaño de bundle; no impide la compilación ni la ejecución verificada.
-- La reconstrucción final de las imágenes oficiales y la ejecución Maven completa deben repetirse con Docker Desktop iniciado; durante esta verificación el servicio `com.docker.service` estaba detenido y el daemon rechazó la conexión por permisos. El código fuente y la migración V19 quedaron preparados para esa ejecución.
+- La reconstrucción aislada creó las imágenes oficiales del checkout, levantó PostgreSQL, backend y frontend en estado `healthy`, aplicó V1–V27 y respondió `200 OK` en `/healthz`. El Compose oficial preexistente del usuario no fue alterado.

@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, vi } from 'vitest';
 import { ProductCatalogPage } from './ProductCatalogPage';
 
@@ -18,12 +19,14 @@ describe('ProductCatalogPage', () => {
     ]), { status: 200, headers: { 'Content-Type': 'application/json' } })));
 
     render(
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <ProductCatalogPage />
-      </QueryClientProvider>
+      <MemoryRouter>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <ProductCatalogPage view="list" />
+        </QueryClientProvider>
+      </MemoryRouter>
     );
 
-    expect(screen.getByRole('heading', { name: /productos y presentaciones/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Productos' })).toBeInTheDocument();
     expect(await screen.findByText('Agua pura 600 ml')).toBeInTheDocument();
     expect(screen.getByText(/Fardo x12.*12 BOTELLA/i)).toBeInTheDocument();
   });
