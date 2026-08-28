@@ -5,6 +5,7 @@ import gt.com.aguapura.application.dto.auth.ChangePasswordRequest;
 import gt.com.aguapura.application.dto.auth.LoginRequest;
 import gt.com.aguapura.application.dto.auth.DeviceReenrollmentRequest;
 import gt.com.aguapura.application.dto.auth.DeviceReenrollmentResponse;
+import gt.com.aguapura.application.dto.auth.DeviceEnrollmentRequest;
 import gt.com.aguapura.application.services.DeviceReenrollmentApplicationService;
 import gt.com.aguapura.application.services.AuthApplicationService;
 import gt.com.aguapura.application.services.AuditApplicationService;
@@ -36,13 +37,16 @@ public class AuthController {
     private final SecurityProperties properties;
     private final AuditApplicationService audit;
     private final DeviceReenrollmentApplicationService reenrollment;
+    private final DeviceEnrollmentApplicationService enrollment;
 
     public AuthController(AuthApplicationService service, SecurityProperties properties,
-                          AuditApplicationService audit, DeviceReenrollmentApplicationService reenrollment) {
+                          AuditApplicationService audit, DeviceReenrollmentApplicationService reenrollment,
+                          DeviceEnrollmentApplicationService enrollment) {
         this.service = service;
         this.properties = properties;
         this.audit = audit;
         this.reenrollment = reenrollment;
+        this.enrollment = enrollment;
     }
 
     @PostMapping("/login")
