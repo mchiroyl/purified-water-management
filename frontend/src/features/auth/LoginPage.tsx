@@ -63,7 +63,6 @@ export function LoginPage() {
     <form onSubmit={reEnrollmentMode ? requestReenrollment : submit} noValidate>
       <label>Usuario<input autoComplete="username" {...register('username')} /></label>{errors.username && <span className="field-error">{errors.username.message}</span>}
       <label>Contraseña<input type="password" autoComplete="current-password" {...register('password')} /></label>{errors.password && <span className="field-error">{errors.password.message}</span>}
-      <div className="device-detected" role="status"><span className="device-detected-label">Dispositivo detectado automáticamente</span><strong>{deviceName}</strong><small>Se registra para identificar esta sesión; no es editable.</small></div>
       {reenrollment && <div className="reenrollment-card" role="status"><strong>Solicitud {statusText[reenrollment.status] ?? reenrollment.status}</strong>{reenrollment.token && <><QRCodeSVG value={qrValue} size={156} includeMargin /><code>{reenrollment.token}</code><small>Escanee el QR desde la sesión del administrador o use el código temporal para identificar la solicitud.</small></>}<small>Expira: {new Date(reenrollment.expiresAt).toLocaleString('es-GT')}</small></div>}
       {error && <div className="alert error" role="alert">{error}</div>}
       <button className="primary" type="submit" disabled={busy || Boolean(reenrollment && reenrollment.status === 'PENDING')}>{reEnrollmentMode ? 'Solicitar reinscripción' : busy ? 'Ingresando…' : 'Ingresar'}</button>
