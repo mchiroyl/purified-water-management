@@ -17,7 +17,6 @@ El producto será una aplicación web empresarial PWA, Mobile First y offline-fi
 
 La solución incluirá un backend Spring Boot, un frontend React/TypeScript, PostgreSQL, IndexedDB, generación de comprobantes PDF y despliegue local mediante Docker Compose.
 
-No se implementará multitenencia. FEL será una integración opcional que permanecerá desactivada mientras no exista un proveedor autorizado configurado.
 
 ## 3. Partes interesadas y actores
 
@@ -29,15 +28,12 @@ No se implementará multitenencia. FEL será una integración opcional que perma
 | Supervisor | Revisar excepciones, autorizaciones, alertas y liquidaciones. |
 | Cliente | Recibir producto y comprobante digital. |
 | Operaciones/Soporte | Instalar, respaldar, restaurar y monitorear el sistema. |
-| Certificador FEL | Certificar DTE únicamente cuando exista integración habilitada. |
 
 ## 4. Definiciones y abreviaturas
 
 | Término | Definición |
 |---|---|
 | PWA | Aplicación web progresiva instalable. |
-| DTE | Documento Tributario Electrónico del régimen FEL de Guatemala. |
-| FEL | Factura Electrónica en Línea. |
 | Outbox | Cola durable de operaciones locales por sincronizar. |
 | Idempotencia | Repetir una solicitud sin duplicar sus efectos. |
 | Merma | Pérdida física de producto; no representa dinero. |
@@ -64,7 +60,6 @@ El servidor es autoritativo. La PWA puede calcular valores para informar al usua
 - PostgreSQL es la base oficial; IndexedDB es almacenamiento local sincronizable.
 - Todo importe usa decimal exacto.
 - Toda modificación de PostgreSQL usa Flyway.
-- La certificación FEL real exige un proveedor autorizado, credenciales válidas y su contrato técnico oficial.
 
 ## 7. Requisitos funcionales
 
@@ -76,7 +71,6 @@ El servidor es autoritativo. La PWA puede calcular valores para informar al usua
 | RF-CFG-002 | Administración podrá editar nombre comercial, razón social, NIT, dirección, teléfonos, WhatsApp, correo, logotipo, moneda, zona horaria, prefijos, numeraciones y texto autorizado. | Alta | Los campos se guardan desde un único formulario con validación y auditoría. |
 | RF-CFG-003 | La interfaz y los comprobantes consumirán la misma configuración empresarial. | Alta | Un cambio autorizado se refleja sin duplicar datos en otro formulario. |
 | RF-CFG-004 | Los cambios de identidad y numeración serán auditados. | Alta | Auditoría contiene actor, fecha y valores permitidos antes/después. |
-| RF-CFG-005 | Políticas operativas, seguridad, sincronización y FEL tendrán configuraciones separadas de la identidad empresarial. | Media | Cada apartado aplica permisos propios sin copiar datos corporativos. |
 
 ### 7.2 Identidad, acceso y dispositivos
 
@@ -185,15 +179,11 @@ El servidor es autoritativo. La PWA puede calcular valores para informar al usua
 | RF-SYN-010 | El usuario verá estado y error de cada operación local. | Alta | La interfaz muestra PENDING, SYNCING, SYNCED, FAILED_RETRYABLE, CONFLICT o REJECTED. |
 | RF-SYN-011 | El payload offline de una venta podrá conservar un snapshot opcional `location` para sincronizar el mismo contrato. | Alta | El snapshot permanece en la operación Outbox; no se crea un watcher, historial móvil de rastreo ni tarea de fondo. |
 
-### 7.10 Comprobantes, FEL, reportes y auditoría
 
 | ID | Requisito verificable | Prioridad | Criterio de aceptación |
 |---|---|---|---|
 | RF-DOC-001 | Una venta sincronizada podrá generar un PDF con datos históricos y configuración empresarial. | Alta | El PDF contiene empresa, venta, ítems, total, pago y estado correctos. |
 | RF-DOC-002 | La PWA compartirá mediante Web Share API y ofrecerá fallback seguro. | Alta | En navegador sin Web Share se puede descargar el PDF y preparar mensaje. |
-| RF-DOC-003 | Un comprobante interno no se identificará como DTE certificado. | Alta | Documento sin certificación muestra su naturaleza interna. |
-| RF-FEL-001 | FEL permanecerá desactivado sin adaptador real y credenciales válidas. | Alta | Intento de activación es rechazado y auditado. |
-| RF-FEL-002 | Una integración FEL habilitada conservará solicitud, respuesta, identificadores, estado y DTE. | Alta | Cada emisión se rastrea hasta la venta y respuesta del certificador. |
 | RF-REP-001 | Administración consultará dashboard y reportes por vendedor, ruta, cliente, producto, fecha, pago, merma y diferencia. | Media | Filtros retornan datos autorizados y paginados. |
 | RF-REP-002 | Los reportes de ventas, mermas y liquidaciones se exportarán en Excel `.xlsx` y PDF imprimible. | Alta | Ambos formatos contienen identidad empresarial, filtros aplicados, datos autorizados y no omiten filas silenciosamente. |
 | RF-ALT-001 | El sistema generará alertas configurables para diferencias y conductas anómalas. | Media | Cada alerta posee regla, severidad, evidencia y estado de atención. |
@@ -215,7 +205,6 @@ El servidor es autoritativo. La PWA puede calcular valores para informar al usua
 | RB-010 | Un cliente provisional conserva sus ventas aunque su alta sea rechazada o fusionada. |
 | RB-011 | No se concede crédito nuevo ni descuento extraordinario offline. |
 | RB-012 | Una liquidación no cierra con operaciones locales que puedan modificarla. |
-| RB-013 | La numeración interna no se usa como autorización fiscal FEL. |
 | RB-014 | La configuración empresarial es la única fuente de identidad y datos para comprobantes. |
 
 ## 9. Requisitos de seguridad
@@ -233,7 +222,6 @@ El servidor es autoritativo. La PWA puede calcular valores para informar al usua
 | SEC-009 | Archivos validados por MIME real, tamaño y extensión. | Archivo no permitido no se almacena. |
 | SEC-010 | Logs y auditoría excluyen secretos y datos innecesarios. | Pruebas inspeccionan eventos representativos. |
 | SEC-011 | Producción exige HTTPS, HSTS y cookies Secure. | Perfil de producción no inicia con configuración insegura. |
-| SEC-012 | Credenciales FEL se protegen en backend. | Nunca se devuelven, registran ni incluyen en documentos. |
 | SEC-013 | Un HTTP 401 de una sesión vigente intentará una sola renovación coordinada del access token y repetirá la solicitud original. | Solicitudes concurrentes comparten una renovación; si falla, se cierra la sesión y no se muestra como caída de PostgreSQL. |
 
 ## 10. Requisitos de datos
@@ -265,7 +253,6 @@ El servidor es autoritativo. La PWA puede calcular valores para informar al usua
 | INT-005 | Storage | Puerto para almacenamiento local y futuro object storage. |
 | INT-006 | PDF | Documento descargable/compartible derivado de venta oficial. |
 | INT-007 | WhatsApp | Web Share API o fallback; no API privada. |
-| INT-008 | FEL | Adaptador específico de proveedor autorizado cuando se configure. |
 | INT-009 | OpenAPI | Contratos, roles, errores e idempotencia documentados. |
 
 ## 12. Requisitos no funcionales
@@ -309,8 +296,6 @@ Los escenarios 1 a 12 de las secciones 145 a 156 del prompt maestro son obligato
 2. El ERD PostgreSQL coincide con Flyway.
 3. El ERD móvil coincide con la versión real de IndexedDB.
 4. La misma operación enviada cinco veces produce un único efecto.
-5. Un comprobante interno nunca se presenta como DTE certificado.
-6. FEL no se activa sin proveedor real y credenciales verificadas.
 
 ## 15. Trazabilidad
 
@@ -325,7 +310,6 @@ Los escenarios 1 a 12 de las secciones 145 a 156 del prompt maestro son obligato
 | RF-WST / RF-RET | Merma y devolución | CU-009, CU-010, CU-011 y antifraude. |
 | RF-SET | Liquidación | CU-013 y escenarios de diferencia. |
 | RF-SYN | Sincronización | CU-012, pruebas IndexedDB e idempotencia. |
-| RF-DOC / RF-FEL | PDF, WhatsApp y FEL | CU-014 y pruebas de proveedor/estado. |
 | RF-REP / RF-ALT / RF-AUD | Reportes, alertas y auditoría | Pruebas de consulta, permisos y eventos. |
 | DAT | PostgreSQL e IndexedDB | Flyway, migraciones móviles y ambos ERD. |
 | RNF | Plataforma completa | CI, Docker, E2E, seguridad y recuperación. |

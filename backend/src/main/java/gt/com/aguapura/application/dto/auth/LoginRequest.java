@@ -19,6 +19,9 @@ public record LoginRequest(
         String deviceName,
 
         @Size(max = 40)
-        String appVersion
+        String appVersion,
+
+        @Pattern(regexp = "^[0-9a-fA-F-]{36}$", message = "El identificador del dispositivo no es válido.")
+        String knownDeviceId
 ) {
 }

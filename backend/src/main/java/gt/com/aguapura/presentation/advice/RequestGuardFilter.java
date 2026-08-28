@@ -51,7 +51,8 @@ public class RequestGuardFilter extends OncePerRequestFilter {
             rejectRate(response, request);
             return;
         }
-        if ("/api/auth/login".equals(request.getRequestURI())
+        if (("/api/auth/login".equals(request.getRequestURI())
+                || "/api/auth/device-reenrollment/request".equals(request.getRequestURI()))
                 && !limiter.tryAcquire("login:" + remoteAddress, properties.loginRequestsPerMinute(), WINDOW, now)) {
             rejectRate(response, request);
             return;

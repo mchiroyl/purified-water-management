@@ -53,9 +53,6 @@ Las dos conciliaciones se calculan y presentan por separado.
 - Los datos empresariales serán configurables y no estarán escritos directamente en el código.
 - Nombre, identidad, NIT, contacto, logotipo, moneda, zona horaria y numeraciones estarán en un único formulario de configuración empresarial.
 - Esa configuración será la única fuente de datos corporativos para la interfaz y los comprobantes.
-- La facturación FEL se considerará una capacidad opcional.
-- No existe todavía un certificador FEL seleccionado.
-- Mientras no se contrate y configure un proveedor, FEL permanecerá desactivado y los comprobantes internos PDF seguirán funcionando.
 - La arquitectura seleccionada es un monolito modular desplegado con Docker Compose.
 
 ## 5. Condiciones técnicas y de integridad
@@ -83,9 +80,7 @@ Ventas simultáneas, crédito, inventario y revisiones requieren control de conc
 
 Los roles no son suficientes. Cada consulta o comando debe verificar vendedor, ruta, cliente, dispositivo y propiedad del recurso para evitar BOLA/IDOR.
 
-### FEL
 
-No puede implementarse una certificación real sin definir un certificador, credenciales y contrato técnico. El sistema incluirá configuración, estados y un contrato de integración, pero bloqueará la activación mientras no exista un adaptador de proveedor real.
 
 ### Alcance
 

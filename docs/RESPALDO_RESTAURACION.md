@@ -129,7 +129,6 @@ Los scripts no respaldan deliberadamente:
 
 - `.env`;
 - claves privadas TLS;
-- secretos de proveedor FEL;
 - credenciales del almacenamiento externo.
 
 Mantenga estos elementos en un gestor de secretos con su propio respaldo cifrado. En una recuperación total deben restaurarse por canal separado antes de iniciar el sistema.

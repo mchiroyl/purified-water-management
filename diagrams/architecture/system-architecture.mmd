@@ -27,7 +27,6 @@ flowchart TB
     PG[("PostgreSQL")]
     Files["Storage de archivos"]
     PDF["Generador PDF"]
-    FEL["Adaptador FEL opcional"]
 
     Internet --> Nginx --> UI
     Query -->|HTTPS JSON| Nginx
@@ -36,4 +35,3 @@ flowchart TB
     INFRA <--> PG
     INFRA <--> Files
     INFRA --> PDF
-    INFRA -.-> FEL

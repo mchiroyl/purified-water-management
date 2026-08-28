@@ -82,12 +82,37 @@ public class AuthApplicationService {
             throw invalidCredentials();
         }
         user.registerSuccessfulLogin();
-        var device = persistence.findActiveDevice(user.getId(), request.deviceName())
-                .orElseGet(() -> persistence.createDevice(user.getId(), request.deviceName(), request.appVersion()));
+        var device = resolveDevice(user, request);
         device.seen(request.appVersion());
         persistence.saveDevice(device);
         persistence.saveUser(user);
         return issueSession(user, device.getId(), UUID.randomUUID());
+    }
+
+    private AuthenticationPersistencePort.AuthDevice resolveDevice(AuthenticationPersistencePort.AuthUser user, LoginRequest request) {
+        if (request.knownDeviceId() != null && !request.knownDeviceId().isBlank()) {
+            UUID id;
+            try { id = UUID.fromString(request.knownDeviceId()); }
+            catch (IllegalArgumentException exception) { throw invalidCredentials(); }
+            var known = persistence.findDeviceById(id);
+            if (known.isPresent()
+                    && known.get().getUserId().equals(user.getId())
+                    && known.get().getStatus() == DeviceStatus.ACTIVE) {
+                return known.get();
+            }
+            if (!persistence.hasActiveDevice(user.getId())) {
+                return persistence.createDevice(user.getId(), request.deviceName(), request.appVersion());
+            }
+            throw new BusinessException("DEVICE_REENROLLMENT_REQUIRED",
+                    "Este dispositivo no está registrado. Solicite su reinscripción.", ErrorCategory.UNAUTHORIZED);
+        }
+        return persistence.findActiveDevice(user.getId(), request.deviceName()).orElseGet(() -> {
+            if (persistence.hasActiveDevice(user.getId())) {
+                throw new BusinessException("DEVICE_REENROLLMENT_REQUIRED",
+                        "Este dispositivo no está registrado. Solicite su reinscripción.", ErrorCategory.UNAUTHORIZED);
+            }
+            return persistence.createDevice(user.getId(), request.deviceName(), request.appVersion());
+        });
     }
 
     @Transactional

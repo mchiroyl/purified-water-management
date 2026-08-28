@@ -34,7 +34,7 @@ function trackingPointCount(where: string) {
   return Number(value);
 }
 
-test('flujo completo 1-28, offline, idempotencia, antifraude, PDF y FEL', async ({ request, page, context, browser }) => {
+test('flujo completo 1-28, offline, idempotencia, antifraude y PDF', async ({ request, page, context, browser }) => {
   test.setTimeout(180_000);
   const suffix = Date.now().toString().slice(-7);
   const manualAssets = path.resolve(process.cwd(), '../docs/assets/manual');
@@ -51,7 +51,7 @@ test('flujo completo 1-28, offline, idempotencia, antifraude, PDF y FEL', async 
     commercialName: `Agua E2E ${suffix}`, legalName: `Purificadora E2E ${suffix}, S.A.`, taxId: `E2E-${suffix}`,
     address: 'Ciudad de Guatemala, Guatemala', phone: '55550101', whatsapp: '55550101',
     email: `e2e-${suffix}@example.invalid`, currencyCode: 'GTQ', timezone: 'America/Guatemala',
-    receiptPrefix: 'E2E', nextReceiptNumber: 1, documentLegend: 'Comprobante interno no certificado como DTE',
+    receiptPrefix: 'E2E', nextReceiptNumber: 1, documentLegend: 'Gracias por su compra',
   })), 'configurar empresa');
 
   // 2-4. Producto, presentacion y precio vigente.
@@ -245,20 +245,12 @@ test('flujo completo 1-28, offline, idempotencia, antifraude, PDF y FEL', async 
   expect(closed.status).toBe('CLOSED');
   expect(Number(closed.monetaryDifference)).toBe(0);
 
-  // 27. PDF interno usa la misma empresa y nunca se presenta como DTE certificado.
+  // 27. PDF interno usa la misma identidad empresarial.
   const receipt = await request.get(`/api/sales/${onlineSale.id}/receipt`, authorized(seller.accessToken));
   expect(receipt.ok()).toBe(true);
   expect(receipt.headers()['content-type']).toContain('application/pdf');
   expect(receipt.headers()['x-document-type']).toBe('INTERNAL_RECEIPT');
   expect((await receipt.body()).subarray(0, 4).toString()).toBe('%PDF');
-
-  // FEL no se activa sin adaptador real ni credenciales.
-  const fel = await body<Json>(await request.get('/api/fel-configuration', authorized(admin.accessToken)), 'leer FEL');
-  const felAttempt = await request.put('/api/fel-configuration', authorized(admin.accessToken, {
-    enabled: true, providerCode: 'NO-INSTALADO', environment: 'TEST', establishmentCode: '1', version: fel.version,
-  }));
-  expect(felAttempt.status()).toBe(409);
-  expect((await felAttempt.json()).code).toBe('FEL_PROVIDER_UNAVAILABLE');
 
   // 28. La interfaz ofrece compartir el comprobante mediante Web Share.
   await page.goto('/');

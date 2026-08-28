@@ -2,7 +2,6 @@
 
 | Requisitos | Fase | Módulo | Caso de uso principal | Evidencia de prueba |
 |---|---:|---|---|---|
-| RF-CFG | 7, 26 | company, receipts, fel | Configurar empresa / generar comprobante | API + formulario + PDF |
 | RF-IAM, SEC-001–013 | 6, 7, 31 | auth, users, devices | CU-001 Iniciar sesión | Unit + integración + seguridad + refresh ante 401 |
 | RF-CAT | 8 | catalog | Gestionar producto/presentación | Dominio + API |
 | RF-PRI | 9 | pricing | Configurar/resolver precio | Dominio + manipulación cliente |
@@ -16,7 +15,6 @@
 | RF-RET | 22 | returns | CU-011 | Movimientos + recepción |
 | RF-SET | 23 | settlements | CU-013 | Escenarios físicos/monetarios |
 | RF-SYN | 16–20 | storage, sync | CU-012 | Persistencia + idempotencia |
-| RF-DOC, RF-FEL | 26, 27 | receipts, fel | CU-014 | PDF + share + bloqueo FEL |
 | RF-REP, RF-ALT | 28, 29, 39 | dashboard, reports | Consultar indicadores y exportar | `GET /api/dashboard`, reportes paginados, `.xlsx`/`.pdf`, rango, SQL parametrizado y alcance por vendedor |
 | RF-AUD | 30 | audit | Consultar auditoría | Flyway 18, `GET /api/audit`, `AuditDataSanitizerTest`, correlación HTTP e inmutabilidad PostgreSQL |
 | DAT-001–012 | 5, 16, 33, 37 | persistence | Migrar/respaldar | Flyway + IndexedDB + restore |

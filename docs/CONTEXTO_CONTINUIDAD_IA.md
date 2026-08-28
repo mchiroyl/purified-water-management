@@ -26,7 +26,6 @@ Los tres servicios deben estar `healthy`. Para detenerlos: `docker compose down`
 - Códigos automáticos: cliente, vendedor, ruta, vehículo, producto y presentación.
 - No se permiten duplicados lógicos de presentaciones ni de productos nuevos con la misma presentación.
 - Empresa, logotipo, moneda, zona horaria y numeración se configuran en un único formulario y se usan en comprobantes/reportes.
-- FEL es opcional y no debe tratarse como certificación activa si no se configura.
 - Reportes: Excel y PDF; los comprobantes usan identidad y logotipo configurados.
 - Recarga: carga adicional para una ruta ya iniciada.
 - Geolocalización: solo punto de inicio al recibir carga inicial y punto de cada venta confirmada; no seguimiento continuo.
@@ -81,7 +80,6 @@ El menú está agrupado y es desplegable:
 - Catálogo y planificación: Presentaciones, Productos, Clientes, Rutas, Precios.
 - Operación diaria: Inventario, Cargas, Ventas, Transferencias, Mermas, Devoluciones, Liquidaciones.
 - Control y seguimiento: Control operativo, Anulaciones, Pendientes, Reportes, Auditoría.
-- Administración: Usuarios, Datos de la empresa, FEL opcional.
 
 En móvil se usa botón de menú y contenido desplazable; el cierre de sesión debe permanecer visible.
 

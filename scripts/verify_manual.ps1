@@ -9,7 +9,7 @@ $requiredManualTerms = @(
     'Inicio', 'Productos', 'Clientes', 'Rutas', 'Precios', 'Inventario', 'Cargas', 'Ventas',
     'Transferencias', 'Mermas', 'Devoluciones', 'Liquidaciones', 'Control operativo',
     'Anulaciones', 'Pendientes', 'Reportes', 'Auditoría', 'Usuarios', 'Datos de la empresa',
-    'FEL opcional', 'CLI-', 'VND-', 'RUT-', 'VEH-', 'Recarga', 'Excel', 'PDF', '401'
+    'CLI-', 'VND-', 'RUT-', 'VEH-', 'Recarga', 'Excel', 'PDF', '401'
 )
 $missing = $requiredManualTerms | Where-Object { $manual -notmatch [regex]::Escape($_) }
 if ($missing.Count -gt 0) {

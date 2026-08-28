@@ -111,7 +111,6 @@ Al añadir operación offline documente:
 - Use `.env` local, nunca credenciales en código.
 - No copie JWT/refresh cookie a issues o capturas.
 - No exponga puertos internos al host salvo una prueba explícita.
-- Mantenga `FEL_ENABLED=false` sin certificador real.
 - Pruebe BOLA/IDOR, alcance por vendedor, revocación, rate limit y tamaños.
 - Revise el resultado del escaneo de seguridad antes de integrar cambios.
 

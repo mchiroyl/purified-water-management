@@ -55,12 +55,12 @@ class PdfBoxReceiptGeneratorTest {
         assertThat(pdf).startsWith("%PDF".getBytes());
         try (var document = Loader.loadPDF(pdf)) {
             String text = new PDFTextStripper().getText(document);
-            assertThat(text).contains("COMPROBANTE INTERNO", "NO ES DTE FEL CERTIFICADO");
+            assertThat(text).contains("COMPROBANTE INTERNO");
+            assertThat(text).doesNotContain("FEL", "DTE", "CERTIFICADO");
             assertThat(text).contains("Agua Clara", "Purificadora Agua Clara, S.A.", "1234567-8");
             assertThat(text).contains("V-00000042", "Cliente Centro", "Vendedor Ruta 1");
             assertThat(text).contains("Agua pura", "Fardo x12", "125.00", "Efectivo");
             assertThat(text).contains("Gracias por su compra");
-            assertThat(text).doesNotContain("DTE CERTIFICADO");
         }
     }
 }

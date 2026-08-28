@@ -30,6 +30,7 @@ public class JpaAuthenticationAdapter implements AuthenticationPersistencePort {
     public Optional<AuthDevice> findActiveDevice(UUID userId, String name) {
         return devices.findFirstByUserIdAndFriendlyNameAndStatus(userId, name, DeviceStatus.ACTIVE).map(device -> device);
     }
+    public boolean hasActiveDevice(UUID userId) { return devices.existsByUserIdAndStatus(userId, DeviceStatus.ACTIVE); }
     public Optional<AuthDevice> findDeviceById(UUID id) { return devices.findById(id).map(device -> device); }
     public AuthDevice createDevice(UUID userId, String name, String version) { return devices.save(new DeviceJpaEntity(userId, name, version)); }
     public void saveDevice(AuthDevice device) { devices.save((DeviceJpaEntity) device); }

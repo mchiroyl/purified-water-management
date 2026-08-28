@@ -5,8 +5,11 @@ import gt.com.aguapura.application.dto.identity.DeviceAdministrationResponse;
 import gt.com.aguapura.application.dto.identity.UserAdministrationResponse;
 import gt.com.aguapura.application.services.IdentityAdministrationApplicationService;
 import gt.com.aguapura.application.services.AuditApplicationService;
+import gt.com.aguapura.application.services.DeviceReenrollmentApplicationService;
+import gt.com.aguapura.application.dto.auth.DeviceReenrollmentResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -26,11 +29,13 @@ public class IdentityAdministrationController {
 
     private final IdentityAdministrationApplicationService service;
     private final AuditApplicationService audit;
+    private final DeviceReenrollmentApplicationService reenrollment;
 
     public IdentityAdministrationController(IdentityAdministrationApplicationService service,
-                                            AuditApplicationService audit) {
+                                            AuditApplicationService audit, DeviceReenrollmentApplicationService reenrollment) {
         this.service = service;
         this.audit = audit;
+        this.reenrollment = reenrollment;
     }
 
     @GetMapping("/users")
@@ -67,8 +72,24 @@ public class IdentityAdministrationController {
         return result;
     }
 
+    @GetMapping("/device-reenrollment")
+    public List<DeviceReenrollmentResponse> reenrollments() { return reenrollment.list(); }
+
+    @GetMapping("/device-reenrollment/by-token/{token}")
+    public DeviceReenrollmentResponse reenrollmentByToken(@PathVariable String token) { return reenrollment.findForAdministrator(token); }
+
+    @PostMapping("/device-reenrollment/{id}/approve")
+    public DeviceReenrollmentResponse approveReenrollment(@PathVariable UUID id, @RequestBody ApproveDeviceRequest request, @AuthenticationPrincipal Jwt jwt) {
+        return reenrollment.approve(id, request.deviceName(), actor(jwt));
+    }
+
+    @PostMapping("/device-reenrollment/{id}/reject")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void rejectReenrollment(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) { reenrollment.reject(id, actor(jwt)); }
+
     private UUID actor(Jwt jwt) { return UUID.fromString(jwt.getClaimAsString("userId")); }
     private UUID device(Jwt jwt) { return UUID.fromString(jwt.getClaimAsString("deviceId")); }
 
     public record StatusRequest(@NotBlank String status) {}
+    public record ApproveDeviceRequest(@NotBlank @Size(min = 2, max = 100) String deviceName) {}
 }

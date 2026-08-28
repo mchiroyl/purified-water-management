@@ -5,7 +5,6 @@ Leyenda: **Sí** permitido; **No** prohibido; **Cond.** permitido con condición
 | Operación | Administrador | Bodega | Vendedor | Supervisor | Restricción adicional |
 |---|---:|---:|---:|---:|---|
 | Configurar datos de empresa | Sí | No | No | No | Auditado; registro único. |
-| Configurar FEL | Sí | No | No | No | Solo activa con proveedor real validado. |
 | Crear/desactivar usuario | Sí | No | No | No | No borra historial. |
 | Asignar roles | Sí | No | No | No | Impide autoescalamiento desde DTO. |
 | Revocar dispositivo | Sí | No | No | Cond. | Supervisor según política. |
