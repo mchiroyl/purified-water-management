@@ -8,6 +8,7 @@ import gt.com.aguapura.application.dto.auth.DeviceReenrollmentResponse;
 import gt.com.aguapura.application.services.DeviceReenrollmentApplicationService;
 import gt.com.aguapura.application.services.AuthApplicationService;
 import gt.com.aguapura.application.services.AuditApplicationService;
+import gt.com.aguapura.application.services.DeviceEnrollmentApplicationService;
 import gt.com.aguapura.infrastructure.configuration.SecurityProperties;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
@@ -67,6 +68,12 @@ public class AuthController {
     @PostMapping("/refresh")
     public ResponseEntity<AuthResponse> refresh(@CookieValue(name = REFRESH_COOKIE, required = false) String refreshToken) {
         var result = service.refresh(refreshToken);
+        return withRefreshCookie(result.response(), result.refreshToken());
+    }
+
+    @PostMapping("/device-enrollment")
+    public ResponseEntity<AuthResponse> deviceEnrollment(@Valid @RequestBody DeviceEnrollmentRequest request) {
+        var result = enrollment.accept(request);
         return withRefreshCookie(result.response(), result.refreshToken());
     }
 

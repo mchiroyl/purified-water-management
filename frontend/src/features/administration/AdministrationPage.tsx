@@ -3,6 +3,7 @@ import { useState, type FormEvent } from 'react';
 import { PageHeader } from '../../app/PageHeader';
 import { StatusPanel } from '../../app/StatusPanel';
 import { apiRequest } from '../../services/apiClient';
+import { QrCodeVisual } from './QrCodeVisual';
 
 type UserAdmin = {
   id: string; username: string; email: string; status: string; mustChangePassword: boolean;
@@ -27,6 +28,8 @@ export function AdministrationPage() {
   const qrRequest = useQuery({ queryKey: ['administration', 'device-reenrollment', 'qr', qrToken], enabled: Boolean(qrToken), queryFn: () => apiRequest<Reenrollment>(`/administration/device-reenrollment/by-token/${encodeURIComponent(qrToken!)}`) });
   const [approvedNames, setApprovedNames] = useState<Record<string, string>>({});
   const [form, setForm] = useState({ username: '', email: '', password: '', roles: ['VENDEDOR'], sellerDisplayName: '' });
+  const [enrollmentUserId, setEnrollmentUserId] = useState('');
+  const [createdInvitation, setCreatedInvitation] = useState<EnrollmentInvitation | null>(null);
   const create = useMutation({
     mutationFn: () => apiRequest<UserAdmin>('/administration/users', { method: 'POST', body: JSON.stringify(form) }),
     onSuccess: () => {

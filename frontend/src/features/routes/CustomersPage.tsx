@@ -1,9 +1,11 @@
 ﻿import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../app/PageHeader';
 import { getMobileDatabase } from '../../offline/SyncContext';
 import type { ProvisionalCustomerRecord } from '../../offline/mobileDatabase';
 import { apiRequest } from '../../services/apiClient';
+import { calendarOnlyProps, currentMonthDateBounds } from '../../utils/dateInput';
 import { queueProvisionalCustomer } from './provisionalCustomerOffline';
 import { localDate, type Customer, type ProvisionalReview, type Route } from './types';
 
@@ -17,8 +19,9 @@ type CustomersPageProps = {
 const emptyRouteCustomer = { routeId: '', name: '', phone: '', whatsapp: '', addressReference: '' };
 
 export function CustomersPage({ canManage, canCreateRouteCustomer = false,
-  canReviewProvisional = false, deviceId = '' }: CustomersPageProps) {
+  canReviewProvisional = false, deviceId = '', view = 'create' }: CustomersPageProps & { view?: 'create' | 'list' }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const customers = useQuery({ queryKey: ['customers'], queryFn: () => apiRequest<Customer[]>('/customers') });
   const routes = useQuery({ queryKey: ['routes'], queryFn: () => apiRequest<Route[]>('/routes'), enabled: canManage || canCreateRouteCustomer });
   const reviews = useQuery({ queryKey: ['customers', 'provisional-reviews'],
@@ -41,13 +44,6 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
     mutationFn: ({ customerId, routeId, validFrom }: { customerId: string; routeId: string; validFrom: string }) =>
       apiRequest<Route>(`/customers/${customerId}/route-assignment`, { method: 'POST', body: JSON.stringify({ routeId, validFrom }) }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['customers'] })
-  });
-  const createOccasional = useMutation({
-    mutationFn: () => apiRequest<Customer>('/customers/occasional', { method: 'POST', body: JSON.stringify(routeCustomer) }),
-    onSuccess: () => {
-      setRouteCustomer(emptyRouteCustomer);
-      void queryClient.invalidateQueries({ queryKey: ['customers'] });
-    }
   });
   const decideReview = useMutation({
     mutationFn: ({ customerId, decision }: { customerId: string; decision: 'APPROVED' | 'REJECTED' | 'MERGED' }) => {
@@ -87,6 +83,9 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
     }
   };
   const submit = (event: FormEvent) => { event.preventDefault(); create.mutate(); };
+  const orderedCustomers = [...(customers.data ?? [])].sort((left, right) =>
+    new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+  const dateBounds = currentMonthDateBounds();
 
   return (
     <main>
@@ -94,10 +93,13 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
         eyebrow="Maestros operativos"
         title="Clientes"
         description="Clientes permanentes, datos de contacto, crédito autorizado y ruta vigente."
+        actions={<button type="button" className="secondary" onClick={() => navigate(view === 'create' ? '/customers/list' : '/customers')}>
+          {view === 'create' ? 'Ver clientes registrados' : 'Nuevo cliente'}
+        </button>}
       />
 
       {/* ── Formulario nuevo cliente ── */}
-      {canManage && (
+      {view === 'create' && canManage && (
         <form className="panel catalog-form" onSubmit={submit}>
           <h2>Nuevo cliente</h2>
           <p className="field-hint">El código de cliente se asigna automáticamente al guardar (CLI-000001).</p>
@@ -149,16 +151,16 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
         </form>
       )}
 
-      {/* ── Cliente en ruta (ocasional / provisional) ── */}
-      {canCreateRouteCustomer && (
+      {/* ── Cliente provisional encontrado en ruta ── */}
+      {view === 'create' && canCreateRouteCustomer && (
         <section className="panel section-panel">
           <div className="section-heading">
             <div>
               <h2>Cliente encontrado en ruta</h2>
-              <span>Ocasional o provisional</span>
+              <span>Cliente provisional</span>
             </div>
           </div>
-          <p className="muted">El ocasional compra sin registro permanente. El provisional se guarda primero en este teléfono y queda pendiente de revisión.</p>
+          <p className="muted">Se guarda primero en este teléfono, queda pendiente de revisión y puede utilizarse en la venta al contado o por transferencia.</p>
           <div className="form-grid compact-form">
             <label>
               Ruta
@@ -175,10 +177,6 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
               Teléfono
               <input value={routeCustomer.phone} onChange={e => setRouteCustomer({ ...routeCustomer, phone: e.target.value })} />
             </label>
-            <label>
-              WhatsApp
-              <input value={routeCustomer.whatsapp} onChange={e => setRouteCustomer({ ...routeCustomer, whatsapp: e.target.value })} />
-            </label>
             <label className="wide">
               Dirección o referencia
               <textarea required value={routeCustomer.addressReference} onChange={e => setRouteCustomer({ ...routeCustomer, addressReference: e.target.value })} />
@@ -190,20 +188,11 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
                 disabled={!routeCustomer.routeId || !routeCustomer.name.trim() || !routeCustomer.addressReference.trim()}
                 onClick={() => void saveProvisional()}
               >
-                Guardar provisional offline
-              </button>
-              <button
-                type="button"
-                className="secondary"
-                disabled={!routeCustomer.routeId || !routeCustomer.name.trim() || !routeCustomer.addressReference.trim() || createOccasional.isPending}
-                onClick={() => createOccasional.mutate()}
-              >
-                Registrar ocasional
+                Guardar cliente provisional offline
               </button>
             </div>
           </div>
           {localMessage && <div className="alert">{localMessage}</div>}
-          {createOccasional.error && <div className="alert error">{createOccasional.error.message}</div>}
           {localCustomers.length > 0 && (
             <div className="data-list">
               <h3>Provisionales guardados en el teléfono</h3>
@@ -224,7 +213,7 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
       )}
 
       {/* ── Revisión de provisionales ── */}
-      {canReviewProvisional && (
+      {view === 'list' && canReviewProvisional && reviews.data && reviews.data.length > 0 && (
         <section className="panel section-panel">
           <div className="section-heading">
             <h2>Revisión de clientes provisionales</h2>
@@ -270,28 +259,30 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
       )}
 
       {/* ── Lista de clientes ── */}
-      <section className="panel section-panel">
+      {view === 'list' && <section className="panel section-panel">
         <div className="section-heading">
           <h2>Clientes registrados</h2>
           <span>{customers.data?.length ?? 0} clientes</span>
         </div>
         {customers.isLoading && <p>Cargando clientes…</p>}
         {customers.error && <div className="alert error">{customers.error.message}</div>}
-        <div className="data-list">
-          {customers.data?.map(customer => {
+        {orderedCustomers.length > 0 && <div className="table-wrap customer-table-wrap">
+          <table>
+            <thead><tr><th>Cliente</th><th>Código</th><th>Teléfono</th><th>Dirección o referencia</th><th>Ruta y vendedor</th><th>Estado</th><th>Opciones</th></tr></thead>
+            <tbody>{orderedCustomers.map(customer => {
             const selection = assignments[customer.id] ?? { routeId: customer.routeId ?? '', validFrom: localDate() };
             return (
-              <article className="data-row customer-row" key={customer.id}>
-                <div>
-                  <strong>{customer.name}</strong>
-                  <span>{customer.code} · {customer.contactName || 'Sin contacto'} · {customer.phone || 'Sin teléfono'}</span>
-                  <small>{customer.routeName ? `${customer.routeName} · ${customer.sellerName ?? 'Sin vendedor'}` : 'Sin ruta asignada'} · Saldo Q{customer.currentBalance.toFixed(2)}</small>
-                </div>
-                <span className={`status ${customer.status === 'ACTIVE' ? 'active' : 'inactive'}`}>
+              <tr key={customer.id}>
+                <td><strong>{customer.name}</strong><small>{customer.contactName || 'Sin contacto'} · Saldo Q{customer.currentBalance.toFixed(2)}</small></td>
+                <td>{customer.code}</td>
+                <td>{customer.phone || 'Sin teléfono'}</td>
+                <td>{customer.addressReference}</td>
+                <td>{customer.routeName ? `${customer.routeName} · ${customer.sellerName ?? 'Sin vendedor'}` : 'Sin ruta asignada'}</td>
+                <td><span className={`status ${customer.status === 'ACTIVE' ? 'active' : 'inactive'}`}>
                   {customer.registrationState === 'PENDING_REVIEW' ? 'Pendiente de revisión' : customer.status === 'ACTIVE' ? 'Activo' : 'Inactivo'}
-                </span>
+                </span></td>
                 {canManage && (
-                  <div className="inline-assignment">
+                  <td><div className="inline-assignment">
                     <select
                       aria-label={`Ruta de ${customer.name}`}
                       value={selection.routeId}
@@ -303,20 +294,26 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
                     <input
                       aria-label={`Vigencia de ruta de ${customer.name}`}
                       type="date"
+                      min={dateBounds.min}
+                      max={dateBounds.max}
+                      {...calendarOnlyProps()}
                       value={selection.validFrom}
                       onChange={e => setAssignments({ ...assignments, [customer.id]: { ...selection, validFrom: e.target.value } })}
                     />
                     <button className="secondary" disabled={!selection.routeId || assign.isPending} onClick={() => assign.mutate({ customerId: customer.id, ...selection })}>
                       Asignar ruta
                     </button>
-                  </div>
+                  </div></td>
                 )}
-              </article>
+                {!canManage && <td>—</td>}
+              </tr>
             );
-          })}
-        </div>
+            })}</tbody>
+          </table>
+        </div>}
+        {customers.data?.length === 0 && <p className="muted">Aún no hay clientes registrados.</p>}
         {assign.error && <div className="alert error">{assign.error.message}</div>}
-      </section>
+      </section>}
     </main>
   );
 }

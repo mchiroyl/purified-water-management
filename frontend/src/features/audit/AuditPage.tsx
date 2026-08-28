@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState, type FormEvent } from 'react';
 import { PageHeader } from '../../app/PageHeader';
 import { apiRequest } from '../../services/apiClient';
+import { calendarOnlyProps, currentMonthDateBounds } from '../../utils/dateInput';
 
 type AuditEvent = { id: string; username: string; deviceName: string; action: string; entityType: string;
   entityId?: string; beforeData?: Record<string, unknown>; afterData?: Record<string, unknown>;
@@ -17,6 +18,7 @@ function parameters(filters: Filters, page: number) {
 }
 
 export function AuditPage() {
+  const dateBounds = currentMonthDateBounds();
   const [draft, setDraft] = useState(initial);
   const [filters, setFilters] = useState(initial);
   const [page, setPage] = useState(0);
@@ -26,8 +28,8 @@ export function AuditPage() {
   return <main>
     <PageHeader eyebrow="Trazabilidad inmutable" title="Auditoría" description="Cada consulta también queda auditada. Contraseñas, tokens y credenciales se eliminan antes de almacenar o mostrar datos." />
     <form className="panel audit-filters" onSubmit={submit}>
-      <label>Desde<input type="date" value={draft.from} onChange={event => setDraft({ ...draft, from: event.target.value })} required /></label>
-      <label>Hasta<input type="date" value={draft.to} onChange={event => setDraft({ ...draft, to: event.target.value })} required /></label>
+      <label>Desde<input type="date" min={dateBounds.min} max={dateBounds.max} {...calendarOnlyProps()} value={draft.from} onChange={event => setDraft({ ...draft, from: event.target.value })} required /></label>
+      <label>Hasta<input type="date" min={dateBounds.min} max={dateBounds.max} {...calendarOnlyProps()} value={draft.to} onChange={event => setDraft({ ...draft, to: event.target.value })} required /></label>
       <label>Acción<input value={draft.action} onChange={event => setDraft({ ...draft, action: event.target.value })} placeholder="CREATE_SALE" /></label>
       <label>Entidad<input value={draft.entityType} onChange={event => setDraft({ ...draft, entityType: event.target.value })} placeholder="SALE" /></label>
       <label>Usuario<input value={draft.user} onChange={event => setDraft({ ...draft, user: event.target.value })} /></label>

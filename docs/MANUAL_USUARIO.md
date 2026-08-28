@@ -98,6 +98,8 @@ En **Precios**:
 4. Active la versión que debe usarse.
 5. Registre precios especiales o solicitudes de descuento solo cuando corresponda.
 
+La pantalla **Registrar precios** se utiliza únicamente para capturar nuevas reglas y solicitudes. El botón **Ver precios registrados** abre una vista separada para consultar listas, versiones, tramos, precios especiales, solicitudes y estados sin duplicar información ni mezclar la consulta con los formularios.
+
 El precio, el descuento y los totales finales los calcula el servidor. El vendedor no debe calcular manualmente el total oficial.
 
 ### 5.5 Rutas, vehículos y clientes

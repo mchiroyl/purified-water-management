@@ -36,6 +36,21 @@ Revoca la sesión y limpia la cookie.
 
 Después del cambio se revocan sesiones anteriores según la política de seguridad.
 
+### Alta controlada de dispositivos por QR
+
+Un administrador crea una invitación con `POST /administration/device-enrollment/invitations`
+(`{"userId":"..."}`), que devuelve un `payload` QR y un token de respaldo. La invitación
+expira en 10 minutos y es de un solo uso. El cliente puede enviar el QR completo o el token
+a `POST /auth/device-enrollment`:
+
+```json
+{ "token": "https://sistema.example/enroll?token=...", "deviceName": "Teléfono de ruta", "appVersion": "web-1.0" }
+```
+
+El endpoint completa el alta y devuelve la sesión normal. Las invitaciones se consultan o
+revocan desde `/administration/device-enrollment/invitations`; el dispositivo puede revocarse
+desde `/administration/devices`.
+
 ## Convenciones
 
 En rutas protegidas envíe:

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '../../app/PageHeader';
 import { useState, type FormEvent } from 'react';
 import { apiRequest } from '../../services/apiClient';
+import { calendarOnlyProps, currentMonthDateTimeBounds } from '../../utils/dateInput';
 
 type Authorization = { id: string; authorizationType: string; entityType: string; entityId: string;
   requestedByUsername: string; reason: string; status: string; expiresAt: string; decidedByUsername?: string;
@@ -15,6 +16,7 @@ const incidentLabels: Record<string, string> = { OPEN: 'Incidencia abierta', INV
 const tomorrow = () => new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
 
 export function OperationsControlPage({ canDecide }: { canDecide: boolean }) {
+  const dateBounds = currentMonthDateTimeBounds();
   const client=useQueryClient();
   const authorizations=useQuery({ queryKey: ['operations-control','authorizations'], queryFn: () => apiRequest<Authorization[]>('/operations-control/authorizations') });
   const incidents=useQuery({ queryKey: ['operations-control','incidents'], queryFn: () => apiRequest<Incident[]>('/operations-control/incidents') });
@@ -38,7 +40,7 @@ export function OperationsControlPage({ canDecide }: { canDecide: boolean }) {
         <label>Tipo<select value={authorization.authorizationType} onChange={event=>setAuthorization({...authorization,authorizationType:event.target.value})}><option value="LOAD_CORRECTION">Corrección de carga</option><option value="SETTLEMENT_DIFFERENCE">Liquidación con diferencia</option><option value="CREDIT_LIMIT_CHANGE">Cambio de límite</option><option value="OTHER_OPERATION">Otra operación</option></select></label>
         <label>Recurso<select value={authorization.entityType} onChange={event=>setAuthorization({...authorization,entityType:event.target.value})}><option value="ROUTE_LOAD">Carga</option><option value="SETTLEMENT">Liquidación</option><option value="CUSTOMER">Cliente</option><option value="SALE">Venta</option></select></label>
         <label>UUID del recurso<input required value={authorization.entityId} onChange={event=>setAuthorization({...authorization,entityId:event.target.value})}/></label>
-        <label>Vence<input required type="datetime-local" value={authorization.expiresAt} onChange={event=>setAuthorization({...authorization,expiresAt:event.target.value})}/></label>
+        <label>Vence<input required type="datetime-local" min={dateBounds.min} max={dateBounds.max} {...calendarOnlyProps()} value={authorization.expiresAt} onChange={event=>setAuthorization({...authorization,expiresAt:event.target.value})}/></label>
         <label className="full-width">Motivo<textarea required value={authorization.reason} onChange={event=>setAuthorization({...authorization,reason:event.target.value})}/></label>
       </div><button className="primary">Enviar solicitud</button></form>
       <form className="panel section-panel" onSubmit={submitIncident}><h2>Reportar incidencia</h2><div className="form-grid compact-grid">

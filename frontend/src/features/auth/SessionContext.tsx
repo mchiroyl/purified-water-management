@@ -8,7 +8,8 @@ interface SessionContextValue {
   user: SessionUser | null;
   busy: boolean;
   initializing: boolean;
-  login(username: string, password: string, deviceName: string): Promise<void>;
+  login(username: string, password: string): Promise<void>;
+  enroll(token: string): Promise<void>;
   refresh(): Promise<void>;
   changePassword(currentPassword: string, newPassword: string): Promise<void>;
   logout(): Promise<void>;
@@ -29,7 +30,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setUser(auth.user);
   }, []);
 
-  const login = useCallback(async (username: string, password: string, deviceName: string) => {
+  const login = useCallback(async (username: string, password: string) => {
     setBusy(true);
     try {
       await applyAuth(await apiRequest<AuthResponse>('/auth/login', {
@@ -90,8 +91,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const value = useMemo(() => ({ user, busy, initializing, login, refresh, changePassword, logout }),
-    [user, busy, initializing, login, refresh, changePassword, logout]);
+  const value = useMemo(() => ({ user, busy, initializing, login, enroll, refresh, changePassword, logout }),
+    [user, busy, initializing, login, enroll, refresh, changePassword, logout]);
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
 

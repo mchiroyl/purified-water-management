@@ -3,6 +3,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { PageHeader } from '../../app/PageHeader';
 import { StatusPanel } from '../../app/StatusPanel';
 import { apiFile, apiRequest } from '../../services/apiClient';
+import { calendarOnlyProps, currentMonthDateBounds } from '../../utils/dateInput';
 
 type ReportType = 'sales' | 'wastes' | 'settlements';
 type Page<T> = { content: T[]; totalElements: number; page: number; size: number; hasNext: boolean };
@@ -33,6 +34,7 @@ function parameters(filters: Filters, page: number): string {
 }
 
 export function ReportsPage() {
+  const dateBounds = currentMonthDateBounds();
   const [type, setType] = useState<ReportType>('sales');
   const [draft, setDraft] = useState<Filters>(initialFilters);
   const [filters, setFilters] = useState<Filters>(initialFilters);
@@ -64,8 +66,8 @@ export function ReportsPage() {
       <button className={type === 'settlements' ? 'primary' : 'secondary'} onClick={() => changeType('settlements')}>Liquidaciones</button>
     </div>
     <form className="panel report-filters" onSubmit={submit}>
-      <label>Desde<input type="date" value={draft.from} onChange={event => setDraft({ ...draft, from: event.target.value })} required /></label>
-      <label>Hasta<input type="date" value={draft.to} onChange={event => setDraft({ ...draft, to: event.target.value })} required /></label>
+      <label>Desde<input type="date" min={dateBounds.min} max={dateBounds.max} {...calendarOnlyProps()} value={draft.from} onChange={event => setDraft({ ...draft, from: event.target.value })} required /></label>
+      <label>Hasta<input type="date" min={dateBounds.min} max={dateBounds.max} {...calendarOnlyProps()} value={draft.to} onChange={event => setDraft({ ...draft, to: event.target.value })} required /></label>
       <label>Vendedor<input value={draft.seller} onChange={event => setDraft({ ...draft, seller: event.target.value })} placeholder="Código o nombre" /></label>
       <label>Ruta<input value={draft.route} onChange={event => setDraft({ ...draft, route: event.target.value })} placeholder="Código o nombre" /></label>
       {type === 'sales' && <label>Cliente<input value={draft.customer} onChange={event => setDraft({ ...draft, customer: event.target.value })} placeholder="Código o nombre" /></label>}

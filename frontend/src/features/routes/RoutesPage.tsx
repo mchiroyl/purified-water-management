@@ -3,9 +3,11 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../app/PageHeader';
 import { apiRequest } from '../../services/apiClient';
+import { calendarOnlyProps, currentMonthDateBounds } from '../../utils/dateInput';
 import { localDate, type Route, type Seller, type Vehicle } from './types';
 
 export function RoutesPage({ canManage, view = 'create' }: { canManage: boolean; view?: 'create' | 'list' }) {
+  const dateBounds = currentMonthDateBounds();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const routes = useQuery({ queryKey: ['routes'], queryFn: () => apiRequest<Route[]>('/routes') });
@@ -54,7 +56,7 @@ export function RoutesPage({ canManage, view = 'create' }: { canManage: boolean;
           {canManage && canEditRoute && <button type="button" className="secondary" onClick={() => setEditingRoute(route)}>Modificar ruta</button>}
           {canManage && <div className="assignment-form"><select aria-label={`Vendedor de ${route.name}`} value={selection.sellerId} onChange={event => setAssignments({ ...assignments, [route.id]: { ...selection, sellerId: event.target.value } })}><option value="">Seleccionar vendedor</option>{sellers.data?.map(seller => <option value={seller.id} key={seller.id}>{seller.code} · {seller.displayName}</option>)}</select>
             <select aria-label={`Vehículo de ${route.name}`} value={selection.vehicleId} onChange={event => setAssignments({ ...assignments, [route.id]: { ...selection, vehicleId: event.target.value } })}><option value="">Sin vehículo</option>{vehicles.data?.map(vehicle => <option value={vehicle.id} key={vehicle.id}>{vehicle.code}{vehicle.licensePlate ? ` · ${vehicle.licensePlate}` : ''}</option>)}</select>
-            <input aria-label={`Vigencia de ${route.name}`} type="date" value={selection.validFrom} onChange={event => setAssignments({ ...assignments, [route.id]: { ...selection, validFrom: event.target.value } })} />
+            <input aria-label={`Vigencia de ${route.name}`} type="date" min={dateBounds.min} max={dateBounds.max} {...calendarOnlyProps()} value={selection.validFrom} onChange={event => setAssignments({ ...assignments, [route.id]: { ...selection, validFrom: event.target.value } })} />
             <button className="secondary" disabled={!selection.sellerId || assign.isPending} onClick={() => assign.mutate({ routeId: route.id, ...selection })}>Guardar asignación</button></div>}
         </article>;
       })}</div>{assign.error && <div className="alert error">{assign.error.message}</div>}

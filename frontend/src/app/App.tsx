@@ -1,6 +1,7 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useSession } from '../features/auth/SessionContext';
 import { LoginPage } from '../features/auth/LoginPage';
+import { EnrollmentPage } from '../features/auth/EnrollmentPage';
 import { PasswordChangePage } from '../features/auth/PasswordChangePage';
 import { CompanyConfigurationPage } from '../features/company/CompanyConfigurationPage';
 import { ProductCatalogPage } from '../features/catalog/ProductCatalogPage';
@@ -27,7 +28,9 @@ import { DashboardPage } from './DashboardPage';
 
 export function App() {
   const { user, initializing } = useSession();
+  const location = useLocation();
   if (initializing) return <main className="auth-page"><section className="auth-card"><p>Restaurando sesión…</p></section></main>;
+  if (!user && location.pathname === '/enroll') return <EnrollmentPage />;
   if (!user) return <LoginPage />;
   if (user.mustChangePassword) return <PasswordChangePage />;
   const isAdmin = user.roles.includes('ADMINISTRADOR');
@@ -61,11 +64,15 @@ export function App() {
         <Route path="customers" element={canSeeCustomers ? <CustomersPage canManage={isAdmin}
           canCreateRouteCustomer={isAdmin || isSeller} canReviewProvisional={canReviewProvisional}
           deviceId={user.deviceId} /> : <Navigate to="/" replace />} />
+        <Route path="customers/list" element={canSeeCustomers ? <CustomersPage view="list" canManage={isAdmin}
+          canCreateRouteCustomer={false} canReviewProvisional={canReviewProvisional}
+          deviceId={user.deviceId} /> : <Navigate to="/" replace />} />
         <Route path="routes" element={canSeeRoutes ? <RoutesPage canManage={isAdmin} /> : <Navigate to="/" replace />} />
         <Route path="routes/list" element={canSeeRoutes ? <RoutesPage canManage={isAdmin} view="list" /> : <Navigate to="/" replace />} />
         <Route path="vehicles" element={canSeeRoutes ? <VehiclesPage /> : <Navigate to="/" replace />} />
         <Route path="vehicles/list" element={canSeeRoutes ? <VehiclesPage view="list" /> : <Navigate to="/" replace />} />
         <Route path="pricing" element={canSeePricing ? <PricingPage canManage={isAdmin} canApprove={isAdmin || user.roles.includes('SUPERVISOR')} canRequestDiscount={user.roles.includes('VENDEDOR')} /> : <Navigate to="/" replace />} />
+        <Route path="pricing/list" element={canSeePricing ? <PricingPage view="list" canManage={isAdmin} canApprove={isAdmin || user.roles.includes('SUPERVISOR')} canRequestDiscount={user.roles.includes('VENDEDOR')} /> : <Navigate to="/" replace />} />
         <Route path="inventory" element={canSeeInventory ? <InventoryPage canManage={canManageInventory} /> : <Navigate to="/" replace />} />
         <Route path="loads" element={canSeeLoads ? <RouteLoadsPage canPrepare={isAdmin || isWarehouse} canConfirmWarehouse={isAdmin || isWarehouse} canReceive={isAdmin || isSeller} canStart={isAdmin || isSeller} canCorrect={isAdmin || isWarehouse} /> : <Navigate to="/" replace />} />
         <Route path="sales" element={canSeeSales ? <SalesPage canSell={isAdmin || isSeller} /> : <Navigate to="/" replace />} />
@@ -78,6 +85,7 @@ export function App() {
         <Route path="pending" element={<PendingOperationsPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="audit" element={canSeeAudit ? <AuditPage /> : <Navigate to="/" replace />} />
+        <Route path="enroll" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

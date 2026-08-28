@@ -42,7 +42,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiErrorResponse> integrity(DataIntegrityViolationException exception, HttpServletRequest request) {
-        log.warn("Violación de integridad. correlationId={}", correlation(request));
+        log.warn("Violación de integridad. correlationId={}, cause={}",
+                correlation(request), exception.getMostSpecificCause().getMessage(), exception);
         return response(HttpStatus.CONFLICT, "DATA_CONFLICT", "La operación entra en conflicto con datos existentes.", request, null);
     }
 

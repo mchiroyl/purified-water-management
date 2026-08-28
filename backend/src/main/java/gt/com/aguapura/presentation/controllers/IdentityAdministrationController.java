@@ -1,9 +1,12 @@
 package gt.com.aguapura.presentation.controllers;
 
 import gt.com.aguapura.application.dto.identity.CreateUserRequest;
+import gt.com.aguapura.application.dto.identity.CreateDeviceEnrollmentRequest;
+import gt.com.aguapura.application.dto.identity.DeviceEnrollmentInvitationResponse;
 import gt.com.aguapura.application.dto.identity.DeviceAdministrationResponse;
 import gt.com.aguapura.application.dto.identity.UserAdministrationResponse;
 import gt.com.aguapura.application.services.IdentityAdministrationApplicationService;
+import gt.com.aguapura.application.services.DeviceEnrollmentApplicationService;
 import gt.com.aguapura.application.services.AuditApplicationService;
 import gt.com.aguapura.application.services.DeviceReenrollmentApplicationService;
 import gt.com.aguapura.application.dto.auth.DeviceReenrollmentResponse;
