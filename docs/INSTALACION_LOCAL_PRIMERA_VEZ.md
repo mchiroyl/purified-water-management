@@ -234,15 +234,6 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 
 El perfil productivo desactiva Swagger/OpenAPI, fuerza cookie segura y expone únicamente salud mínima. Proteja la clave TLS y renueve certificados antes de vencer.
 
-## 12. FEL
-
-Mantenga:
-
-```dotenv
-FEL_ENABLED=false
-```
-
-hasta contratar un certificador e instalar un adaptador real. Configurar solo un nombre de proveedor no certifica documentos. El sistema bloquea la activación sin adaptador/credenciales válidas.
 
 ## 13. Instalación manual sin el inicializador
 

@@ -13,6 +13,7 @@ public interface AuthenticationPersistencePort {
     Optional<AuthUser> findUserById(UUID id);
     void saveUser(AuthUser user);
     Optional<AuthDevice> findActiveDevice(UUID userId, String friendlyName);
+    boolean hasActiveDevice(UUID userId);
     Optional<AuthDevice> findDeviceById(UUID id);
     AuthDevice createDevice(UUID userId, String friendlyName, String appVersion);
     void saveDevice(AuthDevice device);
@@ -39,6 +40,7 @@ public interface AuthenticationPersistencePort {
 
     interface AuthDevice {
         UUID getId();
+        UUID getUserId();
         DeviceStatus getStatus();
         void seen(String currentAppVersion);
     }

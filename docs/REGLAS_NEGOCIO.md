@@ -6,8 +6,6 @@ Fuente: `docs/ERS_SRS.md` y `PROMPT_MAESTRO_SISTEMA_AGUA_PURA.md`.
 
 - **RB-001:** El sistema administra una sola empresa y rechaza una segunda configuración empresarial.
 - **RB-002:** La configuración empresarial es la única fuente para nombre, NIT, contacto, logotipo, moneda, zona horaria y numeración interna.
-- **RB-003:** Un comprobante interno no puede identificarse como DTE certificado.
-- **RB-004:** FEL permanece desactivado hasta validar un adaptador real y credenciales de un certificador autorizado.
 
 ## Seguridad y propiedad
 
@@ -85,15 +83,11 @@ Fuente: `docs/ERS_SRS.md` y `PROMPT_MAESTRO_SISTEMA_AGUA_PURA.md`.
 ## Auditoría
 
 - **RB-050:** Toda acción crítica registra actor, entidad, fecha servidor, dispositivo y correlación.
-- **RB-051:** Auditoría y logs excluyen contraseñas, tokens, claves y credenciales FEL.
 - **RB-052:** Fechas locales se conservan para trazabilidad, pero la hora oficial es la del servidor.
 
-## Comprobantes y FEL
 
 - **RB-053:** El comprobante interno usa la identidad empresarial capturada con la venta y permanece estable aunque la configuración cambie después.
 - **RB-054:** Cada venta posee como máximo un PDF interno almacenado; repetir la solicitud devuelve el mismo documento.
-- **RB-055:** El PDF interno declara de forma visible que no es un DTE FEL certificado.
-- **RB-056:** FEL no se activa sin un adaptador de certificador real instalado y credenciales validadas exclusivamente en backend.
 - **RB-057:** Web Share se usa únicamente cuando el navegador confirma soporte para compartir el archivo PDF.
 - **RB-058:** El fallback descarga el PDF y usa el enlace público `wa.me`; no integra APIs privadas de WhatsApp.
 - **RB-059:** Un comprobante oficial descargado puede almacenarse en IndexedDB y una descarga solicitada offline queda pendiente sin inventar un documento local.

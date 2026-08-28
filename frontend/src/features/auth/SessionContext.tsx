@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { apiRequest, setAccessToken } from '../../services/apiClient';
 import type { AuthResponse, SessionUser } from './types';
 import { clearMobileData, prepareMobileDataForSession } from '../../offline/mobileDatabase';
+import { getKnownDeviceId, saveKnownDeviceId } from './deviceIdentity';
 
 interface SessionContextValue {
   user: SessionUser | null;
@@ -23,6 +24,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const applyAuth = useCallback(async (auth: AuthResponse) => {
     await prepareMobileDataForSession(auth.user.id, auth.user.deviceId);
+    saveKnownDeviceId(auth.user.deviceId);
     setAccessToken(auth.accessToken);
     setUser(auth.user);
   }, []);
@@ -32,7 +34,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     try {
       await applyAuth(await apiRequest<AuthResponse>('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ username, password, deviceName })
+        body: JSON.stringify({ username, password, deviceName, appVersion: 'web', knownDeviceId: getKnownDeviceId() })
       }));
     } finally {
       setBusy(false);

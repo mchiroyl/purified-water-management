@@ -78,8 +78,7 @@ export function AppShell() {
       label: 'Administración',
       items: [
         { to: '/administration', label: 'Usuarios', visible: isAdmin },
-        { to: '/company', label: 'Datos de la empresa', visible: isAdmin },
-        { to: '/fel-configuration', label: 'FEL opcional', visible: isAdmin }
+        { to: '/company', label: 'Datos de la empresa', visible: isAdmin }
       ]
     }
   ];

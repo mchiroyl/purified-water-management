@@ -3,7 +3,6 @@ import { useSession } from '../features/auth/SessionContext';
 import { LoginPage } from '../features/auth/LoginPage';
 import { PasswordChangePage } from '../features/auth/PasswordChangePage';
 import { CompanyConfigurationPage } from '../features/company/CompanyConfigurationPage';
-import { FelConfigurationPage } from '../features/company/FelConfigurationPage';
 import { ProductCatalogPage } from '../features/catalog/ProductCatalogPage';
 import { VehiclesPage } from '../features/routes/VehiclesPage';
 import { PresentationCatalogPage } from '../features/catalog/PresentationCatalogPage';
@@ -54,7 +53,6 @@ export function App() {
       <Route element={<AppShell />}>
         <Route index element={<DashboardPage />} />
         <Route path="company" element={isAdmin ? <CompanyConfigurationPage /> : <Navigate to="/" replace />} />
-        <Route path="fel-configuration" element={isAdmin ? <FelConfigurationPage /> : <Navigate to="/" replace />} />
         <Route path="products" element={<ProductCatalogPage />} />
         <Route path="products/list" element={<ProductCatalogPage view="list" />} />
         <Route path="presentations" element={<PresentationCatalogPage />} />

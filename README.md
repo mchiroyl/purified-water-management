@@ -2,7 +2,6 @@
 
 Sistema operativo para una empresa purificadora: configura identidad empresarial, catálogo, precios, vendedores, rutas, clientes, bodega, cargas, ventas, pagos, mermas, devoluciones, liquidaciones, comprobantes, reportes y auditoría. La PWA permite operación móvil offline con sincronización idempotente.
 
-La configuración de **Datos de la empresa** es única y FEL puede habilitarse cuando exista un certificador real. No es un sistema multitenant.
 
 ## Inicio rápido
 
@@ -60,4 +59,3 @@ Las fases 0–39 están implementadas, verificadas y documentadas. La evidencia 
 
 ## Seguridad básica
 
-No confirme `.env`, tokens, contraseñas, claves TLS ni credenciales FEL. PostgreSQL y el backend son internos en Compose. Use HTTPS, `COOKIE_SECURE=true`, orígenes exactos, respaldo probado y los procedimientos de [SECURITY.md](SECURITY.md) antes de producción.

@@ -49,12 +49,6 @@ erDiagram
         string time_zone
         bigint version
     }
-    FEL_CONFIGURATION {
-        uuid id PK
-        uuid updated_by FK
-        boolean enabled
-        string provider_code
-    }
     AUDIT_LOG {
         uuid id PK
         uuid user_id FK
@@ -420,15 +414,6 @@ erDiagram
         uuid generated_device_id FK
         string sha256
     }
-    FEL_DOCUMENT {
-        uuid id PK
-        uuid sale_id FK,UK
-        uuid fel_configuration_id FK
-        uuid certified_file_id FK
-        string status
-        string authorization_number
-    }
-
     APP_USER ||--o{ USER_ROLE : has
     ROLE ||--o{ USER_ROLE : grants
     APP_USER ||--o| SELLER : represents
@@ -438,7 +423,6 @@ erDiagram
     REFRESH_SESSION o|--o| REFRESH_SESSION : rotates_to
     APP_USER ||--o{ FILE_OBJECT : creates
     FILE_OBJECT o|--o| COMPANY_CONFIGURATION : logo
-    APP_USER ||--o{ FEL_CONFIGURATION : updates
     APP_USER o|--o{ AUDIT_LOG : acts
     DEVICE o|--o{ AUDIT_LOG : originates
 
@@ -534,6 +518,3 @@ erDiagram
     PAYMENT ||--o| PAYMENT_REVERSAL : reverses
     SALE ||--o| RECEIPT_DOCUMENT : renders
     FILE_OBJECT ||--o| RECEIPT_DOCUMENT : stores
-    SALE ||--o| FEL_DOCUMENT : certifies
-    FEL_CONFIGURATION ||--o{ FEL_DOCUMENT : configures
-    FILE_OBJECT o|--o{ FEL_DOCUMENT : certified_pdf

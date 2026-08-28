@@ -204,18 +204,12 @@ crea `payment_reversal`, devuelve existencias con `VOID_IN`, revierte crédito c
 excluye la venta anulada de la liquidación. PostgreSQL temporal confirmó migración 16, HTTP 403 para
 autoaprobación, HTTP 409 para repetición o ruta liquidada, saldo 90→100 y un único efecto de cada tipo.
 
-### FASE 26 — Comprobantes PDF + FEL opcional
 
-Entregables: PDF con configuración empresarial; FEL bloqueado sin proveedor y puerto de adaptación.  
-Verificación: comprobante interno no se presenta como DTE y no se filtran credenciales.
 
 Estado: **completada**. Cada venta conserva la identidad empresarial histórica y genera como máximo
 un `receipt_document` PDF inmutable, descargable por usuarios autorizados y protegido por propiedad
 para el vendedor. El documento muestra empresa, venta, fecha en zona configurada, cliente, vendedor,
-detalle, descuentos aplicados, pagos, totales y la leyenda visible `NO ES DTE FEL CERTIFICADO`.
-FEL posee configuración y puerto independientes, no expone referencias secretas y devuelve HTTP 409
 si se intenta activar sin adaptador real y credenciales validadas. PostgreSQL temporal confirmó
-migración 17, generación idempotente, bloqueo BOLA 404 y cero documentos FEL simulados; el PDF fue
 renderizado a PNG y revisado sin solapamientos ni recortes.
 
 ### FASE 27 — Compartir WhatsApp
@@ -345,16 +339,13 @@ Verificación: tests backend/frontend/integración/E2E, Docker build, Compose, h
 | 23 | Completada | Conciliación física/financiera oficial, efectivo inmutable, bloqueo offline, cierre y carga `SETTLED` verificados. |
 | 24 | Completada | Solicitudes con vigencia, decisiones segregadas, incidencias, permisos por recurso y auditoría verificados. |
 | 25 | Completada | Anulación segregada con reversos compensatorios exactos y venta original inmutable. |
-| 26 | Completada | PDF interno inmutable, identidad histórica, descarga autorizada y FEL protegido sin proveedor real. |
 | 27 | Completada | Web Share, fallback WhatsApp y caché/pendiente de comprobante en IndexedDB verificados. |
 | 28 | Completada | Dashboard oficial por zona empresarial, alcance por rol, pendientes y alertas verificados en API y UI. |
 | 29 | Completada | Reportes paginados/exportables de ventas, mermas y liquidaciones con filtros y alcance por rol. |
 | 30 | Completada | Auditoría inmutable, filtrable, correlacionada y sanitizada con cobertura de eventos críticos. |
 | 31 | Completada | Escaneo de seguridad y remediación: secretos obligatorios/rotados, puertos internos no publicados, rate limiting, límites JSON, cambio obligatorio de contraseña, revocación JWT inmediata, refresh serializado, aislamiento IndexedDB, TLS productivo y auditoría ampliada; pruebas y contenedores saludables. |
-| 32 | Completada | Playwright ejecuta en Docker y base aislada los 28 pasos: configuración, catálogo, precios, vendedor, ruta, carga, venta online/offline, persistencia PWA, sincronización idempotente, revisiones, devolución, liquidación sin diferencias, PDF interno, Web Share, bloqueo FEL y controles HTTP. |
 | 33 | Completada | Diagramas de contexto, arquitectura, componentes, casos de uso, operación, seguridad y sincronización actualizados; ERD PostgreSQL reconciliado con Flyway V1–V19 y ERD IndexedDB con sus 26 stores v2. |
 | 34 | Completada | Manual de usuario en Markdown y PDF con 11 capturas reales generadas por la aceptación E2E; PDF de 17 páginas renderizado y revisado visualmente. |
-| 35 | Completada | Manual técnico creado con stack versionado, arquitectura, seguridad, esquema, invariantes, IndexedDB, sincronización, archivos/FEL, auditoría, pruebas y despliegue. |
 | 36 | Completada | Guía de instalación local/productiva y script PowerShell seguro para crear `.env`, secretos aleatorios y contraseña temporal sin sobrescritura ni exposición. |
 | 37 | Completada | Scripts y guía de respaldo/restauración integral PostgreSQL + archivos, manifiesto con SHA-256, respaldo previo, confirmación destructiva y healthchecks. |
 | 38 | Completada | README, API REST, guía de desarrollo y SECURITY.md agregados; documentación de contratos, flujo de contribución, seguridad y operación enlazada sin duplicar funciones. |

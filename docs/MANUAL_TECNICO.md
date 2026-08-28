@@ -107,7 +107,6 @@ Variables operativas destacadas:
 | `STORAGE_PATH` | Ruta del volumen de archivos. |
 | `FRONTEND_PORT` | Puerto publicado local. |
 | `BOOTSTRAP_ADMIN_FORCE_PASSWORD_CHANGE` | Exige cambio al primer ingreso. |
-| `FEL_ENABLED`, `FEL_PROVIDER_CODE`, `FEL_CREDENTIAL_SECRET_REF` | Integración FEL opcional. |
 
 No registre valores secretos en tickets, auditoría, capturas, comandos compartidos ni documentación.
 
@@ -115,14 +114,12 @@ No registre valores secretos en tickets, auditoría, capturas, comandos comparti
 
 Flyway es la única fuente ejecutable de esquema. V1–V20 crean 55 tablas y las secuencias operativas agrupadas así:
 
-- identidad, roles, dispositivos, sesiones, empresa, archivos, FEL y auditoría;
 - productos, presentaciones, conversiones y precios versionados;
 - clientes, rutas, vehículos y asignaciones históricas;
 - ubicaciones, saldos, libro de movimientos y cargas;
 - ventas, ítems, pagos, crédito e idempotencia;
 - provisionales, mermas, devoluciones y alertas;
 - liquidaciones, autorizaciones, incidencias y anulaciones;
-- comprobantes internos y documentos FEL.
 
 V19 agrega las secuencias `customer_code_seq`, `seller_code_seq`, `route_code_seq` y `vehicle_code_seq`, además de `route_load.load_type` (`INITIAL` o `REPLENISHMENT`). Los códigos se reservan en PostgreSQL dentro de la inserción y no se renumeran los históricos.
 
@@ -177,7 +174,6 @@ Categorías:
 - ventas, pagos, mermas y devoluciones locales con detalles;
 - Outbox, resultados de sincronización, archivos y comprobantes.
 
-No se almacenan contraseñas, refresh tokens, secretos FEL ni datos administrativos innecesarios. Al cambiar de usuario/dispositivo o cerrar sesión se aplica aislamiento/borrado seguro del contexto local.
 
 ## 9. ConnectionManager y SyncEngine
 
@@ -198,13 +194,11 @@ Reenviar una operación idéntica devuelve `ALREADY_PROCESSED`. Reutilizar el UU
 
 La ubicación es un contrato puntual: `GeoLocationRequest` exige `latitude`, `longitude` y `capturedAt`, admite `accuracyMeters` nulo, y aplica los rangos geográficos y precisión no negativa tanto en Bean Validation como en PostgreSQL. `captureCurrentLocation` usa exclusivamente `navigator.geolocation.getCurrentPosition` al confirmar recepción o venta; no usa `watchPosition`, no crea almacén de tracking y no ejecuta captura en segundo plano. Para ventas offline, `LocalSaleRecord.location` es un snapshot opcional que se conserva dentro del payload ya sincronizable.
 
-## 10. Archivos, comprobantes y FEL
 
 `file_object` conserva metadatos, propósito, tamaño, MIME, storage key y SHA-256. El contenido vive en `file_storage`/`STORAGE_PATH` y debe respaldarse junto con PostgreSQL.
 
 PDFBox crea el comprobante interno desde el snapshot histórico de la venta/empresa e incrusta el logotipo que estaba vigente al confirmar la venta. Los reportes usan el logotipo empresarial actual al exportarse a PDF o Excel; Excel incrusta imágenes PNG/JPEG y conserva el resto de la identidad y filtros. Las coordenadas de `route_tracking_point` no se proyectan en respuestas de venta, plantillas de comprobante ni exportaciones de reporte. `receipt_document` vincula venta, archivo, hash, usuario y dispositivo generador.
 
-FEL usa un puerto/adaptador opcional. Sin implementación y credenciales reales, activar FEL responde `FEL_PROVIDER_UNAVAILABLE`; nunca simula una certificación. Un adaptador futuro debe ser idempotente por venta, validar respuesta/firma, persistir autorización y archivo certificado, y auditar cada transición.
 
 ## 11. Auditoría y observabilidad
 
@@ -214,7 +208,6 @@ Actuator expone únicamente salud necesaria. Los logs deben mantener el mismo co
 
 - contraseñas y hashes;
 - JWT y cookies;
-- secretos/credenciales FEL;
 - cuerpos completos con datos sensibles;
 - binarios y evidencia privada.
 

@@ -1,6 +1,7 @@
 package gt.com.aguapura.application.services;
 
 import gt.com.aguapura.application.dto.auth.ChangePasswordRequest;
+import gt.com.aguapura.application.dto.auth.LoginRequest;
 import gt.com.aguapura.application.ports.AccessTokenIssuer;
 import gt.com.aguapura.application.ports.AuthenticationPersistencePort;
 import gt.com.aguapura.application.ports.OpaqueTokenPort;
@@ -17,6 +18,44 @@ import java.util.UUID;
 import static org.mockito.Mockito.*;
 
 class AuthApplicationServicePasswordTest {
+
+    @Test
+    void replacesAnObsoleteBrowserDeviceIdWhenTheUserHasNoActiveDevice() {
+        var persistence = mock(AuthenticationPersistencePort.class);
+        var verifier = mock(PasswordVerificationPort.class);
+        var tokens = mock(AccessTokenIssuer.class);
+        var opaqueTokens = mock(OpaqueTokenPort.class);
+        var policy = mock(SessionPolicy.class);
+        var user = mock(AuthenticationPersistencePort.AuthUser.class);
+        var device = mock(AuthenticationPersistencePort.AuthDevice.class);
+        UUID userId = UUID.randomUUID();
+        UUID staleDeviceId = UUID.randomUUID();
+        UUID replacementDeviceId = UUID.randomUUID();
+
+        when(persistence.findUserByUsername("admin")).thenReturn(Optional.of(user));
+        when(user.getId()).thenReturn(userId);
+        when(user.getStatus()).thenReturn(UserStatus.ACTIVE);
+        when(user.getPasswordHash()).thenReturn("hash");
+        when(user.getRoleCodes()).thenReturn(java.util.Set.of("ADMINISTRADOR"));
+        when(verifier.matches("Correct-password-1", "hash")).thenReturn(true);
+        when(persistence.findDeviceById(staleDeviceId)).thenReturn(Optional.empty());
+        when(persistence.hasActiveDevice(userId)).thenReturn(false);
+        when(persistence.createDevice(userId, "Equipo local", "web")).thenReturn(device);
+        when(device.getId()).thenReturn(replacementDeviceId);
+        when(opaqueTokens.newOpaqueToken()).thenReturn("refresh-token");
+        when(opaqueTokens.sha256("refresh-token")).thenReturn("token-hash");
+        when(policy.refreshTokenDuration()).thenReturn(java.time.Duration.ofDays(7));
+        when(tokens.issue(user, replacementDeviceId)).thenReturn(
+                new AccessTokenIssuer.IssuedAccessToken("access-token", Instant.now().plusSeconds(900)));
+
+        var service = new AuthApplicationService(persistence, verifier, tokens, opaqueTokens, policy,
+                mock(AuditApplicationService.class), mock(PasswordHashingPort.class));
+
+        var result = service.login(new LoginRequest("admin", "Correct-password-1", "Equipo local", "web", staleDeviceId.toString()));
+
+        org.junit.jupiter.api.Assertions.assertEquals(replacementDeviceId, result.response().user().deviceId());
+        verify(persistence).createDevice(userId, "Equipo local", "web");
+    }
 
     @Test
     void changesThePasswordClearsTheFlagAndRevokesExistingSessions() {

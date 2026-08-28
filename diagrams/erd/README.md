@@ -13,7 +13,6 @@ PostgreSQL es la fuente oficial y autoritativa. El diagrama incluye las 54 tabla
 
 | Migración | Alcance principal |
 |---|---|
-| V1–V2 | Seguridad, usuarios, empresa única, archivos, FEL y auditoría |
 | V3 | Productos, presentaciones, unidades y conversiones |
 | V4 | Clientes, rutas, vendedores, vehículos y asignaciones históricas |
 | V5 | Listas/versiones de precios, tramos, precios especiales y descuentos |
@@ -27,7 +26,6 @@ PostgreSQL es la fuente oficial y autoritativa. El diagrama incluye las 54 tabla
 | V14 | Entrega de efectivo y liquidación física/financiera |
 | V15 | Autorizaciones e incidencias |
 | V16 | Anulación segregada y reversos de pago |
-| V17 | Comprobantes internos y bloqueo FEL sin certificador |
 | V18 | Ampliación de auditoría correlacionada |
 
 ## IndexedDB móvil
@@ -106,6 +104,5 @@ Mermas y devoluciones dependen del recorrido y, cuando corresponda, de venta o a
 
 - Contraseñas.
 - Refresh tokens.
-- Claves privadas o credenciales FEL.
 - Datos administrativos o de otras rutas que el vendedor no necesita.
 - Secretos de infraestructura.

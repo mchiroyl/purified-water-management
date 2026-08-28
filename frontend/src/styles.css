@@ -35,6 +35,14 @@ h2 { margin-top: 0; }
 .auth-card form { display: grid; gap: .85rem; margin-top: 1.5rem; }
 .brand-mark { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 1rem; background: #d9f7fa; font-size: 1.65rem; }
 .field-error { color: var(--danger); font-size: .82rem; margin-top: -.65rem; }
+.device-detected { display: grid; gap: .2rem; padding: .7rem .8rem; border: 1px solid var(--line); border-radius: .65rem; background: #f8fcfd; color: var(--muted); }
+.device-detected-label { font-size: .78rem; font-weight: 750; }
+.device-detected strong { color: var(--primary-dark); font-size: .92rem; }
+.device-detected small { font-size: .75rem; }
+.reenrollment-card { display: grid; justify-items: center; gap: .55rem; padding: .9rem; border: 1px solid var(--line); border-radius: .75rem; background: #f8fcfd; text-align: center; }
+.reenrollment-card code { max-width: 100%; overflow-wrap: anywhere; color: var(--primary-dark); font-size: .78rem; }
+.reenrollment-card small { color: var(--muted); }
+.link-button { min-height: 36px; border: 0; background: transparent; color: var(--primary-dark); font-weight: 750; text-decoration: underline; }
 .field-hint { align-self: end; margin: 0; padding: .75rem .8rem; color: var(--muted); font-size: .9rem; }
 .alert { padding: .75rem; border-radius: .65rem; font-weight: 650; }
 .alert.error { color: var(--danger); background: #fff0ee; }

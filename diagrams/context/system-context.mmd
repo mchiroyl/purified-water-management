@@ -10,7 +10,6 @@ flowchart LR
     IDB[("IndexedDB móvil")]
     Storage["Storage de archivos"]
     WhatsApp["WhatsApp / Web Share"]
-    Fel["Certificador FEL opcional"]
 
     Owner --> System
     Warehouse --> System
@@ -21,4 +20,3 @@ flowchart LR
     System <--> DB
     System <--> Storage
     Device --> WhatsApp
-    System -. "solo si está configurado" .-> Fel

@@ -61,7 +61,6 @@ Categorías HTTP: `400` validación/JSON, `401` no autenticado, `403` sin permis
 
 Los importes y cantidades se envían como decimal exacto cuando el DTO lo define. El servidor recalcula totales, precios, crédito e inventario.
 
-## Empresa, identidad y FEL
 
 | Método | Ruta | Roles |
 |---|---|---|
@@ -69,8 +68,6 @@ Los importes y cantidades se envían como decimal exacto cuando el DTO lo define
 | PUT | `/company-configuration` | ADMINISTRADOR |
 | POST multipart | `/company-configuration/logo` | ADMINISTRADOR |
 | GET | `/company-configuration/logo` | público para recurso configurado |
-| GET | `/fel-configuration` | ADMINISTRADOR |
-| PUT | `/fel-configuration` | ADMINISTRADOR; bloquea proveedor inexistente |
 | GET | `/administration/users` | ADMINISTRADOR |
 | POST | `/administration/users` | ADMINISTRADOR |
 | PATCH | `/administration/users/{id}/status` | ADMINISTRADOR |

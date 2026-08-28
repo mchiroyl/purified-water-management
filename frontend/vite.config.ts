@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'prompt',
+      registerType: 'autoUpdate',
       includeAssets: ['icons/icon.svg', 'sync-listener.js'],
       manifest: {
         id: '/',
@@ -34,7 +34,7 @@ export default defineConfig({
         importScripts: ['/sync-listener.js'],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
-        skipWaiting: false,
+        skipWaiting: true,
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//, /^\/actuator\//],
         runtimeCaching: [

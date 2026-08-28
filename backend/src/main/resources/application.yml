@@ -73,7 +73,3 @@ app:
     force-password-change: ${BOOTSTRAP_ADMIN_FORCE_PASSWORD_CHANGE:true}
   storage:
     path: ${STORAGE_PATH:./storage}
-  fel:
-    enabled: ${FEL_ENABLED:false}
-    provider-code: ${FEL_PROVIDER_CODE:}
-    credential-secret-ref: ${FEL_CREDENTIAL_SECRET_REF:}

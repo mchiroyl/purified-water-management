@@ -170,7 +170,6 @@ Desde la venta confirmada puede:
 - usar **Compartir / WhatsApp** en un teléfono compatible;
 - volver a descargar el documento histórico.
 
-El PDF conserva la identidad empresarial y numeración usadas al confirmar. Mientras FEL esté desactivado, el documento es un comprobante interno y no debe presentarse como DTE certificado.
 
 ## 8. Operación offline y sincronización
 
@@ -235,11 +234,8 @@ En **Reportes** seleccione ventas, mermas o liquidaciones, aplique fechas/filtro
 
 ![Reportes filtrables y exportables](assets/manual/11-reportes.png)
 
-**Auditoría** es de solo lectura. Permite buscar eventos críticos por usuario, acción, recurso, correlación y fecha. No contiene contraseñas, tokens ni secretos FEL.
 
-## 13. FEL opcional
 
-FEL permanece desactivado hasta conocer e integrar un certificador real. La pantalla **FEL opcional** no permite activarlo con un proveedor inexistente. Cuando exista proveedor, un técnico debe instalar el adaptador, configurar credenciales secretas fuera de la interfaz y verificar certificación en ambiente de prueba antes de producción.
 
 ## 14. Reglas de seguridad para usuarios
 
@@ -247,7 +243,6 @@ FEL permanece desactivado hasta conocer e integrar un certificador real. La pant
 - Use un nombre único por dispositivo.
 - Cambie de inmediato la contraseña temporal.
 - Cierre sesión al entregar o perder un teléfono y solicite revocación del dispositivo.
-- No fotografíe ni copie tokens, archivos `.env` o credenciales FEL.
 - Verifique cliente, cantidades y forma de pago antes de confirmar.
 - No repita manualmente una operación que aparece pendiente: sincronícela.
 - Registre correcciones y anulaciones por sus flujos; nunca intente borrar el historial.
@@ -263,6 +258,5 @@ FEL permanece desactivado hasta conocer e integrar un certificador real. La pant
 | Hay conflicto/rechazo | No duplique la venta. Tome nota del UUID/referencia y solicite revisión. |
 | No aparece un cliente/producto | Verifique ruta, vigencia, estado activo y permisos; vuelva a sincronizar. |
 | No se puede cerrar liquidación | Resuelva operaciones pendientes, devoluciones, diferencias o autorizaciones. |
-| FEL no activa | Es el comportamiento seguro mientras no exista certificador/adaptador configurado. |
 
 Para soporte entregue: usuario, fecha/hora, pantalla, número de documento o UUID, ruta y mensaje exacto. Nunca entregue contraseña, JWT, refresh cookie ni secretos.

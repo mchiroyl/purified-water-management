@@ -2,7 +2,6 @@
 
 ## Alcance
 
-Esta política cubre el backend Spring Boot, la PWA React, PostgreSQL, IndexedDB móvil, Compose, Nginx, almacenamiento de archivos, comprobantes internos y el adaptador FEL opcional.
 
 ## Reportar una vulnerabilidad
 
@@ -22,11 +21,9 @@ Si el repositorio tiene un canal de seguridad del proveedor Git, use ese canal. 
 - auditoría inmutable con correlación y sin datos sensibles;
 - datos offline aislados por usuario/dispositivo y sin credenciales persistentes;
 - servidor autoritativo para precio, crédito, total, inventario, numeración e idempotencia;
-- FEL desactivado hasta existir proveedor y credenciales reales.
 
 ## Datos sensibles
 
-Nunca almacenar o registrar contraseñas, JWT, refresh tokens, claves privadas, secretos FEL, dumps sin cifrar ni contenido de evidencia fuera de su propósito. Los comprobantes y archivos deben usar storage key, MIME, tamaño y SHA-256; el acceso requiere autorización.
 
 ## Respuesta a incidentes
 

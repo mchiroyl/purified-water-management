@@ -5,7 +5,6 @@ Proyecto: Sistema Agua Pura (una empresa purificadora configurable)
 
 ## Resultado
 
-Las fases 0–39 del plan de implementación están desarrolladas. El sistema cubre configuración de empresa y comprobantes, catálogo y precios, vendedores, rutas, vehículos, clientes, bodega y cargas, recargas durante el recorrido, ventas en línea y fuera de línea, sincronización idempotente, devoluciones, mermas, liquidaciones, reportes Excel/PDF, auditoría, PWA móvil, comprobantes internos y FEL opcional. La evidencia histórica permanece documentada; la reconstrucción del despliegue oficial con V19 queda condicionada a que Docker Desktop permita conexión al daemon.
 
 ## Evidencia ejecutada
 
@@ -40,7 +39,6 @@ Las fases 0–39 del plan de implementación están desarrolladas. El sistema cu
 ## Observaciones operativas
 
 - El script de pruebas unitarias excluye explícitamente Playwright; la aceptación se ejecuta con `npm run test:e2e` o el script Compose indicado.
-- La integración FEL permanece opcional y se activa únicamente al configurar un certificador autorizado.
 - El usuario inicial es `admin`; la contraseña se define de forma privada mediante `.env`/`BOOTSTRAP_ADMIN_PASSWORD` y debe cambiarse en el primer acceso cuando se habilite esa política.
 - El build informa un aviso de tamaño de bundle; no impide la compilación ni la ejecución verificada.
 - La reconstrucción final de las imágenes oficiales y la ejecución Maven completa deben repetirse con Docker Desktop iniciado; durante esta verificación el servicio `com.docker.service` estaba detenido y el daemon rechazó la conexión por permisos. El código fuente y la migración V19 quedaron preparados para esa ejecución.

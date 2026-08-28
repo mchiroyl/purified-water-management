@@ -80,7 +80,6 @@ public class PdfBoxReceiptGenerator implements ReceiptPdfPort {
 
         writer.fillRect(MARGIN, writer.y - 36, writer.width(), 36, LIGHT);
         writer.text("COMPROBANTE INTERNO", BOLD, 14, TEAL, MARGIN + 12, writer.y - 15);
-        writer.text("NO ES DTE FEL CERTIFICADO", BOLD, 9, DARK, MARGIN + 12, writer.y - 29);
         writer.y -= 54;
     }
 

@@ -118,7 +118,6 @@ Desarrollar una aplicación web empresarial PWA que permita controlar completame
 - sincronización offline;
 - comprobantes digitales;
 - configuración empresarial;
-- facturación FEL opcional;
 - reportes;
 - dashboard.
 
@@ -387,7 +386,6 @@ SUPERVISOR
 Puede:
 
 - configurar los datos e identidad de la empresa;
-- administrar la configuración FEL opcional;
 - administrar usuarios;
 - vendedores;
 - productos;
@@ -1809,36 +1807,26 @@ Debe contener:
 - método pago;
 - estado.
 
-El PDF generado sin certificación FEL es un COMPROBANTE INTERNO y no debe presentarse como Documento Tributario Electrónico certificado.
 
-## FEL OPCIONAL
 
 Contemplar Factura Electrónica en Línea de Guatemala como integración opcional.
 
-La configuración FEL debe estar en un apartado independiente debido a sus permisos, credenciales y reglas propias, pero debe reutilizar directamente los datos de la empresa.
 
-Mientras no exista un certificador seleccionado:
 
-- FEL permanece desactivado;
 - no permitir activarlo;
 - no simular certificación;
 - no utilizar un proveedor ficticio;
 - los comprobantes internos PDF continúan funcionando.
 
-Cuando se seleccione un certificador autorizado:
 
 - implementar un adaptador real contra su contrato oficial;
 - validar credenciales antes de habilitar;
 - registrar solicitud, respuesta, identificadores, estado y errores de certificación;
-- conservar el DTE certificado y su trazabilidad;
 - no exponer credenciales en frontend, logs, PDF ni auditoría.
 
 Tomar como referencia normativa y técnica oficial:
 
 - https://portal.sat.gob.gt/portal/efactura/
-- https://portal.sat.gob.gt/portal/emisor-de-dte/
-- https://portal.sat.gob.gt/portal/certificador-de-dte/
-- https://portal.sat.gob.gt/portal/documentacion-tecnica-del-regimen-fel
 
 ---
 
@@ -1888,7 +1876,6 @@ Mantener ambos para trazabilidad.
 
 La numeración configurable corresponde a comprobantes internos.
 
-Para FEL, utilizar exclusivamente los identificadores y autorizaciones devueltos por el proceso real de certificación. Nunca fabricar una autorización fiscal mediante una secuencia local.
 
 ---
 
@@ -2026,9 +2013,6 @@ REFRESH_SESSION
 DEVICE
 
 COMPANY_CONFIGURATION
-FEL_CONFIGURATION
-FEL_DOCUMENT
-
 SELLER
 
 ROUTE
@@ -2448,8 +2432,6 @@ Además comprobar:
 
 - el administrador configura los datos de la empresa una sola vez;
 - la interfaz y el PDF utilizan esa misma configuración;
-- el PDF interno no se identifica como DTE certificado;
-- FEL no puede activarse sin un adaptador real y credenciales válidas.
 
 ---
 
@@ -2765,7 +2747,6 @@ Reports.
 
 PDF.
 
-FEL Adapter.
 
 ---
 
@@ -3153,7 +3134,6 @@ Incluir:
 35. Cerrar sesión.
 36. Preguntas frecuentes.
 37. Errores comunes.
-38. FEL opcional y diferencia entre comprobante interno y DTE certificado.
 
 Utilizar capturas cuando el sistema esté terminado.
 
@@ -3171,7 +3151,6 @@ Debe incluir:
 - tecnologías;
 - módulos;
 - configuración empresarial;
-- comprobantes internos y FEL opcional;
 - seguridad;
 - base de datos;
 - ERD PostgreSQL;
@@ -3279,9 +3258,7 @@ Indicar todas las variables.
 
 NO incluir secretos reales.
 
-Las credenciales FEL solamente deben configurarse cuando exista un proveedor real.
 
-No guardar credenciales FEL en variables expuestas al frontend ni documentar valores reales.
 
 ---
 
@@ -3474,7 +3451,6 @@ README debe permitir que una persona entienda en menos de 10 minutos:
 
 - qué hace sistema;
 - alcance de una sola empresa;
-- configuración empresarial y estado de FEL;
 - arquitectura;
 - tecnologías;
 - cómo levantar;
@@ -3569,7 +3545,6 @@ FASE 25
 Anulaciones.
 
 FASE 26
-Comprobantes PDF + FEL opcional, habilitable únicamente con proveedor real.
 
 FASE 27
 Compartir WhatsApp.
@@ -3888,7 +3863,6 @@ hasta que:
 - PDF funcione;
 - los datos de empresa sean configurables desde un único formulario;
 - la interfaz y los comprobantes utilicen la misma configuración empresarial;
-- FEL permanezca bloqueado sin proveedor o certifique mediante un proveedor real cuando esté configurado;
 - tests pasen;
 - ERS/SRS exista y mantenga trazabilidad con casos de uso y pruebas;
 - ERD PostgreSQL corresponda a las migraciones Flyway;
@@ -3986,7 +3960,6 @@ EVERY RELEASE MUST BE VERIFIABLE.
 
 ONE COMPANY CONFIGURATION IS THE SINGLE SOURCE OF TRUTH.
 
-AN INTERNAL RECEIPT IS NEVER PRESENTED AS A CERTIFIED FEL DOCUMENT.
 
 ---
 

@@ -12,12 +12,20 @@ type DeviceAdmin = {
   id: string; userId: string; username: string; friendlyName: string; status: string; appVersion?: string;
   firstSeenAt: string; lastSeenAt: string; revokedAt?: string;
 };
+type Reenrollment = {
+  id: string; username: string; status: string; deviceName: string;
+  expiresAt: string; createdAt: string;
+};
 const roleOptions = ['ADMINISTRADOR', 'BODEGA', 'VENDEDOR', 'SUPERVISOR'];
 
 export function AdministrationPage() {
   const queryClient = useQueryClient();
+  const qrToken = new URLSearchParams(window.location.search).get('device-reenrollment-token');
   const users = useQuery({ queryKey: ['administration', 'users'], queryFn: () => apiRequest<UserAdmin[]>('/administration/users') });
   const devices = useQuery({ queryKey: ['administration', 'devices'], queryFn: () => apiRequest<DeviceAdmin[]>('/administration/devices') });
+  const reenrollments = useQuery({ queryKey: ['administration', 'device-reenrollment'], queryFn: () => apiRequest<Reenrollment[]>('/administration/device-reenrollment') });
+  const qrRequest = useQuery({ queryKey: ['administration', 'device-reenrollment', 'qr', qrToken], enabled: Boolean(qrToken), queryFn: () => apiRequest<Reenrollment>(`/administration/device-reenrollment/by-token/${encodeURIComponent(qrToken!)}`) });
+  const [approvedNames, setApprovedNames] = useState<Record<string, string>>({});
   const [form, setForm] = useState({ username: '', email: '', password: '', roles: ['VENDEDOR'], sellerDisplayName: '' });
   const create = useMutation({
     mutationFn: () => apiRequest<UserAdmin>('/administration/users', { method: 'POST', body: JSON.stringify(form) }),
@@ -33,6 +41,17 @@ export function AdministrationPage() {
   const revoke = useMutation({
     mutationFn: (id: string) => apiRequest<DeviceAdmin>(`/administration/devices/${id}/revoke`, { method: 'POST' }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['administration', 'devices'] })
+  });
+  const approveReenrollment = useMutation({
+    mutationFn: ({ id, deviceName }: { id: string; deviceName: string }) => apiRequest<Reenrollment>(`/administration/device-reenrollment/${id}/approve`, { method: 'POST', body: JSON.stringify({ deviceName }) }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['administration', 'device-reenrollment'] });
+      void queryClient.invalidateQueries({ queryKey: ['administration', 'devices'] });
+    }
+  });
+  const rejectReenrollment = useMutation({
+    mutationFn: (id: string) => apiRequest<void>(`/administration/device-reenrollment/${id}/reject`, { method: 'POST' }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['administration', 'device-reenrollment'] })
   });
   const toggleRole = (role: string) => setForm(current => ({
     ...current, roles: current.roles.includes(role) ? current.roles.filter(item => item !== role) : [...current.roles, role]
@@ -74,6 +93,23 @@ export function AdministrationPage() {
         <div className="row-actions"><span className={`status ${device.status === 'ACTIVE' ? 'active' : 'inactive'}`}>{device.status === 'ACTIVE' ? 'Activo' : 'Revocado'}</span>
           {device.status !== 'REVOKED' && <button className="secondary danger-button" onClick={() => revoke.mutate(device.id)}>Revocar</button>}</div>
       </article>)}</div>
+    </section>
+    <section className="panel section-panel">
+      <h2>Reinscripciones de dispositivos</h2>
+      <p className="muted">Apruebe únicamente solicitudes verificadas. Al completarse se revocan las sesiones anteriores del usuario.</p>
+      {qrRequest.data && <div className="alert success">Solicitud abierta desde QR: {qrRequest.data.username} · {qrRequest.data.deviceName}</div>}
+      {qrRequest.error && <div className="alert error">El código QR no es válido, expiró o ya fue utilizado.</div>}
+      {reenrollments.error && <div className="alert error">{reenrollments.error.message}</div>}
+      {reenrollments.isLoading && <StatusPanel tone="loading">Cargando solicitudes…</StatusPanel>}
+      <div className="table-wrap"><table>
+        <thead><tr><th>Usuario</th><th>Nombre del dispositivo</th><th>Solicitud</th><th>Expira</th><th>Estado</th><th>Acciones</th></tr></thead>
+        <tbody>{reenrollments.data?.map(item => {
+          const editableName = approvedNames[item.id] ?? item.deviceName;
+          const pending = item.status === 'PENDING';
+          return <tr key={item.id}><td>{item.username}</td><td>{pending ? <input aria-label={`Nombre para ${item.username}`} value={editableName} onChange={event => setApprovedNames(current => ({ ...current, [item.id]: event.target.value }))} /> : item.deviceName}</td><td>{new Date(item.createdAt).toLocaleString('es-GT')}</td><td>{new Date(item.expiresAt).toLocaleString('es-GT')}</td><td><span className={`status ${pending ? 'pending' : item.status === 'APPROVED' || item.status === 'USED' ? 'active' : 'inactive'}`}>{item.status}</span></td><td><div className="row-actions">{pending && <><button className="secondary" disabled={approveReenrollment.isPending} onClick={() => { if (window.confirm('¿Aprobar esta reinscripción y revocar las sesiones anteriores?')) approveReenrollment.mutate({ id: item.id, deviceName: editableName }); }}>Aprobar</button><button className="secondary danger-button" disabled={rejectReenrollment.isPending} onClick={() => { if (window.confirm('¿Rechazar esta solicitud?')) rejectReenrollment.mutate(item.id); }}>Rechazar</button></>}</div></td></tr>;
+        })}</tbody>
+      </table></div>
+      {(approveReenrollment.error || rejectReenrollment.error) && <div className="alert error">{(approveReenrollment.error || rejectReenrollment.error)?.message}</div>}
     </section>
   </main>;
 }

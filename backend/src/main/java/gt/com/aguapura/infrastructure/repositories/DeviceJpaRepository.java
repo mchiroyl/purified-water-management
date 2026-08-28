@@ -9,4 +9,5 @@ import java.util.UUID;
 
 public interface DeviceJpaRepository extends JpaRepository<DeviceJpaEntity, UUID> {
     Optional<DeviceJpaEntity> findFirstByUserIdAndFriendlyNameAndStatus(UUID userId, String friendlyName, DeviceStatus status);
+    boolean existsByUserIdAndStatus(UUID userId, DeviceStatus status);
 }
