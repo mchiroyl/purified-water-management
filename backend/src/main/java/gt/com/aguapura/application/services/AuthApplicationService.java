@@ -100,6 +100,10 @@ public class AuthApplicationService {
                     && known.get().getStatus() == DeviceStatus.ACTIVE) {
                 return known.get();
             }
+            var currentDevice = persistence.findActiveDevice(user.getId(), request.deviceName());
+            if (currentDevice.isPresent()) {
+                return currentDevice.get();
+            }
             if (!persistence.hasActiveDevice(user.getId())) {
                 return persistence.createDevice(user.getId(), request.deviceName(), request.appVersion());
             }
