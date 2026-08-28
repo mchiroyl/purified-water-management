@@ -17,6 +17,10 @@ type Reenrollment = {
   id: string; username: string; status: string; deviceName: string;
   expiresAt: string; createdAt: string;
 };
+type EnrollmentInvitation = {
+  id: string; userId: string; username: string; token?: string; status: string;
+  expiresAt: string; createdAt: string;
+};
 const roleOptions = ['ADMINISTRADOR', 'BODEGA', 'VENDEDOR', 'SUPERVISOR'];
 
 export function AdministrationPage() {

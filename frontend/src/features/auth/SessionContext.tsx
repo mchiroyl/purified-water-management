@@ -3,12 +3,13 @@ import { apiRequest, setAccessToken } from '../../services/apiClient';
 import type { AuthResponse, SessionUser } from './types';
 import { clearMobileData, prepareMobileDataForSession } from '../../offline/mobileDatabase';
 import { getKnownDeviceId, saveKnownDeviceId } from './deviceIdentity';
+import { getDeviceName } from './deviceIdentity';
 
 interface SessionContextValue {
   user: SessionUser | null;
   busy: boolean;
   initializing: boolean;
-  login(username: string, password: string): Promise<void>;
+  login(username: string, password: string, deviceName?: string): Promise<void>;
   enroll(token: string): Promise<void>;
   refresh(): Promise<void>;
   changePassword(currentPassword: string, newPassword: string): Promise<void>;
@@ -30,12 +31,24 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setUser(auth.user);
   }, []);
 
-  const login = useCallback(async (username: string, password: string) => {
+  const login = useCallback(async (username: string, password: string, deviceName = getDeviceName()) => {
     setBusy(true);
     try {
       await applyAuth(await apiRequest<AuthResponse>('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ username, password, deviceName, appVersion: 'web', knownDeviceId: getKnownDeviceId() })
+      }));
+    } finally {
+      setBusy(false);
+    }
+  }, [applyAuth]);
+
+  const enroll = useCallback(async (token: string) => {
+    setBusy(true);
+    try {
+      await applyAuth(await apiRequest<AuthResponse>('/auth/device-enrollment', {
+        method: 'POST',
+        body: JSON.stringify({ token, deviceName: getDeviceName(), appVersion: 'web' })
       }));
     } finally {
       setBusy(false);
