@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
 import { PageHeader } from '../../app/PageHeader';
 import { apiRequest } from '../../services/apiClient';
+import { calendarOnlyProps, currentMonthDateBounds } from '../../utils/dateInput';
 import { captureCurrentLocation } from '../../services/geolocation';
 
 type LoadItem = { id: string; productId: string; productCode: string; productName: string; baseUnitCode: string; quantityBaseUnits: number };
@@ -23,6 +24,7 @@ const statusLabel: Record<string, string> = { PREPARED: 'Preparada', WAREHOUSE_C
 export function RouteLoadsPage({ canPrepare, canConfirmWarehouse, canReceive, canStart, canCorrect }: {
   canPrepare: boolean; canConfirmWarehouse: boolean; canReceive: boolean; canStart: boolean; canCorrect: boolean;
 }) {
+  const dateBounds = currentMonthDateBounds();
   const client = useQueryClient();
   const loads = useQuery({ queryKey: ['route-loads'], queryFn: () => apiRequest<RouteLoad[]>('/loads') });
   const company = useQuery({ queryKey: ['company-configuration'], queryFn: () => apiRequest<{ timezone: string }>('/company-configuration') });
@@ -76,7 +78,7 @@ export function RouteLoadsPage({ canPrepare, canConfirmWarehouse, canReceive, ca
       <label>Tipo de operación<select value={form.loadType} onChange={event => setForm({ ...form, loadType: event.target.value as 'INITIAL' | 'REPLENISHMENT' })}><option value="INITIAL">Carga inicial</option><option value="REPLENISHMENT">Recarga de ruta</option></select></label>
       <label>Ruta<select required value={form.routeId} onChange={event => setForm({ ...form, routeId: event.target.value })}><option value="">Seleccionar</option>{routes.data?.filter(route => route.status === 'ACTIVE').map(route => <option value={route.id} key={route.id}>{route.code} · {route.name}</option>)}</select></label>
       <label>Bodega origen<select required value={form.sourceLocationId} onChange={event => setForm({ ...form, sourceLocationId: event.target.value })}><option value="">Seleccionar</option>{locations.data?.filter(item => item.active && item.locationType === 'WAREHOUSE').map(item => <option value={item.id} key={item.id}>{item.code} · {item.name}</option>)}</select></label>
-      <label>Fecha planificada<input required type="date" min={dateInZone(company.data?.timezone)} value={form.plannedDate} onChange={event => setForm({ ...form, plannedDate: event.target.value })} /></label>
+      <label>Fecha planificada<input required type="date" min={dateBounds.min} max={dateBounds.max} {...calendarOnlyProps()} value={form.plannedDate} onChange={event => setForm({ ...form, plannedDate: event.target.value })} /></label>
       <label>Notas<input value={form.notes} onChange={event => setForm({ ...form, notes: event.target.value })} /></label>
     </div><h3>Productos en unidades base</h3><div className="data-list">{items.map((item, index) => <div className="tier-editor" key={index}>
       <label>Producto<select required value={item.productId} onChange={event => setItems(items.map((row, rowIndex) => rowIndex === index ? { ...row, productId: event.target.value } : row))}><option value="">Seleccionar</option>{products.data?.filter(product => product.active && product.controlsInventory).map(product => <option value={product.id} key={product.id}>{product.code} · {product.name}</option>)}</select></label>

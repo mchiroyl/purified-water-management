@@ -26,7 +26,7 @@ export function InventoryPage({ canManage }: { canManage: boolean }) {
   const createLocation = useMutation({
     mutationFn: () => apiRequest<Location>('/inventory/locations', {
       method: 'POST',
-      body: JSON.stringify({ ...locationForm, routeId: locationForm.locationType === 'ROUTE' ? locationForm.routeId : null })
+      body: JSON.stringify({ ...locationForm, locationType: 'WAREHOUSE', routeId: null })
     }),
     onSuccess: () => { setLocationForm({ code: '', name: '', locationType: 'WAREHOUSE', routeId: '' }); refresh(); }
   });
