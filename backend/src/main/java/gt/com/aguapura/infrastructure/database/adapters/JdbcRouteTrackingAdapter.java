@@ -150,7 +150,7 @@ public class JdbcRouteTrackingAdapter implements RouteTrackingPort {
                 .param("latitude", point.latitude())
                 .param("longitude", point.longitude())
                 .param("accuracyMeters", point.accuracyMeters())
-                .param("capturedAt", point.capturedAt())
+                .param("capturedAt", point.capturedAt() == null ? null : point.capturedAt().atOffset(java.time.ZoneOffset.UTC))
                 .param("actorId", actorId)
                 .param("deviceId", deviceId)
                 .update();

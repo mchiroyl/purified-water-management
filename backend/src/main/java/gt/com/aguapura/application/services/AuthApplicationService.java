@@ -90,6 +90,7 @@ public class AuthApplicationService {
     }
 
     private AuthenticationPersistencePort.AuthDevice resolveDevice(AuthenticationPersistencePort.AuthUser user, LoginRequest request) {
+        boolean isAdmin = user.getRoleCodes().contains("ADMINISTRADOR");
         if (request.knownDeviceId() != null && !request.knownDeviceId().isBlank()) {
             UUID id;
             try { id = UUID.fromString(request.knownDeviceId()); }
@@ -104,14 +105,14 @@ public class AuthApplicationService {
             if (currentDevice.isPresent()) {
                 return currentDevice.get();
             }
-            if (!persistence.hasActiveDevice(user.getId())) {
+            if (!persistence.hasActiveDevice(user.getId()) || isAdmin) {
                 return persistence.createDevice(user.getId(), request.deviceName(), request.appVersion());
             }
             throw new BusinessException("DEVICE_REENROLLMENT_REQUIRED",
                     "Este dispositivo no está registrado. Solicite su reinscripción.", ErrorCategory.UNAUTHORIZED);
         }
         return persistence.findActiveDevice(user.getId(), request.deviceName()).orElseGet(() -> {
-            if (persistence.hasActiveDevice(user.getId())) {
+            if (persistence.hasActiveDevice(user.getId()) && !isAdmin) {
                 throw new BusinessException("DEVICE_REENROLLMENT_REQUIRED",
                         "Este dispositivo no está registrado. Solicite su reinscripción.", ErrorCategory.UNAUTHORIZED);
             }
