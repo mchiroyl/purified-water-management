@@ -18,7 +18,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class CustomerRouteApplicationServiceTest {
     private final FakeCustomerRoutePort persistence = new FakeCustomerRoutePort();
-    private final CustomerRouteApplicationService service = new CustomerRouteApplicationService(persistence);
+    private final FakeRouteTrackingPort tracking = new FakeRouteTrackingPort();
+    private final CustomerRouteApplicationService service = new CustomerRouteApplicationService(persistence, tracking);
 
     @Test
     void normalizesCustomerIdentityBeforePersisting() {
@@ -83,5 +84,13 @@ class CustomerRouteApplicationServiceTest {
             return new RouteView(id, "R-1", "Ruta 1", "", "ACTIVE", null, null, null,
                     null, null, null, 0, null, java.time.Instant.now());
         }
+    }
+
+    private static final class FakeRouteTrackingPort implements gt.com.aguapura.application.ports.RouteTrackingPort {
+        @Override public void recordStart(UUID routeLoadId, UUID routeId, gt.com.aguapura.application.ports.RouteTrackingPort.GeoLocation point, UUID actorId, UUID deviceId) {}
+        @Override public void recordSale(UUID routeLoadId, UUID routeId, UUID saleId, gt.com.aguapura.application.ports.RouteTrackingPort.GeoLocation point, UUID actorId, UUID deviceId) {}
+        @Override public Optional<gt.com.aguapura.application.ports.RouteTrackingPort.SaleLocationView> findSaleLocation(UUID saleId) { return Optional.empty(); }
+        @Override public List<gt.com.aguapura.application.ports.RouteTrackingPort.RouteMapPoint> findRouteMap(UUID loadId) { return new ArrayList<>(); }
+        @Override public List<gt.com.aguapura.application.ports.RouteTrackingPort.RouteHistoryDay> findRouteHistory(UUID routeId, java.time.Instant from, java.time.Instant to) { return new ArrayList<>(); }
     }
 }

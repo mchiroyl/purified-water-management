@@ -20,7 +20,9 @@ type PaymentForm = { method: string; amount: string; reference: string; bank: st
 const money = (value: number) => `Q${Number(value).toFixed(2)}`;
 const newPayment = (method = 'CASH'): PaymentForm => ({ method, amount: '', reference: '', bank: '', evidenceReference: '' });
 
-export function SalesPage({ canSell }: { canSell: boolean }) {
+type SaleLocation = { latitude: number; longitude: number; accuracyMeters: number | null; capturedAt: string; persistedAt: string };
+
+export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canViewLocation: boolean }) {
   const queryClient = useQueryClient();
   const sales = useQuery({ queryKey: ['sales'], queryFn: () => apiRequest<Sale[]>('/sales') });
   const routes = useQuery({ queryKey: ['routes'], queryFn: () => apiRequest<Route[]>('/routes'), enabled: canSell });
@@ -34,6 +36,12 @@ export function SalesPage({ canSell }: { canSell: boolean }) {
   const [receiptMessage, setReceiptMessage] = useState('');
   const [locationError, setLocationError] = useState('');
   const [isCapturingLocation, setIsCapturingLocation] = useState(false);
+  const [locationPanelSaleId, setLocationPanelSaleId] = useState<string | null>(null);
+  const locationQuery = useQuery({
+    queryKey: ['sale-location', locationPanelSaleId],
+    queryFn: () => apiRequest<SaleLocation>(`/sales/${locationPanelSaleId}/location`),
+    enabled: locationPanelSaleId !== null,
+  });
   const create = useMutation({
     mutationFn: (location: GeoLocationSnapshot) => apiRequest<Sale>('/sales', {
       method: 'POST',
@@ -146,7 +154,8 @@ export function SalesPage({ canSell }: { canSell: boolean }) {
         {payments.length > 1 && <button type="button" className="secondary" onClick={() => setPayments(current => current.filter((_row, position) => position !== index))}>Quitar pago</button>}
       </div>)}</div>
       <button type="button" className="secondary add-payment" disabled={!nextPaymentMethod} onClick={() => nextPaymentMethod && setPayments(current => [...current, newPayment(nextPaymentMethod)])}>Dividir pago</button>
-      <div className="form-actions"><button type="button" className="secondary" onClick={() => setItems(current => [...current, { presentationId: '', quantity: 1 }])}>Agregar producto</button><button className="primary" disabled={isCapturingLocation || create.isPending}>{isCapturingLocation ? 'Obteniendo ubicación…' : create.isPending ? 'Confirmando…' : 'Confirmar venta'}</button></div>
+      <div className="form-actions"><button type="button" className="secondary" onClick={() => setItems(current => [...current, { presentationId: '', quantity: 1 }])}>Agregar producto</button><button className="primary" disabled={isCapturingLocation || create.isPending}>{isCapturingLocation ? 'Refinando precisión GPS…' : create.isPending ? 'Confirmando…' : 'Confirmar venta'}</button></div>
+      {isCapturingLocation && <p className="muted" style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>Buscando señal GPS de alta precisión. Puede tomar hasta 30 segundos.</p>}
       {(locationError || create.error) && <div className="alert error">{locationError || create.error?.message}</div>}
     </form>}
 
@@ -167,6 +176,37 @@ export function SalesPage({ canSell }: { canSell: boolean }) {
           <button type="button" className="secondary" onClick={() => void downloadReceipt(sale)}>Descargar PDF</button>
           <button type="button" className="primary" onClick={() => void shareReceipt(sale)}>Compartir / WhatsApp</button>
         </div>
+        {canViewLocation && (
+          <div className="form-actions">
+            <button type="button" className="secondary" onClick={() => setLocationPanelSaleId(prev => prev === sale.id ? null : sale.id)}>
+              {locationPanelSaleId === sale.id ? 'Ocultar ubicación' : 'Ver ubicación'}
+            </button>
+          </div>
+        )}
+        {canViewLocation && locationPanelSaleId === sale.id && (
+          <div className="location-panel">
+            {locationQuery.isLoading && <p className="muted">Cargando coordenadas…</p>}
+            {locationQuery.error && <p className="alert error">{locationQuery.error.message}</p>}
+            {locationQuery.data && (
+              <>
+                <p className="muted" style={{ fontSize: '0.82rem', margin: '0.5rem 0 0.25rem' }}>
+                  <strong>Lat:</strong> {Number(locationQuery.data.latitude).toFixed(8)} &nbsp;
+                  <strong>Lon:</strong> {Number(locationQuery.data.longitude).toFixed(8)}
+                  {locationQuery.data.accuracyMeters != null && <> &nbsp; <strong>Precisión:</strong> ±{Number(locationQuery.data.accuracyMeters).toFixed(1)} m</>}
+                </p>
+                <a
+                  href={`https://www.google.com/maps?q=${Number(locationQuery.data.latitude).toFixed(8)},${Number(locationQuery.data.longitude).toFixed(8)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="secondary"
+                  style={{ fontSize: '0.82rem' }}
+                >
+                  Abrir en Google Maps
+                </a>
+              </>
+            )}
+          </div>
+        )}
       </article>)}</div>
     </section>
   </main>;

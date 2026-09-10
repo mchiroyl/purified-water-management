@@ -39,46 +39,47 @@ export function AppShell() {
   const navigationGroups = [
     {
       label: 'Inicio',
-      items: [{ to: '/', label: 'Panel operativo', visible: true }]
+      items: [{ to: '/', label: 'Panel operativo', icon: '📊', visible: true }]
     },
     {
       label: 'Catálogo y planificación',
       items: [
-        { to: '/presentations', label: 'Presentaciones', visible: canCatalog },
-        { to: '/products', label: 'Productos', visible: canCatalog },
-        { to: '/customers', label: 'Clientes', visible: canSeeCustomers },
-        { to: '/routes', label: 'Rutas', visible: canSeeRoutes },
-        { to: '/vehicles', label: 'Vehículos', visible: canSeeRoutes },
-        { to: '/pricing', label: 'Precios', visible: canSeePricing }
+        { to: '/presentations', label: 'Presentaciones', icon: '📦', visible: canCatalog },
+        { to: '/products', label: 'Productos', icon: '🏷️', visible: canCatalog },
+        { to: '/customers', label: 'Clientes', icon: '👥', visible: canSeeCustomers },
+        { to: '/routes', label: 'Rutas', icon: '🗺️', visible: canSeeRoutes },
+        { to: '/vehicles', label: 'Vehículos', icon: '🚚', visible: canSeeRoutes },
+        { to: '/pricing', label: 'Precios', icon: '💲', visible: canSeePricing }
       ]
     },
     {
       label: 'Operación diaria',
       items: [
-        { to: '/inventory', label: 'Inventario', visible: canSeeInventory },
-        { to: '/loads', label: 'Cargas', visible: canSeeLoads },
-        { to: '/sales', label: 'Ventas', visible: canSeeSales },
-        { to: '/transfers', label: 'Transferencias', visible: canVerifyTransfers },
-        { to: '/wastes', label: 'Mermas', visible: canSeeWastes },
-        { to: '/returns', label: 'Devoluciones', visible: canSeeReturns },
-        { to: '/settlements', label: 'Liquidaciones', visible: canSeeSettlements }
+        { to: '/inventory', label: 'Inventario', icon: '🏭', visible: canSeeInventory },
+        { to: '/loads', label: 'Cargas', icon: '📥', visible: canSeeLoads },
+        { to: '/sales', label: 'Ventas', icon: '💰', visible: canSeeSales },
+        { to: '/transfers', label: 'Transferencias', icon: '🔄', visible: canVerifyTransfers },
+        { to: '/wastes', label: 'Mermas', icon: '📉', visible: canSeeWastes },
+        { to: '/returns', label: 'Devoluciones', icon: '🔙', visible: canSeeReturns },
+        { to: '/settlements', label: 'Liquidaciones', icon: '💵', visible: canSeeSettlements }
       ]
     },
     {
       label: 'Control y seguimiento',
       items: [
-        { to: '/operations-control', label: 'Control operativo', visible: canSeeOperationsControl },
-        { to: '/annulments', label: 'Anulaciones', visible: canSeeAnnulments },
-        { to: '/pending', label: 'Pendientes', visible: true },
-        { to: '/reports', label: 'Reportes', visible: true },
-        { to: '/audit', label: 'Auditoría', visible: canSeeAudit }
+        { to: '/operations-control', label: 'Cierre de operaciones', icon: '🏁', visible: canSeeOperationsControl },
+        { to: '/annulments', label: 'Anulaciones', icon: '❌', visible: canSeeAnnulments },
+        { to: '/pending', label: 'Pendientes', icon: '⏳', visible: true },
+        { to: '/reports', label: 'Reportes', icon: '📈', visible: true },
+        { to: '/audit', label: 'Auditoría', icon: '📋', visible: canSeeAudit },
+        { to: '/route-history', label: 'Historial de rutas', icon: '📍', visible: isAdmin || user?.roles.includes('SUPERVISOR') }
       ]
     },
     {
       label: 'Administración',
       items: [
-        { to: '/administration', label: 'Usuarios', visible: isAdmin },
-        { to: '/company', label: 'Datos de la empresa', visible: isAdmin }
+        { to: '/administration', label: 'Usuarios', icon: '👤', visible: isAdmin },
+        { to: '/company', label: 'Datos de la empresa', icon: '🏢', visible: isAdmin }
       ]
     }
   ];
@@ -103,7 +104,10 @@ export function AppShell() {
         {group.items.map(item => <NavLink key={item.to} to={item.to} onClick={() => {
           setExpandedGroup(group.label);
           onNavigate?.();
-        }}>{item.label}</NavLink>)}
+        }}>
+          <span className="nav-icon" aria-hidden="true" style={{ marginRight: '8px', fontSize: '1.1em' }}>{item.icon}</span>
+          {item.label}
+        </NavLink>)}
       </div>}
     </section>
   );

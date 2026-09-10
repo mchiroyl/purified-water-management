@@ -22,6 +22,7 @@ public class JdbcPricingAdapter implements PricingPort {
     private final JdbcClient jdbc;
     public JdbcPricingAdapter(JdbcClient jdbc) { this.jdbc = jdbc; }
 
+    @Override public String nextPriceListCode() { return jdbc.sql("SELECT 'LST-' || LPAD(nextval('price_list_code_seq')::text, 4, '0')").query(String.class).single(); }
     @Override public boolean priceListCodeExists(String code) { return exists("SELECT EXISTS(SELECT 1 FROM price_list WHERE code=:value)", code); }
     @Override public boolean presentationExists(UUID id) { return exists("SELECT EXISTS(SELECT 1 FROM product_presentation WHERE id=:value AND active)", id); }
     @Override public boolean customerEligibleForBenefits(UUID id) {

@@ -18,8 +18,12 @@ import java.util.UUID;
 @Service
 public class CustomerRouteApplicationService {
     private final CustomerRoutePort persistence;
+    private final gt.com.aguapura.application.ports.RouteTrackingPort tracking;
 
-    public CustomerRouteApplicationService(CustomerRoutePort persistence) { this.persistence = persistence; }
+    public CustomerRouteApplicationService(CustomerRoutePort persistence, gt.com.aguapura.application.ports.RouteTrackingPort tracking) {
+        this.persistence = persistence;
+        this.tracking = tracking;
+    }
 
     @Transactional
     public CustomerResponse createCustomer(CreateCustomerRequest request, UUID actorId) {
@@ -82,6 +86,14 @@ public class CustomerRouteApplicationService {
     public RouteResponse assignRoute(UUID routeId, AssignRouteRequest request, UUID actorId) {
         return route(persistence.assignRoute(new CustomerRoutePort.NewRouteAssignment(routeId,
                 request.sellerId(), request.vehicleId(), request.validFrom(), actorId)));
+    }
+
+    @Transactional(readOnly = true)
+    public List<RouteHistoryResponse> getRouteHistory(UUID routeId, java.time.Instant from, java.time.Instant to) {
+        return tracking.findRouteHistory(routeId, from, to).stream().map(h -> new RouteHistoryResponse(
+                h.loadId(), h.date(), h.sellerName(), h.startTime(), h.endTime(), h.durationMinutes(),
+                h.pointCount(), h.estimatedDistanceKm(), h.firstLat(), h.firstLon(), h.lastLat(), h.lastLon()
+        )).toList();
     }
 
     @Transactional

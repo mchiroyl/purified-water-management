@@ -25,8 +25,7 @@ public class PricingApplicationService {
 
     @Transactional
     public PriceListResponse createPriceList(CreatePriceListRequest request) {
-        String code = request.code().trim().toUpperCase(Locale.ROOT);
-        if (persistence.priceListCodeExists(code)) throw conflict("PRICE_LIST_CODE_EXISTS", "El código de lista ya existe.");
+        String code = persistence.nextPriceListCode();
         return priceList(persistence.createPriceList(new PricingPort.NewPriceList(code, request.name().trim(),
                 request.currencyCode().toUpperCase(Locale.ROOT))));
     }

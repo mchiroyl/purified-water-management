@@ -23,6 +23,7 @@ import { AnnulmentsPage } from '../features/annulments/AnnulmentsPage';
 import { PendingOperationsPage } from '../offline/PendingOperationsPage';
 import { ReportsPage } from '../features/reports/ReportsPage';
 import { AuditPage } from '../features/audit/AuditPage';
+import { RouteHistoryPage } from '../features/routes/RouteHistoryPage';
 import { AppShell } from './AppShell';
 import { DashboardPage } from './DashboardPage';
 
@@ -71,11 +72,12 @@ export function App() {
         <Route path="routes/list" element={canSeeRoutes ? <RoutesPage canManage={isAdmin} view="list" /> : <Navigate to="/" replace />} />
         <Route path="vehicles" element={canSeeRoutes ? <VehiclesPage /> : <Navigate to="/" replace />} />
         <Route path="vehicles/list" element={canSeeRoutes ? <VehiclesPage view="list" /> : <Navigate to="/" replace />} />
+        <Route path="route-history" element={isAdmin || user.roles.includes('SUPERVISOR') ? <RouteHistoryPage /> : <Navigate to="/" replace />} />
         <Route path="pricing" element={canSeePricing ? <PricingPage canManage={isAdmin} canApprove={isAdmin || user.roles.includes('SUPERVISOR')} canRequestDiscount={user.roles.includes('VENDEDOR')} /> : <Navigate to="/" replace />} />
         <Route path="pricing/list" element={canSeePricing ? <PricingPage view="list" canManage={isAdmin} canApprove={isAdmin || user.roles.includes('SUPERVISOR')} canRequestDiscount={user.roles.includes('VENDEDOR')} /> : <Navigate to="/" replace />} />
         <Route path="inventory" element={canSeeInventory ? <InventoryPage canManage={canManageInventory} /> : <Navigate to="/" replace />} />
         <Route path="loads" element={canSeeLoads ? <RouteLoadsPage canPrepare={isAdmin || isWarehouse} canConfirmWarehouse={isAdmin || isWarehouse} canReceive={isAdmin || isSeller} canStart={isAdmin || isSeller} canCorrect={isAdmin || isWarehouse} /> : <Navigate to="/" replace />} />
-        <Route path="sales" element={canSeeSales ? <SalesPage canSell={isAdmin || isSeller} /> : <Navigate to="/" replace />} />
+        <Route path="sales" element={canSeeSales ? <SalesPage canSell={isAdmin || isSeller} canViewLocation={isAdmin || user.roles.includes('SUPERVISOR')} /> : <Navigate to="/" replace />} />
         <Route path="transfers" element={canVerifyTransfers ? <TransfersPage /> : <Navigate to="/" replace />} />
         <Route path="wastes" element={canSeeWastes ? <WastePage canReport canReview={isAdmin || isWarehouse || user.roles.includes('SUPERVISOR')} canManageCatalog={isAdmin} deviceId={user.deviceId} /> : <Navigate to="/" replace />} />
         <Route path="returns" element={canSeeReturns ? <ReturnsPage canReport canReceive={isAdmin || isWarehouse || user.roles.includes('SUPERVISOR')} deviceId={user.deviceId} /> : <Navigate to="/" replace />} />

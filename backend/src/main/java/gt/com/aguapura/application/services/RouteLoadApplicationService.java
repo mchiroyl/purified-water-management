@@ -135,6 +135,36 @@ public class RouteLoadApplicationService {
         return response(persistence.start(id, actorId, deviceId));
     }
 
+    @Transactional(readOnly = true)
+    public gt.com.aguapura.application.dto.route.RouteMapResponse getRouteMap(UUID id) {
+        var load = persistence.findLoad(id);
+        if (!"SETTLED".equals(load.status())) {
+            throw conflict("ROUTE_MAP_NOT_SETTLED", "La liquidación aún no está cerrada.");
+        }
+        var points = tracking.findRouteMap(id);
+        int salesCount = 0;
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        for (var p : points) {
+            if ("SALE".equals(p.pointType()) && p.saleTotal() != null) {
+                salesCount++;
+                totalAmount = totalAmount.add(p.saleTotal());
+            }
+        }
+        long durationMinutes = 0;
+        if (points.size() > 1) {
+            var first = points.getFirst().capturedAt();
+            var last = points.getLast().capturedAt();
+            durationMinutes = java.time.Duration.between(first, last).toMinutes();
+        }
+        var pointResponses = points.stream().map(p -> new gt.com.aguapura.application.dto.route.RouteMapResponse.Point(
+                p.pointType(), p.latitude(), p.longitude(), p.accuracyMeters(),
+                p.capturedAt(), p.documentNumber(), p.saleTotal()
+        )).toList();
+        return new gt.com.aguapura.application.dto.route.RouteMapResponse(
+                load.sellerReceivedByUsername() != null ? load.sellerReceivedByUsername() : load.startedByUsername(),
+                load.routeName(), load.plannedDate(), salesCount, totalAmount, durationMinutes, pointResponses);
+    }
+
     @Transactional
     public RouteLoadResponse correct(UUID id, CreateRouteLoadCorrectionRequest request,
                                      UUID actorId, UUID deviceId) {

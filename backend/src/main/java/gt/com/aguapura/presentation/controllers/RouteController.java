@@ -67,6 +67,14 @@ public class RouteController {
         return result;
     }
 
+    @GetMapping("/{id}/route-history")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR','SUPERVISOR')")
+    public List<RouteHistoryResponse> getRouteHistory(@PathVariable UUID id,
+                                                      @RequestParam java.time.Instant from,
+                                                      @RequestParam java.time.Instant to) {
+        return service.getRouteHistory(id, from, to);
+    }
+
     @GetMapping("/vehicles")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','SUPERVISOR','BODEGA')")
     public List<VehicleResponse> findVehicles() { return service.findVehicles(); }
