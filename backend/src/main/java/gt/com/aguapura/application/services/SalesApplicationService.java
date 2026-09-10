@@ -2,6 +2,7 @@ package gt.com.aguapura.application.services;
 
 import gt.com.aguapura.application.dto.pricing.ResolvePriceRequest;
 import gt.com.aguapura.application.dto.sales.CreateSaleRequest;
+import gt.com.aguapura.application.dto.sales.SaleLocationResponse;
 import gt.com.aguapura.application.dto.sales.SaleResponse;
 import gt.com.aguapura.application.ports.RouteTrackingPort;
 import gt.com.aguapura.application.ports.SalesPort;
@@ -110,6 +111,15 @@ public class SalesApplicationService {
         return persistence.findSale(id, restrictedToSeller ? Optional.of(userId) : Optional.empty())
                 .map(this::response).orElseThrow(() -> new BusinessException("SALE_NOT_FOUND",
                         "No se encontró la venta.", ErrorCategory.NOT_FOUND));
+    }
+
+    @Transactional(readOnly = true)
+    public SaleLocationResponse findSaleLocation(UUID id) {
+        return tracking.findSaleLocation(id).map(point -> new SaleLocationResponse(
+                point.latitude(), point.longitude(), point.accuracyMeters(),
+                point.capturedAt(), point.persistedAt()))
+                .orElseThrow(() -> new BusinessException("SALE_LOCATION_NOT_FOUND",
+                        "No se encontró la ubicación para esta venta.", ErrorCategory.NOT_FOUND));
     }
 
     private gt.com.aguapura.application.dto.pricing.PriceDecisionResponse resolvePrice(

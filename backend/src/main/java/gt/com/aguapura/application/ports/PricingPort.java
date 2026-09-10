@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface PricingPort {
+    String nextPriceListCode();
     boolean priceListCodeExists(String code);
     boolean presentationExists(UUID presentationId);
     boolean customerEligibleForBenefits(UUID customerId);

@@ -1,6 +1,7 @@
 package gt.com.aguapura.presentation.controllers;
 
 import gt.com.aguapura.application.dto.sales.CreateSaleRequest;
+import gt.com.aguapura.application.dto.sales.SaleLocationResponse;
 import gt.com.aguapura.application.dto.sales.SaleResponse;
 import gt.com.aguapura.application.services.SalesApplicationService;
 import jakarta.validation.Valid;
@@ -32,6 +33,12 @@ public class SalesController {
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','SUPERVISOR','VENDEDOR')")
     public List<SaleResponse> findAll(@AuthenticationPrincipal Jwt jwt) {
         return service.findSales(actor(jwt), sellerOnly(jwt));
+    }
+
+    @GetMapping("/{id}/location")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR','SUPERVISOR')")
+    public SaleLocationResponse findLocation(@PathVariable UUID id) {
+        return service.findSaleLocation(id);
     }
 
     @GetMapping("/{id}")

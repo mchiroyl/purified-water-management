@@ -11,7 +11,7 @@ afterEach(() => {
 describe('SalesPage', () => {
   async function prepareSaleForm(fetchMock: ReturnType<typeof vi.fn>) {
     render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <SalesPage canSell={true} />
+      <SalesPage canSell={true} canViewLocation={false} />
     </QueryClientProvider>);
     await screen.findByRole('option', { name: /r-01.*ruta norte/i });
     fireEvent.change(screen.getByLabelText('Ruta'), { target: { value: 'route-1' } });
@@ -60,7 +60,7 @@ describe('SalesPage', () => {
     }));
 
     render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <SalesPage canSell={false} />
+      <SalesPage canSell={false} canViewLocation={false} />
     </QueryClientProvider>);
 
     expect(screen.getByRole('heading', { level: 1, name: 'Ventas' })).toBeInTheDocument();
@@ -93,7 +93,7 @@ describe('SalesPage', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <SalesPage canSell={true} />
+      <SalesPage canSell={true} canViewLocation={false} />
     </QueryClientProvider>);
     await screen.findByRole('option', { name: /r-01.*ruta norte/i });
     fireEvent.change(screen.getByLabelText('Ruta'), { target: { value: 'route-1' } });
@@ -125,7 +125,7 @@ describe('SalesPage', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <SalesPage canSell={true} />
+      <SalesPage canSell={true} canViewLocation={false} />
     </QueryClientProvider>);
     await screen.findByRole('option', { name: /r-01.*ruta norte/i });
     fireEvent.change(screen.getByLabelText('Ruta'), { target: { value: 'route-1' } });

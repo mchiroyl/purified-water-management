@@ -34,7 +34,7 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
   const specials = useQuery({ queryKey: ['pricing', 'specials'], queryFn: () => apiRequest<Special[]>('/pricing/special-prices'), enabled: canManage || canApprove });
   const discounts = useQuery({ queryKey: ['pricing', 'discounts'], queryFn: () => apiRequest<Discount[]>('/pricing/discounts'), enabled: canApprove || canRequestDiscount });
   const presentations = products.data?.flatMap(product => product.presentations.filter(item => item.active).map(item => ({ ...item, productName: product.name }))) ?? [];
-  const [listForm, setListForm] = useState({ code: '', name: '', currencyCode: 'GTQ' });
+  const [listForm, setListForm] = useState({ name: '', currencyCode: 'GTQ' });
   const [selectedList, setSelectedList] = useState('');
   const [validFrom, setValidFrom] = useState(localDateTime());
   const [tiers, setTiers] = useState<DraftTier[]>([{ presentationId: '', minimumBaseUnits: 1, maximumBaseUnits: '', unitPrice: 0 }]);
@@ -42,7 +42,7 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
   const [discount, setDiscount] = useState({ customerId: '', presentationId: '', quantityBaseUnits: 1, requestedPrice: 0, reason: '', expiresAt: localDateTime(2) });
   useEffect(() => { if (!selectedList && lists.data?.[0]) setSelectedList(lists.data[0].id); }, [lists.data, selectedList]);
   const refresh = () => void client.invalidateQueries({ queryKey: ['pricing'] });
-  const createList = useMutation({ mutationFn: () => apiRequest<PriceList>('/pricing/lists', { method: 'POST', body: JSON.stringify(listForm) }), onSuccess: data => { setListForm({ code: '', name: '', currencyCode: 'GTQ' }); setSelectedList(data.id); refresh(); } });
+  const createList = useMutation({ mutationFn: () => apiRequest<PriceList>('/pricing/lists', { method: 'POST', body: JSON.stringify(listForm) }), onSuccess: data => { setListForm({ name: '', currencyCode: 'GTQ' }); setSelectedList(data.id); refresh(); } });
   const createVersion = useMutation({ mutationFn: () => apiRequest<PriceList>(`/pricing/lists/${selectedList}/versions`, { method: 'POST', body: JSON.stringify({ validFrom: new Date(validFrom).toISOString(), tiers: tiers.map(item => ({ ...item, maximumBaseUnits: item.maximumBaseUnits === '' ? null : Number(item.maximumBaseUnits) })) }) }), onSuccess: refresh });
   const activate = useMutation({ mutationFn: (id: string) => apiRequest<PriceList>(`/pricing/versions/${id}/activate`, { method: 'POST' }), onSuccess: refresh });
   const createSpecial = useMutation({ mutationFn: () => apiRequest<Special>('/pricing/special-prices', { method: 'POST', body: JSON.stringify({ ...special, validFrom: new Date(special.validFrom).toISOString(), validTo: special.validTo ? new Date(special.validTo).toISOString() : null }) }), onSuccess: () => { setSpecial({ customerId: '', presentationId: '', unitPrice: 0, validFrom: localDateTime(), validTo: '' }); refresh(); } });
@@ -58,7 +58,6 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
   return <main><PageHeader eyebrow="Reglas comerciales" title={isCreateView ? 'Registrar precios' : 'Precios registrados'} description={isCreateView ? 'Configure listas, versiones y reglas comerciales. El servidor calculará el precio oficial.' : 'Consulte las listas, versiones y reglas comerciales vigentes.'} actions={<button type="button" className="secondary" onClick={() => navigate(isCreateView ? '/pricing/list' : '/pricing')}>{isCreateView ? 'Ver precios registrados' : 'Registrar nuevos precios'}</button>} />
     {canManage && isCreateView && <>
       <form className="panel inline-form" onSubmit={event => submit(event, () => createList.mutate())}><h2>Nueva lista</h2>
-        <label>Código<input required value={listForm.code} onChange={event => setListForm({ ...listForm, code: event.target.value })} /></label>
         <label>Nombre<input required value={listForm.name} onChange={event => setListForm({ ...listForm, name: event.target.value })} /></label>
         <label>Moneda<input required maxLength={3} value={listForm.currencyCode} onChange={event => setListForm({ ...listForm, currencyCode: event.target.value.toUpperCase() })} /></label>
         <button className="primary">Crear lista</button>{createList.error && <div className="alert error wide">{createList.error.message}</div>}

@@ -103,6 +103,12 @@ public class RouteLoadController {
         return result;
     }
 
+    @GetMapping("/{id}/route-map")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR','SUPERVISOR')")
+    public gt.com.aguapura.application.dto.route.RouteMapResponse getRouteMap(@PathVariable UUID id) {
+        return service.getRouteMap(id);
+    }
+
     private UUID actor(Jwt jwt) {
         return UUID.fromString(jwt.getClaimAsString("userId"));
     }

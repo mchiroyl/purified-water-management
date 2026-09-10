@@ -129,3 +129,21 @@ En móvil se usa botón de menú y contenido desplazable; el cierre de sesión d
 - No ejecutar `git reset --hard` ni borrar datos/volúmenes sin orden explícita.
 - Tras cambios: compilar con `docker compose up -d --build`, verificar `docker compose ps` y `http://localhost:3000`.
 - Actualizar este archivo y el manual pertinente cuando se agregue o cambie comportamiento funcional.
+
+## Registro de sesiones
+
+### 2026-09-10 — Verificación y arranque de entorno
+
+**Hecho:**
+- Entorno Docker reconstruido desde cero (`docker compose up -d --build`).
+- Backend compiló con Java 21 + Spring Boot 4.1.0 (266 archivos fuente).
+- Flyway V1–V33 aplicado automáticamente al arrancar el backend.
+- Los tres contenedores alcanzaron estado `healthy`: `postgres`, `backend`, `frontend`.
+- **Código de lista de precios automático**: campo eliminado del formulario; el servidor genera `LST-xxxx` (migración V32 + secuencia `price_list_code_seq`).
+- **GPS de alta precisión en ventas**: `watchPosition` espera hasta ≤20 m o 30 s; migración V33 aumenta columnas a `NUMERIC(12,8)`; mensaje "Refinando precisión GPS…" en UI.
+- **Coordenadas visibles solo para admin/supervisor**: endpoint `GET /api/sales/{id}/location` restringido con `@PreAuthorize`; botón "Ver ubicación" oculto al vendedor; panel con lat/lon/precisión y enlace Google Maps.
+- **Historial y comparación geográfica de rutas**: endpoint `GET /api/routes/{id}/route-history` y `GET /api/loads/{id}/route-map`; nueva pantalla `/route-history` con mapa interactivo OSM, distancia calculada por Haversine y comparación de tramos para admin/supervisor.
+
+**Pendiente:**
+- Fase 32: Implementar pruebas E2E con Playwright (escenarios online/offline y antifraude, flujo 1–28).
+- Fase 35: Revisar/actualizar Manual Técnico con los cambios de las fases 25–33.
