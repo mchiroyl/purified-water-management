@@ -7,7 +7,7 @@ import path from 'node:path';
 type Auth = { accessToken: string; user: { id: string; deviceId: string; mustChangePassword: boolean } };
 type Json = Record<string, any>;
 
-const adminPassword = process.env.E2E_ADMIN_PASSWORD ?? 'E2E-Admin-Password-2026!';
+const adminPassword = process.env.E2E_ADMIN_PASSWORD ?? 'DevOnly-Admin-2026!';
 const sellerTemporaryPassword = 'E2E-Seller-Temp-2026!';
 const sellerPassword = 'E2E-Seller-Final-2026!';
 
@@ -45,13 +45,13 @@ test('flujo completo 1-28, offline, idempotencia, antifraude y PDF', async ({ re
   expect(connectivity.status()).toBe(200);
 
   // 1. Administrador inicia sesion y configura una sola identidad empresarial.
-  const admin = await login(request, 'admin', adminPassword, `Admin E2E ${suffix}`);
+  const admin = await login(request, 'admin', adminPassword, `Admin E2E Static Device`);
   expect(admin.user.mustChangePassword).toBe(false);
   const company = await body<Json>(await request.put('/api/company-configuration', authorized(admin.accessToken, {
     commercialName: `Agua E2E ${suffix}`, legalName: `Purificadora E2E ${suffix}, S.A.`, taxId: `E2E-${suffix}`,
     address: 'Ciudad de Guatemala, Guatemala', phone: '55550101', whatsapp: '55550101',
     email: `e2e-${suffix}@example.invalid`, currencyCode: 'GTQ', timezone: 'America/Guatemala',
-    receiptPrefix: 'E2E', nextReceiptNumber: 1, documentLegend: 'Gracias por su compra',
+    receiptPrefix: `E${suffix.slice(-6)}`, nextReceiptNumber: 1, documentLegend: 'Gracias por su compra',
   })), 'configurar empresa');
 
   // 2-4. Producto, presentacion y precio vigente.
@@ -61,7 +61,7 @@ test('flujo completo 1-28, offline, idempotencia, antifraude y PDF', async ({ re
   })), 'crear producto');
   const presentationId = product.presentations[0].id as string;
   const priceList = await body<Json>(await request.post('/api/pricing/lists', authorized(admin.accessToken, {
-    code: `L-${suffix}`, name: 'Lista E2E', currencyCode: 'GTQ',
+    name: 'Lista E2E', currencyCode: 'GTQ',
   })), 'crear lista');
   const versioned = await body<Json>(await request.post(`/api/pricing/lists/${priceList.id}/versions`, authorized(admin.accessToken, {
     validFrom: new Date(Date.now() - 60_000).toISOString(),
@@ -104,6 +104,7 @@ test('flujo completo 1-28, offline, idempotencia, antifraude y PDF', async ({ re
   await body(await request.post('/api/inventory/locations', authorized(admin.accessToken, {
     code: `IR-${suffix}`, name: 'Inventario ruta E2E', locationType: 'ROUTE', routeId: route.id,
   })), 'crear inventario de ruta');
+
   await body(await request.post('/api/inventory/adjustments', authorized(admin.accessToken, {
     locationId: warehouse.id, productId: product.id, quantityDelta: 100, reason: 'Existencia inicial E2E',
   })), 'ajustar existencia');
@@ -140,10 +141,10 @@ test('flujo completo 1-28, offline, idempotencia, antifraude y PDF', async ({ re
 
   // 12-18. Se preparan datos offline y se comprueba persistencia tras reabrir la PWA.
   await page.goto('/');
+  await page.evaluate((deviceId) => window.localStorage.setItem('agua-pura.known-device-id', deviceId), seller.user.deviceId);
   if (captureManual) await page.screenshot({ path: path.join(manualAssets, '01-inicio-sesion.png'), fullPage: true });
   await page.getByLabel('Usuario').fill(`seller-${suffix}`);
   await page.getByLabel('Contraseña').fill(sellerPassword);
-  await page.getByLabel('Nombre del dispositivo').fill(`Telefono E2E ${suffix}`);
   const browserLoginPromise = page.waitForResponse(response => response.url().endsWith('/api/auth/login')
     && response.request().method() === 'POST');
   await page.getByRole('button', { name: 'Ingresar' }).click();
@@ -162,6 +163,7 @@ test('flujo completo 1-28, offline, idempotencia, antifraude y PDF', async ({ re
     db.close();
   });
   await context.setOffline(true);
+  await page.waitForTimeout(500);
   await page.evaluate(() => window.dispatchEvent(new Event('offline')));
   await expect(page.getByRole('button', { name: 'Sin conexión' })).toBeVisible();
   if (captureManual) await page.screenshot({ path: path.join(manualAssets, '03-modo-sin-conexion.png'), fullPage: true });
@@ -218,6 +220,7 @@ test('flujo completo 1-28, offline, idempotencia, antifraude y PDF', async ({ re
   const wastes = await body<Json[]>(await request.get('/api/wastes', authorized(admin.accessToken)), 'listar mermas');
   const waste = wastes.find(item => item.clientReference === wasteId);
   expect(waste).toBeTruthy();
+  if (!waste) throw new Error('Merma no encontrada');
   await body(await request.post(`/api/wastes/${waste.id}/reviews`, authorized(admin.accessToken, {
     decision: 'APPROVE', items: waste.items.map((item: Json) => ({ itemId: item.id, approvedBaseUnits: 2 })), notes: 'Conteo E2E',
   })), 'aprobar merma');
@@ -259,6 +262,7 @@ test('flujo completo 1-28, offline, idempotencia, antifraude y PDF', async ({ re
     Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => true });
     Object.defineProperty(navigator, 'share', { configurable: true, value: async () => { (window as any).__sharedReceipt = true; } });
   });
+  await page.locator('aside').getByRole('button', { name: /Operación diaria/i }).click();
   await page.locator('aside').getByRole('link', { name: 'Ventas' }).click();
   await expect(page.getByText(onlineSale.documentNumber)).toBeVisible();
   if (captureManual) await page.screenshot({ path: path.join(manualAssets, '04-ventas-y-comprobantes.png'), fullPage: true });
@@ -274,9 +278,9 @@ test('flujo completo 1-28, offline, idempotencia, antifraude y PDF', async ({ re
     const manualContext = await browser.newContext();
     const manualPage = await manualContext.newPage();
     await manualPage.goto('/');
+    await manualPage.evaluate((deviceId) => window.localStorage.setItem('agua-pura.known-device-id', deviceId), admin.user.deviceId);
     await manualPage.getByLabel('Usuario').fill('admin');
     await manualPage.getByLabel('Contraseña').fill(adminPassword);
-    await manualPage.getByLabel('Nombre del dispositivo').fill(`Manual E2E ${suffix}`);
     const adminBrowserLoginPromise = manualPage.waitForResponse(response => response.url().endsWith('/api/auth/login')
       && response.request().method() === 'POST');
     await manualPage.getByRole('button', { name: 'Ingresar' }).click();

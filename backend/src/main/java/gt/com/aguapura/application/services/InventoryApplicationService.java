@@ -32,18 +32,24 @@ public class InventoryApplicationService {
     public InventoryLocationResponse createLocation(CreateInventoryLocationRequest request) {
         String code = request.code().trim().toUpperCase(Locale.ROOT);
         String type = request.locationType().trim().toUpperCase(Locale.ROOT);
-        if (!"WAREHOUSE".equals(type)) {
-            throw validation("INVALID_INVENTORY_LOCATION_TYPE",
-                    "El inventario se gestiona desde la bodega. Las rutas se asignan por cargas diarias y no se registran como ubicaciones de stock.");
-        }
-        if (request.routeId() != null) {
-            throw validation("WAREHOUSE_ROUTE_NOT_ALLOWED", "La bodega no puede vincularse a una ruta. Use el módulo de rutas y cargas diarias.");
+        if (!LOCATION_TYPES.contains(type)) {
+            throw validation("INVALID_INVENTORY_LOCATION_TYPE", "El tipo de ubicación no es válido.");
         }
         if (persistence.locationCodeExists(code)) {
             throw conflict("INVENTORY_LOCATION_CODE_EXISTS", "El código de ubicación ya está registrado.");
         }
+        if ("ROUTE".equals(type)) {
+            if (request.routeId() == null || !persistence.activeRouteExists(request.routeId())) {
+                throw validation("INVENTORY_ROUTE_REQUIRED", "La ubicación de ruta requiere una ruta activa.");
+            }
+            if (persistence.routeLocationExists(request.routeId())) {
+                throw conflict("ROUTE_INVENTORY_LOCATION_EXISTS", "La ruta ya tiene una ubicación de inventario.");
+            }
+        } else if (request.routeId() != null) {
+            throw validation("WAREHOUSE_ROUTE_NOT_ALLOWED", "Una bodega no puede vincularse a una ruta.");
+        }
         return location(persistence.createLocation(new InventoryPort.NewLocation(
-                code, request.name().trim(), type, null)));
+                code, request.name().trim(), type, request.routeId())));
     }
 
     @Transactional(readOnly = true)
