@@ -245,6 +245,39 @@ public class JdbcSalesAdapter implements SalesPort {
                 rs.getObject("device_id", UUID.class), instant(rs, "created_at"), List.of(), List.of());
     }
 
+    @Override
+    public Optional<UUID> findStartedRouteLoadId(UUID routeId) {
+        return jdbc.sql("""
+                SELECT id FROM route_load
+                WHERE route_id = :routeId AND status = 'STARTED'
+                ORDER BY started_at DESC LIMIT 1
+                """)
+                .param("routeId", routeId)
+                .query((rs, row) -> rs.getObject("id", UUID.class))
+                .optional();
+    }
+
+    @Override
+    public Optional<CustomerRouteView> findCustomerInRoute(UUID customerId, UUID routeId) {
+        return jdbc.sql("""
+                SELECT c.id AS customer_id, c.name AS customer_name
+                FROM customer c
+                JOIN customer_route cr ON cr.customer_id = c.id
+                WHERE c.id = :customerId
+                  AND cr.route_id = :routeId
+                  AND cr.valid_from <= current_date
+                  AND (cr.valid_to IS NULL OR cr.valid_to >= current_date)
+                  AND c.status = 'ACTIVE'
+                  AND c.registration_state IN ('ACTIVE', 'PENDING_REVIEW')
+                """)
+                .param("customerId", customerId)
+                .param("routeId", routeId)
+                .query((rs, row) -> new CustomerRouteView(
+                        rs.getObject("customer_id", UUID.class),
+                        rs.getString("customer_name")))
+                .optional();
+    }
+
     private Instant instant(ResultSet rs, String column) throws SQLException {
         var value = rs.getTimestamp(column);
         return value == null ? null : value.toInstant();

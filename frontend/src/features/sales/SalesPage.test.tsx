@@ -79,9 +79,13 @@ describe('SalesPage', () => {
   });
 
   it('envía la ubicación obtenida al confirmar una venta', async () => {
-    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: { getCurrentPosition: vi.fn((success: PositionCallback) => success({
-      coords: { latitude: 14.6349, longitude: -90.5069, accuracy: 7 },
-    } as GeolocationPosition)) } });
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: {
+      watchPosition: vi.fn((success: PositionCallback) => {
+        success({ coords: { latitude: 14.6349, longitude: -90.5069, accuracy: 7 } } as GeolocationPosition);
+        return 1;
+      }),
+      clearWatch: vi.fn(),
+    } });
     const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
       const path = input.toString();
       const value = path.endsWith('/routes') ? [{ id: 'route-1', code: 'R-01', name: 'Ruta norte', status: 'ACTIVE' }]
@@ -113,7 +117,13 @@ describe('SalesPage', () => {
 
   it('bloquea una segunda confirmación mientras obtiene la ubicación', async () => {
     let resolvePosition!: PositionCallback;
-    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: { getCurrentPosition: vi.fn((success: PositionCallback) => { resolvePosition = success; }) } });
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: {
+      watchPosition: vi.fn((success: PositionCallback) => {
+        resolvePosition = success;
+        return 1;
+      }),
+      clearWatch: vi.fn(),
+    } });
     const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
       const path = input.toString();
       const value = path.endsWith('/routes') ? [{ id: 'route-1', code: 'R-01', name: 'Ruta norte', status: 'ACTIVE' }]
@@ -134,7 +144,7 @@ describe('SalesPage', () => {
     fireEvent.change(screen.getByLabelText('Presentación'), { target: { value: 'presentation-1' } });
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar venta' }));
 
-    const submit = await screen.findByRole('button', { name: 'Obteniendo ubicación…' });
+    const submit = await screen.findByRole('button', { name: 'Refinando precisión GPS…' });
     expect(submit).toBeDisabled();
     expect(fetchMock.mock.calls.some(([input, init]) => input.toString().endsWith('/sales') && (init as RequestInit | undefined)?.method === 'POST')).toBe(false);
 
@@ -144,7 +154,11 @@ describe('SalesPage', () => {
 
   it('no crea una venta cuando el usuario deniega la ubicación', async () => {
     Object.defineProperty(navigator, 'geolocation', { configurable: true, value: {
-      getCurrentPosition: vi.fn((_success: PositionCallback, error?: PositionErrorCallback) => error?.({ code: 1, message: 'denied' } as GeolocationPositionError)),
+      watchPosition: vi.fn((_success: PositionCallback, error?: PositionErrorCallback) => {
+        error?.({ code: 1, message: 'denied' } as GeolocationPositionError);
+        return 1;
+      }),
+      clearWatch: vi.fn(),
     } });
     const fetchMock = formFetchMock();
     vi.stubGlobal('fetch', fetchMock);

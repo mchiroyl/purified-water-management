@@ -17,12 +17,18 @@ public class JdbcRouteTrackingAdapter implements RouteTrackingPort {
 
     @Override
     public void recordStart(UUID routeLoadId, UUID routeId, GeoLocation point, UUID actorId, UUID deviceId) {
-        insert(routeLoadId, routeId, null, "START", point, actorId, deviceId);
+        insert(routeLoadId, routeId, null, null, "START", null, point, actorId, deviceId);
     }
 
     @Override
     public void recordSale(UUID routeLoadId, UUID routeId, UUID saleId, GeoLocation point, UUID actorId, UUID deviceId) {
-        insert(routeLoadId, routeId, saleId, "SALE", point, actorId, deviceId);
+        insert(routeLoadId, routeId, saleId, null, "SALE", null, point, actorId, deviceId);
+    }
+
+    @Override
+    public void recordNoPurchaseVisit(UUID routeLoadId, UUID routeId, UUID customerId, String visitNote,
+                                      GeoLocation point, UUID actorId, UUID deviceId) {
+        insert(routeLoadId, routeId, null, customerId, "NO_PURCHASE_VISIT", visitNote, point, actorId, deviceId);
     }
 
     @Override
@@ -46,9 +52,13 @@ public class JdbcRouteTrackingAdapter implements RouteTrackingPort {
     public java.util.List<RouteTrackingPort.RouteMapPoint> findRouteMap(UUID loadId) {
         return jdbc.sql("""
                 SELECT p.point_type, p.latitude, p.longitude, p.accuracy_meters, p.captured_at,
-                       s.document_number, s.total
+                       s.document_number, s.total,
+                       COALESCE(c.name, sc.name) AS customer_name,
+                       p.visit_note
                 FROM route_tracking_point p
                 LEFT JOIN sale s ON p.sale_id = s.id
+                LEFT JOIN customer c ON p.customer_id = c.id
+                LEFT JOIN customer sc ON s.customer_id = sc.id
                 WHERE p.route_load_id = :loadId
                 ORDER BY p.captured_at ASC
                 """)
@@ -60,7 +70,9 @@ public class JdbcRouteTrackingAdapter implements RouteTrackingPort {
                         rs.getBigDecimal("accuracy_meters"),
                         rs.getTimestamp("captured_at").toInstant(),
                         rs.getString("document_number"),
-                        rs.getBigDecimal("total")))
+                        rs.getBigDecimal("total"),
+                        rs.getString("customer_name"),
+                        rs.getString("visit_note")))
                 .list();
     }
 
@@ -80,7 +92,7 @@ public class JdbcRouteTrackingAdapter implements RouteTrackingPort {
                            FIRST_VALUE(p.longitude) OVER (PARTITION BY p.route_load_id ORDER BY p.captured_at DESC) as last_lon
                     FROM route_tracking_point p
                     JOIN route_load rl ON p.route_load_id = rl.id
-                    WHERE rl.route_id = :routeId AND rl.status = 'SETTLED'
+                    WHERE rl.route_id = :routeId AND rl.status IN ('STARTED', 'SETTLED')
                       AND rl.created_at >= :from AND rl.created_at < :to
                 ),
                 distances AS (
@@ -107,13 +119,15 @@ public class JdbcRouteTrackingAdapter implements RouteTrackingPort {
                 )
                 SELECT a.route_load_id as load_id,
                        (rl.created_at AT TIME ZONE (SELECT timezone FROM config))::date as load_date,
-                       u.name as seller_name, a.start_time, a.end_time,
+                       COALESCE(s.display_name, u.username, 'Vendedor') as seller_name,
+                       a.start_time, a.end_time,
                        EXTRACT(EPOCH FROM (a.end_time - a.start_time))/60 as duration_minutes,
                        a.point_count, a.estimated_distance_km,
                        a.first_lat, a.first_lon, a.last_lat, a.last_lon
                 FROM aggregated a
                 JOIN route_load rl ON a.route_load_id = rl.id
-                JOIN app_user u ON rl.seller_id = u.id
+                LEFT JOIN app_user u ON u.id = COALESCE(rl.started_by, rl.seller_received_by, rl.created_by)
+                LEFT JOIN seller s ON s.user_id = u.id
                 ORDER BY load_date ASC, a.start_time ASC
                 """)
                 .param("routeId", routeId)
@@ -135,18 +149,22 @@ public class JdbcRouteTrackingAdapter implements RouteTrackingPort {
                 .list();
     }
 
-    private void insert(UUID routeLoadId, UUID routeId, UUID saleId, String pointType,
-                        GeoLocation point, UUID actorId, UUID deviceId) {
+    private void insert(UUID routeLoadId, UUID routeId, UUID saleId, UUID customerId, String pointType,
+                        String visitNote, GeoLocation point, UUID actorId, UUID deviceId) {
         jdbc.sql("""
-                INSERT INTO route_tracking_point(route_load_id,route_id,sale_id,point_type,latitude,longitude,
-                                                 accuracy_meters,captured_at,actor_id,device_id)
-                VALUES (:routeLoadId,:routeId,:saleId,:pointType,:latitude,:longitude,
-                        :accuracyMeters,:capturedAt,:actorId,:deviceId)
+                INSERT INTO route_tracking_point(route_load_id, route_id, sale_id, customer_id, point_type,
+                                                 visit_note, latitude, longitude,
+                                                 accuracy_meters, captured_at, actor_id, device_id)
+                VALUES (:routeLoadId, :routeId, :saleId, :customerId, :pointType,
+                        :visitNote, :latitude, :longitude,
+                        :accuracyMeters, :capturedAt, :actorId, :deviceId)
                 """)
                 .param("routeLoadId", routeLoadId)
                 .param("routeId", routeId)
                 .param("saleId", saleId)
+                .param("customerId", customerId)
                 .param("pointType", pointType)
+                .param("visitNote", visitNote)
                 .param("latitude", point.latitude())
                 .param("longitude", point.longitude())
                 .param("accuracyMeters", point.accuracyMeters())

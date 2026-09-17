@@ -35,11 +35,15 @@ describe('RouteLoadsPage', () => {
     expect(screen.getByText(/Entrega: bodega.*Recepción: vendedor/i)).toBeInTheDocument();
   });
 
-  it('envía la ubicación obtenida al confirmar la recepción', async () => {
-    const getCurrentPosition = vi.fn((success: PositionCallback) => success({
-      coords: { latitude: 14.6349, longitude: -90.5069, accuracy: 6 },
-    } as GeolocationPosition));
-    vi.stubGlobal('navigator', { geolocation: { getCurrentPosition } });
+  it('envía la ubicación obligatoria al confirmar la recepción de una carga inicial', async () => {
+    const watchPosition = vi.fn((success: PositionCallback) => {
+      success({
+        coords: { latitude: 14.6349, longitude: -90.5069, accuracy: 6 },
+      } as GeolocationPosition);
+      return 1;
+    });
+    const clearWatch = vi.fn();
+    vi.stubGlobal('navigator', { geolocation: { watchPosition, clearWatch } });
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       if (input.toString().endsWith('/loads/l1/receipt')) {
         return Promise.resolve(new Response(JSON.stringify({}), { status: 200, headers: { 'Content-Type': 'application/json' } }));
@@ -72,7 +76,11 @@ describe('RouteLoadsPage', () => {
   });
 
   it('no confirma la recepción si se deniega la ubicación', async () => {
-    vi.stubGlobal('navigator', { geolocation: { getCurrentPosition: vi.fn((_success: PositionCallback, failure: PositionErrorCallback) => failure({ code: 1 } as GeolocationPositionError)) } });
+    const watchPosition = vi.fn((_success: PositionCallback, failure?: PositionErrorCallback) => {
+      failure?.({ code: 1 } as GeolocationPositionError);
+      return 1;
+    });
+    vi.stubGlobal('navigator', { geolocation: { watchPosition, clearWatch: vi.fn() } });
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       if (input.toString().endsWith('/loads')) {
         return Promise.resolve(new Response(JSON.stringify([{
@@ -96,8 +104,8 @@ describe('RouteLoadsPage', () => {
   });
 
   it('confirma una recarga sin solicitar ubicación', async () => {
-    const getCurrentPosition = vi.fn();
-    vi.stubGlobal('navigator', { geolocation: { getCurrentPosition } });
+    const watchPosition = vi.fn();
+    vi.stubGlobal('navigator', { geolocation: { watchPosition, clearWatch: vi.fn() } });
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       if (input.toString().endsWith('/loads/l1/receipt')) {
         return Promise.resolve(new Response(JSON.stringify({}), { status: 200, headers: { 'Content-Type': 'application/json' } }));
@@ -118,7 +126,7 @@ describe('RouteLoadsPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Confirmar recepción' }));
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => input.toString().endsWith('/loads/l1/receipt'))).toBe(true));
-    expect(getCurrentPosition).not.toHaveBeenCalled();
+    expect(watchPosition).not.toHaveBeenCalled();
     const call = fetchMock.mock.calls.find(([input]) => input.toString().endsWith('/loads/l1/receipt'));
     expect(JSON.parse((call?.[1] as RequestInit).body as string)).toEqual({});
   });

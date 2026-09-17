@@ -104,9 +104,11 @@ public class RouteLoadController {
     }
 
     @GetMapping("/{id}/route-map")
-    @PreAuthorize("hasAnyRole('ADMINISTRADOR','SUPERVISOR')")
-    public gt.com.aguapura.application.dto.route.RouteMapResponse getRouteMap(@PathVariable UUID id) {
-        return service.getRouteMap(id);
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR','SUPERVISOR','VENDEDOR')")
+    public gt.com.aguapura.application.dto.route.RouteMapResponse getRouteMap(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+        return service.getRouteMap(id, sellerOnly(jwt), actor(jwt));
     }
 
     private UUID actor(Jwt jwt) {

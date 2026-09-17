@@ -4,6 +4,7 @@ import { PageHeader } from '../../app/PageHeader';
 import { apiRequest } from '../../services/apiClient';
 import { calendarOnlyProps, currentMonthDateBounds } from '../../utils/dateInput';
 import { captureCurrentLocation } from '../../services/geolocation';
+import { RouteMapPanel, type RouteMapData } from '../routes/RouteMapPanel';
 
 type LoadItem = { id: string; productId: string; productCode: string; productName: string; baseUnitCode: string; quantityBaseUnits: number };
 type Correction = { id: string; productId: string; productName: string; quantityDelta: number; reason: string; actorUsername: string; createdAt: string };
@@ -37,6 +38,12 @@ export function RouteLoadsPage({ canPrepare, canConfirmWarehouse, canReceive, ca
   const [locationError, setLocationError] = useState('');
   const [isCapturingLocation, setIsCapturingLocation] = useState(false);
   const refresh = () => void client.invalidateQueries({ queryKey: ['route-loads'] });
+  const [mapLoadId, setMapLoadId] = useState<string | null>(null);
+  const routeMapQuery = useQuery({
+    queryKey: ['route-map', mapLoadId],
+    queryFn: () => apiRequest<RouteMapData>(`/loads/${mapLoadId}/route-map`),
+    enabled: !!mapLoadId,
+  });
   const create = useMutation({
     mutationFn: () => apiRequest<RouteLoad>(form.loadType === 'REPLENISHMENT' ? '/loads/replenishments' : '/loads', { method: 'POST', body: JSON.stringify({ ...form, items }) }),
     onSuccess: () => { setForm({ routeId: '', sourceLocationId: '', plannedDate: dateInZone(company.data?.timezone), loadType: 'INITIAL', notes: '' }); setItems([{ productId: '', quantityBaseUnits: 1 }]); refresh(); }
@@ -97,7 +104,15 @@ export function RouteLoadsPage({ canPrepare, canConfirmWarehouse, canReceive, ca
           <div className="form-actions">{load.status === 'PREPARED' && canConfirmWarehouse && <button className="primary" onClick={() => transition.mutate({ id: load.id, action: 'warehouse-confirmation' })}>Confirmar entrega de bodega</button>}
             {load.status === 'WAREHOUSE_CONFIRMED' && canReceive && <button className="primary" disabled={isCapturingLocation || transition.isPending} onClick={() => void confirmReceipt(load)}>{isCapturingLocation ? 'Obteniendo ubicación…' : 'Confirmar recepción'}</button>}
             {load.status === 'RECEIVED' && canStart && load.loadType !== 'REPLENISHMENT' && <button className="primary" onClick={() => transition.mutate({ id: load.id, action: 'start' })}>Iniciar recorrido</button>}
+            {load.status === 'STARTED' && <button type="button" className="secondary" onClick={() => setMapLoadId(prev => prev === load.id ? null : load.id)}>🗺 {mapLoadId === load.id ? 'Ocultar mi ruta' : 'Ver mi ruta'}</button>}
           </div>
+          {mapLoadId === load.id && (
+            <div style={{ marginTop: '1rem' }}>
+              {routeMapQuery.isLoading && <p className="muted">Cargando mapa…</p>}
+              {routeMapQuery.error && <p className="alert error">{(routeMapQuery.error as Error).message}</p>}
+              {routeMapQuery.data && <RouteMapPanel data={routeMapQuery.data} height="400px" />}
+            </div>
+          )}
           {canCorrect && ['RECEIVED', 'STARTED'].includes(load.status) && <div className="correction-form"><h3>Corrección compensatoria</h3><select aria-label={`Producto corrección ${load.loadNumber}`} value={correction.productId} onChange={event => setCorrections({ ...corrections, [load.id]: { ...correction, productId: event.target.value } })}>{load.items.map(item => <option value={item.productId} key={item.id}>{item.productName}</option>)}</select><input aria-label={`Cantidad corrección ${load.loadNumber}`} type="number" step="0.0001" value={correction.quantityDelta} onChange={event => setCorrections({ ...corrections, [load.id]: { ...correction, quantityDelta: Number(event.target.value) } })} /><input aria-label={`Motivo corrección ${load.loadNumber}`} placeholder="Motivo obligatorio" value={correction.reason} onChange={event => setCorrections({ ...corrections, [load.id]: { ...correction, reason: event.target.value } })} /><button className="secondary" disabled={!correction.productId || correction.quantityDelta === 0 || !correction.reason} onClick={() => correct.mutate({ id: load.id, value: correction })}>Registrar corrección</button></div>}
           {load.corrections.length > 0 && <div className="data-list"><h3>Correcciones</h3>{load.corrections.map(item => <div className="data-row" key={item.id}><span>{item.productName} · {item.reason} · {item.actorUsername}</span><strong>{Number(item.quantityDelta) > 0 ? '+' : ''}{Number(item.quantityDelta).toLocaleString('es-GT')}</strong></div>)}</div>}
         </article>;

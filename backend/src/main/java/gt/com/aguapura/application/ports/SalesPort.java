@@ -14,6 +14,19 @@ public interface SalesPort {
     List<SaleView> findSales(Optional<UUID> sellerUserId);
     Optional<SaleView> findSale(UUID id, Optional<UUID> sellerUserId);
 
+    /**
+     * Returns the active (STARTED) route_load id for the given route, if any.
+     * Used to validate that the route is currently in progress before registering a no-purchase visit.
+     */
+    Optional<UUID> findStartedRouteLoadId(UUID routeId);
+
+    /**
+     * Returns basic customer info if the customer is active and belongs to the given route.
+     */
+    Optional<CustomerRouteView> findCustomerInRoute(UUID customerId, UUID routeId);
+
+    record CustomerRouteView(UUID customerId, String customerName) {}
+
     record SaleContext(UUID routeId, UUID inventoryLocationId, UUID routeLoadId, UUID sellerId, String customerType,
                        boolean creditAllowed, BigDecimal creditLimit, BigDecimal currentBalance) {
     }

@@ -89,6 +89,7 @@ class CustomerRouteApplicationServiceTest {
     private static final class FakeRouteTrackingPort implements gt.com.aguapura.application.ports.RouteTrackingPort {
         @Override public void recordStart(UUID routeLoadId, UUID routeId, gt.com.aguapura.application.ports.RouteTrackingPort.GeoLocation point, UUID actorId, UUID deviceId) {}
         @Override public void recordSale(UUID routeLoadId, UUID routeId, UUID saleId, gt.com.aguapura.application.ports.RouteTrackingPort.GeoLocation point, UUID actorId, UUID deviceId) {}
+        @Override public void recordNoPurchaseVisit(UUID routeLoadId, UUID routeId, UUID customerId, String visitNote, gt.com.aguapura.application.ports.RouteTrackingPort.GeoLocation point, UUID actorId, UUID deviceId) {}
         @Override public Optional<gt.com.aguapura.application.ports.RouteTrackingPort.SaleLocationView> findSaleLocation(UUID saleId) { return Optional.empty(); }
         @Override public List<gt.com.aguapura.application.ports.RouteTrackingPort.RouteMapPoint> findRouteMap(UUID loadId) { return new ArrayList<>(); }
         @Override public List<gt.com.aguapura.application.ports.RouteTrackingPort.RouteHistoryDay> findRouteHistory(UUID routeId, java.time.Instant from, java.time.Instant to) { return new ArrayList<>(); }

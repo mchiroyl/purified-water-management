@@ -37,6 +37,16 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
   const [locationError, setLocationError] = useState('');
   const [isCapturingLocation, setIsCapturingLocation] = useState(false);
   const [locationPanelSaleId, setLocationPanelSaleId] = useState<string | null>(null);
+
+  // ── Visita sin compra ──────────────────────────────────────────────────────
+  const [visitOpen, setVisitOpen] = useState(false);
+  const [visitRouteId, setVisitRouteId] = useState('');
+  const [visitCustomerId, setVisitCustomerId] = useState('');
+  const [visitReason, setVisitReason] = useState('NO_ESTABA');
+  const [visitNote, setVisitNote] = useState('');
+  const [visitCapturing, setVisitCapturing] = useState(false);
+  const [visitError, setVisitError] = useState('');
+  const [visitSuccess, setVisitSuccess] = useState('');
   const locationQuery = useQuery({
     queryKey: ['sale-location', locationPanelSaleId],
     queryFn: () => apiRequest<SaleLocation>(`/sales/${locationPanelSaleId}/location`),
@@ -56,6 +66,45 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
       await queryClient.invalidateQueries({ queryKey: ['inventory'] });
     }
   });
+
+  const registerVisit = useMutation({
+    mutationFn: (location: GeoLocationSnapshot) => apiRequest<{ customerName: string; visitReason: string; fullNote: string }>('/sales/no-purchase-visit', {
+      method: 'POST',
+      body: JSON.stringify({
+        routeId: visitRouteId,
+        customerId: visitCustomerId,
+        visitReason,
+        visitNote: visitNote.trim() || null,
+        location,
+      }),
+    }),
+    onSuccess: (data) => {
+      const reasonLabel = visitReason === 'NO_ESTABA' ? 'Cliente no estaba'
+        : visitReason === 'NO_NECESITABA' ? 'No necesitaba' : 'Otro motivo';
+      setVisitSuccess(`✅ Visita registrada para ${data.customerName ?? 'el cliente'}. Motivo: ${reasonLabel}. La ubicación GPS quedó almacenada.`);
+      setVisitCustomerId('');
+      setVisitNote('');
+      setVisitReason('NO_ESTABA');
+      setTimeout(() => setVisitSuccess(''), 8000);
+    },
+  });
+
+  const submitVisit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setVisitError('');
+    setVisitSuccess('');
+    setVisitCapturing(true);
+    try {
+      const location = await captureCurrentLocation('registrar la visita sin compra');
+      registerVisit.mutate(location);
+    } catch (err) {
+      setVisitError(err instanceof Error ? err.message : 'No fue posible obtener la ubicación.');
+    } finally {
+      setVisitCapturing(false);
+    }
+  };
+
+  const visitAvailableCustomers = customers.data?.filter(c => c.status === 'ACTIVE' && c.routeId === visitRouteId) ?? [];
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setLocationError('');
@@ -158,6 +207,71 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
       {isCapturingLocation && <p className="muted" style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>Buscando señal GPS de alta precisión. Puede tomar hasta 30 segundos.</p>}
       {(locationError || create.error) && <div className="alert error">{locationError || create.error?.message}</div>}
     </form>}
+
+    {/* ── Visita sin compra ─────────────────────────────────────────────── */}
+    {canSell && (
+      <section className="panel section-panel">
+        <div className="section-heading">
+          <h2>🚶 Visita sin compra</h2>
+          <button type="button" className="secondary" onClick={() => { setVisitOpen(v => !v); setVisitError(''); setVisitSuccess(''); }}>
+            {visitOpen ? '▲ Ocultar' : '▼ Registrar'}
+          </button>
+        </div>
+        <p className="muted" style={{ fontSize: '0.88rem' }}>
+          Registra cuando visitaste a un cliente pero no realizó compra hoy. El sistema capturará las coordenadas GPS como respaldo ético y auditable.
+        </p>
+        {visitOpen && (
+          <form onSubmit={e => void submitVisit(e)} className="form-grid compact-grid" style={{ marginTop: '1rem' }}>
+            <label>Ruta
+              <select required value={visitRouteId} onChange={e => { setVisitRouteId(e.target.value); setVisitCustomerId(''); }}>
+                <option value="">Seleccionar</option>
+                {routes.data?.filter(r => r.status === 'ACTIVE').map(r => (
+                  <option key={r.id} value={r.id}>{r.code} · {r.name}</option>
+                ))}
+              </select>
+            </label>
+            <label>Cliente
+              <select required value={visitCustomerId} disabled={!visitRouteId} onChange={e => setVisitCustomerId(e.target.value)}>
+                <option value="">Seleccionar</option>
+                {visitAvailableCustomers.map(c => (
+                  <option key={c.id} value={c.id}>{c.code} · {c.name}</option>
+                ))}
+              </select>
+            </label>
+            <label>Motivo de visita
+              <select value={visitReason} onChange={e => setVisitReason(e.target.value)}>
+                <option value="NO_ESTABA">Cliente no estaba</option>
+                <option value="NO_NECESITABA">No necesitaba</option>
+                <option value="OTRO">Otro motivo</option>
+              </select>
+            </label>
+            <label className="wide">Nota adicional (opcional)
+              <textarea
+                value={visitNote}
+                maxLength={300}
+                placeholder="Detalles adicionales…"
+                onChange={e => setVisitNote(e.target.value)}
+              />
+            </label>
+            <div className="form-actions wide">
+              <button
+                type="submit"
+                className="primary"
+                disabled={visitCapturing || registerVisit.isPending || !visitRouteId || !visitCustomerId}
+              >
+                {visitCapturing ? 'Obteniendo GPS…' : registerVisit.isPending ? 'Registrando…' : '📍 Registrar visita'}
+              </button>
+            </div>
+            {visitCapturing && (
+              <p className="muted wide" style={{ fontSize: '0.85rem' }}>Buscando señal GPS de alta precisión. Puede tomar hasta 30 segundos.</p>
+            )}
+            {visitError && <div className="alert error wide">{visitError}</div>}
+            {registerVisit.error && <div className="alert error wide">{(registerVisit.error as Error).message}</div>}
+            {visitSuccess && <div className="alert success wide">{visitSuccess}</div>}
+          </form>
+        )}
+      </section>
+    )}
 
     <section className="section-panel"><div className="section-heading"><h2>Ventas confirmadas</h2><span>{sales.data?.length ?? 0} ventas</span></div>
       {receiptError && <div className="alert error">{receiptError}</div>}

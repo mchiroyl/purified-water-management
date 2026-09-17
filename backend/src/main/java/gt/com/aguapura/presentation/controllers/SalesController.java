@@ -1,6 +1,8 @@
 package gt.com.aguapura.presentation.controllers;
 
 import gt.com.aguapura.application.dto.sales.CreateSaleRequest;
+import gt.com.aguapura.application.dto.sales.NoPurchaseVisitRequest;
+import gt.com.aguapura.application.dto.sales.NoPurchaseVisitResponse;
 import gt.com.aguapura.application.dto.sales.SaleLocationResponse;
 import gt.com.aguapura.application.dto.sales.SaleResponse;
 import gt.com.aguapura.application.services.SalesApplicationService;
@@ -53,6 +55,19 @@ public class SalesController {
     public SaleResponse create(@Valid @RequestBody CreateSaleRequest request,
                                @AuthenticationPrincipal Jwt jwt) {
         return service.create(request, actor(jwt), device(jwt), sellerOnly(jwt));
+    }
+
+    /**
+     * Registers a GPS-stamped visit to a customer who did not purchase on the day.
+     * This creates an immutable audit record in route_tracking_point with type NO_PURCHASE_VISIT.
+     */
+    @PostMapping("/no-purchase-visit")
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR','VENDEDOR')")
+    public NoPurchaseVisitResponse registerNoPurchaseVisit(
+            @Valid @RequestBody NoPurchaseVisitRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+        return service.registerNoPurchaseVisit(request, actor(jwt), device(jwt), sellerOnly(jwt));
     }
 
     private UUID actor(Jwt jwt) {

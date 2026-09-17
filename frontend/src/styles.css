@@ -271,3 +271,41 @@ h2 { margin-top: 0; }
   .inline-assignment { grid-template-columns: 1fr; }
   .mobile-menu-trigger { min-height: 42px; }
 }
+
+/* ── Route Map Panel (Leaflet) ───────────────────────────────────── */
+.route-map-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem 1.5rem;
+  margin-bottom: .5rem;
+  font-size: .88rem;
+  font-weight: 650;
+  color: var(--primary-dark);
+}
+.route-map-legend {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: .65rem;
+  font-size: .82rem;
+  color: var(--muted);
+  align-items: center;
+}
+.legend-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: .3rem;
+  vertical-align: middle;
+}
+.route-point-list .data-row {
+  display: grid;
+  grid-template-columns: 24px 72px minmax(0,1fr) minmax(0,1fr);
+  gap: .4rem;
+  align-items: center;
+  font-size: .85rem;
+}
+/* Leaflet map z-index fix inside modals / panels */
+.leaflet-container { z-index: 0; border-radius: 8px; }
+.leaflet-pane { z-index: 1 !important; }
+.leaflet-top, .leaflet-bottom { z-index: 2 !important; }
