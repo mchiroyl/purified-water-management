@@ -14,13 +14,16 @@
   "dependencies": {
     "@hookform/resolvers": "5.7.1",
     "@tanstack/react-query": "5.101.4",
+    "@types/leaflet": "^1.9.22",
     "idb": "8.0.3",
+    "leaflet": "^1.9.4",
+    "qrcode": "1.5.4",
     "qrcode.react": "^4.2.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-hook-form": "7.85.0",
+    "react-leaflet": "^5.0.0",
     "react-router-dom": "7.18.2",
-    "qrcode": "1.5.4",
     "zod": "4.4.3"
   },
   "devDependencies": {
@@ -28,9 +31,9 @@
     "@testing-library/jest-dom": "7.0.1",
     "@testing-library/react": "16.3.2",
     "@types/node": "26.2.0",
+    "@types/qrcode": "1.5.5",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
-    "@types/qrcode": "1.5.5",
     "@vitejs/plugin-react": "6.0.5",
     "fake-indexeddb": "6.2.5",
     "jsdom": "30.0.1",

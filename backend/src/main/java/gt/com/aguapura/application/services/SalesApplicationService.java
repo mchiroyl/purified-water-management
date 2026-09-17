@@ -100,6 +100,57 @@ public class SalesApplicationService {
         return result;
     }
 
+    @Transactional
+    public gt.com.aguapura.application.dto.sales.NoPurchaseVisitResponse registerNoPurchaseVisit(
+            gt.com.aguapura.application.dto.sales.NoPurchaseVisitRequest request,
+            UUID actorId, UUID deviceId, boolean restrictedToSeller) {
+
+        // 1. Vendor must be assigned to the route (security guard)
+        if (restrictedToSeller && !persistence.sellerAssignedToRoute(actorId, request.routeId())) {
+            throw forbidden("VISIT_ROUTE_FORBIDDEN", "El vendedor no está asignado a la ruta seleccionada.");
+        }
+
+        // 2. Verify the customer exists and is active in that route
+        var customer = persistence.findCustomerInRoute(request.customerId(), request.routeId())
+                .orElseThrow(() -> validation("VISIT_CUSTOMER_NOT_FOUND",
+                        "El cliente no está activo en esta ruta."));
+
+        // 3. Verify there is an active route load in progress
+        UUID routeLoadId = persistence.findStartedRouteLoadId(request.routeId())
+                .orElseThrow(() -> validation("VISIT_ROUTE_NOT_STARTED",
+                        "No hay un recorrido iniciado para esta ruta. Inicie la carga antes de registrar visitas."));
+
+        // 4. Build the combined note (reason label + optional freetext)
+        String reasonLabel = switch (request.visitReason()) {
+            case "NO_ESTABA" -> "Cliente no estaba";
+            case "NO_NECESITABA" -> "No necesitaba";
+            default -> "Otro motivo";
+        };
+        String fullNote = (request.visitNote() != null && !request.visitNote().isBlank())
+                ? reasonLabel + ": " + request.visitNote().trim()
+                : reasonLabel;
+
+        // 5. Record the GPS point
+        var loc = request.location();
+        tracking.recordNoPurchaseVisit(routeLoadId, request.routeId(), request.customerId(),
+                fullNote, new RouteTrackingPort.GeoLocation(
+                        loc.latitude(), loc.longitude(), loc.accuracyMeters(), loc.capturedAt()),
+                actorId, deviceId);
+
+        // 6. Audit trail
+        audit.record(actorId, deviceId, "NO_PURCHASE_VISIT", "ROUTE_TRACKING", routeLoadId,
+                Map.of(),
+                Map.of("routeId", request.routeId(), "customerId", request.customerId(),
+                        "visitReason", request.visitReason()));
+
+        return new gt.com.aguapura.application.dto.sales.NoPurchaseVisitResponse(
+                UUID.randomUUID(),
+                request.routeId(), null,
+                request.customerId(), customer.customerName(),
+                request.visitReason(), fullNote,
+                loc.capturedAt(), java.time.Instant.now());
+    }
+
     @Transactional(readOnly = true)
     public List<SaleResponse> findSales(UUID userId, boolean restrictedToSeller) {
         return persistence.findSales(restrictedToSeller ? Optional.of(userId) : Optional.empty())

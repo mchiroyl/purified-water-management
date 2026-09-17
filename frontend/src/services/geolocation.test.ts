@@ -85,9 +85,9 @@ describe('captureCurrentLocation', () => {
     });
 
     const promise = captureCurrentLocation('confirmar la venta');
+    const assertion = expect(promise).rejects.toThrow('No fue posible obtener la ubicación para confirmar la venta');
     await vi.runAllTimersAsync();
-
-    await expect(promise).rejects.toThrow('No fue posible obtener la ubicación para confirmar la venta');
+    await assertion;
   });
 
   it('explica cómo resolver un permiso de ubicación denegado', async () => {

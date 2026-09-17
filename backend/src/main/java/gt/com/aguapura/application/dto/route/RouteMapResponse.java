@@ -9,6 +9,7 @@ public record RouteMapResponse(
         String routeName,
         java.time.LocalDate date,
         int salesCount,
+        int noPurchaseVisitCount,
         BigDecimal totalAmount,
         long durationMinutes,
         List<Point> points
@@ -20,6 +21,8 @@ public record RouteMapResponse(
             BigDecimal accuracyMeters,
             Instant capturedAt,
             String documentNumber,
-            BigDecimal saleTotal
+            BigDecimal saleTotal,
+            String customerName,
+            String visitNote
     ) {}
 }

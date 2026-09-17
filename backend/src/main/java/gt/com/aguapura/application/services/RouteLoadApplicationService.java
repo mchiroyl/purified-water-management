@@ -136,18 +136,25 @@ public class RouteLoadApplicationService {
     }
 
     @Transactional(readOnly = true)
-    public gt.com.aguapura.application.dto.route.RouteMapResponse getRouteMap(UUID id) {
+    public gt.com.aguapura.application.dto.route.RouteMapResponse getRouteMap(UUID id, boolean sellerOnly, UUID actorId) {
         var load = persistence.findLoad(id);
-        if (!"SETTLED".equals(load.status())) {
-            throw conflict("ROUTE_MAP_NOT_SETTLED", "La liquidación aún no está cerrada.");
+        if (!List.of("STARTED", "SETTLED").contains(load.status())) {
+            throw conflict("ROUTE_MAP_NOT_AVAILABLE", "El mapa solo está disponible para recorridos iniciados o liquidados.");
+        }
+        // If the user is a seller (sellerOnly), they can only view maps of routes assigned to them.
+        if (sellerOnly && !persistence.sellerAssignedToRoute(actorId, load.routeId())) {
+            throw forbidden("ROUTE_MAP_FORBIDDEN", "Solo puede ver el mapa de sus propios recorridos.");
         }
         var points = tracking.findRouteMap(id);
         int salesCount = 0;
+        int noPurchaseVisitCount = 0;
         BigDecimal totalAmount = BigDecimal.ZERO;
         for (var p : points) {
             if ("SALE".equals(p.pointType()) && p.saleTotal() != null) {
                 salesCount++;
                 totalAmount = totalAmount.add(p.saleTotal());
+            } else if ("NO_PURCHASE_VISIT".equals(p.pointType())) {
+                noPurchaseVisitCount++;
             }
         }
         long durationMinutes = 0;
@@ -158,11 +165,13 @@ public class RouteLoadApplicationService {
         }
         var pointResponses = points.stream().map(p -> new gt.com.aguapura.application.dto.route.RouteMapResponse.Point(
                 p.pointType(), p.latitude(), p.longitude(), p.accuracyMeters(),
-                p.capturedAt(), p.documentNumber(), p.saleTotal()
+                p.capturedAt(), p.documentNumber(), p.saleTotal(), p.customerName(), p.visitNote()
         )).toList();
+        String sellerName = load.sellerReceivedByUsername() != null ? load.sellerReceivedByUsername()
+                : load.startedByUsername();
         return new gt.com.aguapura.application.dto.route.RouteMapResponse(
-                load.sellerReceivedByUsername() != null ? load.sellerReceivedByUsername() : load.startedByUsername(),
-                load.routeName(), load.plannedDate(), salesCount, totalAmount, durationMinutes, pointResponses);
+                sellerName, load.routeName(), load.plannedDate(), salesCount,
+                noPurchaseVisitCount, totalAmount, durationMinutes, pointResponses);
     }
 
     @Transactional
