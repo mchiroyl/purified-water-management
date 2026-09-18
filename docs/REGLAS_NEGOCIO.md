@@ -1,6 +1,6 @@
 # Reglas de negocio
 
-Fuente: `docs/ERS_SRS.md` y `PROMPT_MAESTRO_SISTEMA_AGUA_PURA.md`.
+Fuente canónica: `docs/ERS_SRS.md`.
 
 ## Identidad y configuración
 
@@ -115,3 +115,11 @@ Fuente: `docs/ERS_SRS.md` y `PROMPT_MAESTRO_SISTEMA_AGUA_PURA.md`.
 - **RB-070:** Contraseñas, tokens, secretos, credenciales, autorizaciones y cookies se eliminan recursivamente de before/after.
 - **RB-071:** Consultar el historial de auditoría produce a su vez un evento `AUDIT_VIEW`.
 - **RB-072:** Los intentos de login fallidos se conservan aunque la autenticación termine con HTTP 401.
+
+## Rastreo geográfico de rutas
+
+- **RB-073:** Al confirmar una venta, el sistema captura la coordenada GPS del dispositivo y registra un punto de tipo `SALE` vinculado a la venta y al cliente.
+- **RB-074:** Al iniciar una jornada, el sistema captura la coordenada GPS y registra un punto de tipo `START` vinculado a la carga de ruta.
+- **RB-075:** Una visita sin compra (`NO_PURCHASE_VISIT`) requiere obligatoriamente captura de coordenadas GPS actuales y un motivo predefinido ético: *"Cliente no estaba"* o *"No necesitaba"*. No se registra ningún juicio sobre el cliente.
+- **RB-076:** El historial geográfico es consultable durante la jornada en curso (`STARTED`) y después de liquidar (`SETTLED`). El mapa se renderiza con Leaflet + OpenStreetMap sin depender de API keys ni servicios de pago.
+- **RB-077:** Las fechas de los selectores de historial de rutas se calculan siempre con la zona horaria local del dispositivo, no con UTC, para evitar desfases en zonas como Guatemala (UTC-6).

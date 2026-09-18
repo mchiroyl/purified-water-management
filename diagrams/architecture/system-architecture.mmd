@@ -8,9 +8,11 @@ flowchart TB
         Sync["SyncEngine"]
         SW["Service Worker"]
         IDB[("IndexedDB + Outbox")]
+        LeafletMap["RouteMapPanel\nLeaflet + OpenStreetMap"]
         UI --> Query
         UI --> Connection
         UI --> Sync
+        UI --> LeafletMap
         Sync <--> IDB
         SW --> UI
     end
@@ -27,6 +29,8 @@ flowchart TB
     PG[("PostgreSQL")]
     Files["Storage de archivos"]
     PDF["Generador PDF"]
+    OSM["OpenStreetMap\ntiles de mapa (gratuito)"]
+    OSRM["OSRM\ncálculo de rutas viales (gratuito)"]
 
     Internet --> Nginx --> UI
     Query -->|HTTPS JSON| Nginx
@@ -35,3 +39,5 @@ flowchart TB
     INFRA <--> PG
     INFRA <--> Files
     INFRA --> PDF
+    LeafletMap -->|tiles| OSM
+    LeafletMap -->|polilínea vial| OSRM

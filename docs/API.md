@@ -140,6 +140,7 @@ Los importes y cantidades se envían como decimal exacto cuando el DTO lo define
 | GET/POST | `/sales` | consultar/crear venta online |
 | GET | `/sales/{id}` | detalle oficial |
 | GET | `/sales/{saleId}/receipt` | PDF interno inmutable con el logotipo histórico |
+| POST | `/sales/no-purchase-visit` | registrar visita sin compra (GPS + motivo obligatorio) |
 | GET | `/payments/transfers` | transferencias pendientes |
 | POST | `/payments/transfers/{id}/decision` | verificar/rechazar transferencia |
 
@@ -168,6 +169,39 @@ El monto `null` en un único medio permite que el servidor aplique el total calc
 Los cuerpos de recepción y de venta incluyen `location` con `latitude`, `longitude`, `accuracyMeters` opcional y `capturedAt` ISO-8601. Latitud debe estar entre `-90` y `90`, longitud entre `-180` y `180`, la precisión no puede ser negativa y los demás campos son obligatorios. Un cuerpo ausente o inválido devuelve `400 VALIDATION_ERROR` con `fieldErrors`.
 
 La PWA solicita una sola posición al pulsar **Confirmar recepción** y otra al pulsar **Confirmar venta**. Si el permiso de ubicación se deniega, no envía la solicitud ni confirma la operación; no existe endpoint de rastreo continuo, watcher ni captura en segundo plano. La API persiste filas inmutables en `route_tracking_point`: una `START` por carga inicial y una `SALE` por venta, vinculadas a carga, ruta, actor y dispositivo. Esos datos no forman parte de las respuestas de venta ni de los comprobantes o reportes dirigidos al cliente.
+
+### `POST /api/sales/no-purchase-visit` — VENDEDOR
+
+Registra una visita ética al cliente cuando no se realizó compra. Requiere GPS obligatorio y un motivo predefinido.
+
+```json
+{
+  "routeLoadId": "uuid",
+  "customerId": "uuid",
+  "reason": "Cliente no estaba",
+  "location": {
+    "latitude": 14.6349,
+    "longitude": -90.5069,
+    "accuracyMeters": 8,
+    "capturedAt": "2026-09-16T14:05:00Z"
+  }
+}
+```
+
+Motivos aceptados: `"Cliente no estaba"`, `"No necesitaba"`. El sistema persiste un punto `NO_PURCHASE_VISIT` en `route_tracking_point` con el `customer_id` y `visit_note`. No afecta inventario ni genera comprobante.
+
+### `GET /api/loads/{id}/route-map` — ADMINISTRADOR / VENDEDOR (ruta propia)
+
+Devuelve la secuencia cronológica de puntos GPS de una jornada con estado `STARTED` o `SETTLED` para renderizar en el mapa interactivo (Leaflet + OpenStreetMap + OSRM). Incluye tipo de punto, coordenadas, hora de captura, nombre de cliente (cuando aplica) y monto de venta.
+
+### `GET /api/routes/{id}/route-history` — ADMINISTRADOR
+
+Devuelve el resumen de jornadas (loadId, fecha, vendedor, inicio/fin, duración, puntos GPS, distancia estimada) filtrable por rango de fechas y vendedor.
+
+### `GET /api/routes/sellers` — ADMINISTRADOR
+
+Devuelve la lista de vendedores disponibles para filtrar el historial geográfico.
+
 
 ## Offline y control operativo
 
