@@ -30,3 +30,6 @@ flowchart LR
     Users --> Audit
     Sync --> Audit
     Sales --> Receipts
+    Sales --> RouteTracking["RouteTracking\n(GPS por evento de venta\ny visita sin compra)"]
+    Loads --> RouteTracking
+    RouteTracking --> RouteHistory["Historial Geográfico\n(Leaflet + OSM + OSRM)"]

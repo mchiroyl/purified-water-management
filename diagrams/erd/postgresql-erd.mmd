@@ -19,6 +19,7 @@ erDiagram
         uuid id PK
         uuid user_id FK,UK
         string code UK
+        string display_name
     }
     DEVICE {
         uuid id PK
@@ -105,8 +106,12 @@ erDiagram
         uuid created_by FK
         uuid source_device_id FK
         string code UK
+        string name
         string status
-        boolean provisional
+        string customer_type
+        boolean credit_allowed
+        decimal credit_limit
+        decimal current_balance
     }
     CUSTOMER_ROUTE {
         uuid id PK
@@ -191,6 +196,8 @@ erDiagram
         uuid source_location_id FK
         uuid target_location_id FK
         uuid created_by FK
+        uuid started_by FK
+        uuid seller_received_by FK
         string load_type
         string status
         date business_date
@@ -214,7 +221,9 @@ erDiagram
         uuid route_load_id FK
         uuid route_id FK
         uuid sale_id FK
-        string point_type
+        uuid customer_id FK
+        string point_type "VARCHAR(30): START, SALE, NO_PURCHASE_VISIT"
+        string visit_note "motivo etico de visita sin compra"
         decimal latitude
         decimal longitude
         decimal accuracy_meters
@@ -469,6 +478,8 @@ erDiagram
     ROUTE ||--o{ ROUTE_TRACKING_POINT : tracks
     APP_USER ||--o{ ROUTE_TRACKING_POINT : records
     DEVICE ||--o{ ROUTE_TRACKING_POINT : captures
+    SALE o|--o| ROUTE_TRACKING_POINT : sale_event
+    CUSTOMER o|--o{ ROUTE_TRACKING_POINT : visited
 
     ROUTE ||--o{ SALE : produces
     INVENTORY_LOCATION ||--o{ SALE : decrements
@@ -483,7 +494,6 @@ erDiagram
     PRICE_TIER o|--o{ SALE_ITEM : tier
     CUSTOMER_SPECIAL_PRICE o|--o{ SALE_ITEM : special
     SALE ||--o{ PAYMENT : paid_by
-    SALE ||--o| ROUTE_TRACKING_POINT : sale_event
     PAYMENT ||--o| CREDIT_ACCOUNT_ENTRY : posts
     CUSTOMER ||--o{ CREDIT_ACCOUNT_ENTRY : account
 

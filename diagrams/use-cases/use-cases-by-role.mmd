@@ -3,17 +3,20 @@ flowchart LR
     Admin --> A2["Gestionar usuarios y catálogos"]
     Admin --> A3["Revisar diferencias y liquidaciones"]
     Admin --> A4["Consultar auditoría y reportes"]
+    Admin --> A5["Ver historial geográfico de rutas\n(mapa Leaflet/OSM por vendedor y fecha)"]
 
     Warehouse["Bodega"] --> B1["Preparar y entregar carga"]
     Warehouse --> B2["Recibir devoluciones"]
     Warehouse --> B3["Revisar mermas"]
 
-    Seller["Vendedor"] --> V1["Confirmar carga e iniciar ruta"]
-    Seller --> V2["Registrar venta y pago"]
+    Seller["Vendedor"] --> V1["Confirmar carga e iniciar ruta\n(GPS captura punto de inicio)"]
+    Seller --> V2["Registrar venta y pago\n(GPS capturado al confirmar)"]
     Seller --> V3["Crear cliente ocasional/provisional"]
     Seller --> V4["Registrar merma/devolución"]
     Seller --> V5["Sincronizar y finalizar recorrido"]
     Seller --> V6["Compartir comprobante"]
+    Seller --> V7["Registrar visita sin compra\n(GPS + motivo: 'Cliente no estaba' / 'No necesitaba')"]
+    Seller --> V8["Ver mi ruta en tiempo real\n(mapa interactivo durante jornada STARTED)"]
 
     Supervisor["Supervisor"] --> S1["Revisar autorizaciones"]
     Supervisor --> S2["Validar transferencias"]

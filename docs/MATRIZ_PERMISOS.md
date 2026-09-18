@@ -36,5 +36,8 @@ Leyenda: **Sí** permitido; **No** prohibido; **Cond.** permitido con condición
 | Cerrar liquidación | Sí | No | No | Cond. | Sin pendientes bloqueantes. |
 | Consultar dashboard/reportes | Sí | Cond. | Cond. | Sí | Datos mínimos por rol. |
 | Consultar auditoría | Sí | No | No | Cond. | Acceso restringido y auditado. |
+| Registrar visita sin compra | No | No | Sí | No | GPS obligatorio + motivo predefinido ético. |
+| Ver mapa de ruta (en curso) | No | No | Sí | Cond. | Solo la ruta propia mientras STARTED. |
+| Ver historial geográfico | Sí | No | No | Cond. | Filtro por vendedor/fecha; sin acceso a datos de ventas de otros vendedores desde rol supervisor. |
 
 Toda operación con **Sí** o **Cond.** también aplica autorización a nivel de recurso. Un rol nunca concede acceso automático a rutas, vendedores o entidades fuera de su alcance.

@@ -45,10 +45,16 @@ La dirección de dependencias es presentación → aplicación → dominio; infr
 ### Migración
 
 ```text
-backend/src/main/resources/db/migration/V19__descripcion.sql
+backend/src/main/resources/db/migration/V36__descripcion.sql
 ```
 
 Incluya PK/FK/UNIQUE/CHECK/índices y timestamps necesarios. Actualice `diagrams/erd/postgresql-erd.mmd`, `diagrams/erd/README.md`, servicio, adaptador, tests y `docs/MATRIZ_TRAZABILIDAD.md`.
+
+### Rastreo GPS y mapa
+
+- No agregue dependencias de pago (Google Maps, Mapbox). El mapa usa **Leaflet + OpenStreetMap + OSRM**, todos gratuitos y sin API keys.
+- Si agrega nuevos tipos de punto, extienda el `VARCHAR(30)` de `point_type` con una nueva migración y actualice el ERD.
+- La CSP en `frontend/security-headers.conf` debe incluir cualquier nuevo dominio externo de tiles o rutas.
 
 ## 4. Frontend
 
