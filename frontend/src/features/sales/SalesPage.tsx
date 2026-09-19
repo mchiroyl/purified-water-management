@@ -165,6 +165,89 @@ function InlineAbonoForm({ customerId, routeId, onDone }: { customerId: string; 
   );
 }
 
+// ── Mini-formulario de devolución de garrafones inline ───────────────────────
+function InlineJugReturnForm({
+  customerId,
+  routeId,
+  maxReturnable,
+  onDone,
+}: {
+  customerId: string;
+  routeId: string;
+  maxReturnable?: number;
+  onDone: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [quantity, setQuantity] = useState(maxReturnable && maxReturnable > 0 ? Math.min(maxReturnable, 1) : 1);
+  const [notes, setNotes] = useState('');
+  const [returnError, setReturnError] = useState('');
+  const [returnSuccess, setReturnSuccess] = useState('');
+
+  const returnJug = useMutation({
+    mutationFn: () =>
+      apiRequest('/jugs/events', {
+        method: 'POST',
+        body: JSON.stringify({
+          customerId,
+          routeId,
+          eventType: 'RETURNED',
+          quantity: Number(quantity),
+          notes: notes.trim() || 'Devolución en visita sin compra',
+        }),
+      }),
+    onSuccess: () => {
+      setReturnSuccess(`✅ Devolución de ${quantity} garrafón(es) registrada.`);
+      void queryClient.invalidateQueries({ queryKey: ['jugs'] });
+      setTimeout(onDone, 2500);
+    },
+    onError: (err: Error) => setReturnError(err.message || 'Error al registrar la devolución.'),
+  });
+
+  return (
+    <div className="inline-abono-form" style={{ marginTop: '0.5rem', background: '#f0fafb' }}>
+      <strong style={{ fontSize: '0.88rem', display: 'block', marginBottom: '0.4rem' }}>🧴 Registrar devolución de garrafones vacíos</strong>
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <label style={{ fontSize: '0.85rem' }}>
+          Cantidad devuelta:
+          <input
+            type="number"
+            min="1"
+            max={maxReturnable && maxReturnable > 0 ? maxReturnable : undefined}
+            step="1"
+            value={quantity}
+            onChange={e => setQuantity(Math.max(1, Number(e.target.value)))}
+            style={{ width: '5rem', marginLeft: '0.3rem' }}
+          />
+        </label>
+        <label style={{ fontSize: '0.85rem' }}>
+          Nota:
+          <input
+            type="text"
+            placeholder="Opcional"
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            style={{ width: '9rem', marginLeft: '0.3rem' }}
+          />
+        </label>
+        <button
+          type="button"
+          className="primary"
+          style={{ fontSize: '0.85rem' }}
+          disabled={returnJug.isPending || quantity < 1}
+          onClick={() => { setReturnError(''); returnJug.mutate(); }}
+        >
+          {returnJug.isPending ? 'Registrando…' : 'Confirmar devolución'}
+        </button>
+        <button type="button" className="secondary" style={{ fontSize: '0.85rem' }} onClick={onDone}>
+          Cancelar
+        </button>
+      </div>
+      {returnError && <div className="alert error" style={{ marginTop: '0.4rem', fontSize: '0.82rem' }}>{returnError}</div>}
+      {returnSuccess && <div className="alert success" style={{ marginTop: '0.4rem', fontSize: '0.82rem' }}>{returnSuccess}</div>}
+    </div>
+  );
+}
+
 export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canViewLocation: boolean }) {
   const queryClient = useQueryClient();
   const sales = useQuery({ queryKey: ['sales'], queryFn: () => apiRequest<Sale[]>('/sales') });
@@ -206,6 +289,7 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
   const [visitError, setVisitError] = useState('');
   const [visitSuccess, setVisitSuccess] = useState('');
   const [showVisitAbono, setShowVisitAbono] = useState(false);
+  const [showVisitJugReturn, setShowVisitJugReturn] = useState(false);
 
   // ── Queries contextuales al seleccionar cliente (visita) ───────────────────
   const visitJugBalance = useQuery({
@@ -432,7 +516,7 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
       <section className="panel section-panel">
         <div className="section-heading">
           <h2>🚶 Visita sin compra</h2>
-          <button type="button" className="secondary" onClick={() => { setVisitOpen(v => !v); setVisitError(''); setVisitSuccess(''); setShowVisitAbono(false); }}>
+          <button type="button" className="secondary" onClick={() => { setVisitOpen(v => !v); setVisitError(''); setVisitSuccess(''); setShowVisitAbono(false); setShowVisitJugReturn(false); }}>
             {visitOpen ? '▲ Ocultar' : '▼ Registrar'}
           </button>
         </div>
@@ -442,7 +526,7 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
         {visitOpen && (
           <form onSubmit={e => void submitVisit(e)} className="form-grid compact-grid" style={{ marginTop: '1rem' }}>
             <label>Ruta
-              <select required value={visitRouteId} onChange={e => { setVisitRouteId(e.target.value); setVisitCustomerId(''); }}>
+              <select required value={visitRouteId} onChange={e => { setVisitRouteId(e.target.value); setVisitCustomerId(''); setShowVisitAbono(false); setShowVisitJugReturn(false); }}>
                 <option value="">Seleccionar</option>
                 {routes.data?.filter(r => r.status === 'ACTIVE').map(r => (
                   <option key={r.id} value={r.id}>{r.code} · {r.name}</option>
@@ -450,7 +534,7 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
               </select>
             </label>
             <label>Cliente
-              <select required value={visitCustomerId} disabled={!visitRouteId} onChange={e => { setVisitCustomerId(e.target.value); setShowVisitAbono(false); }}>
+              <select required value={visitCustomerId} disabled={!visitRouteId} onChange={e => { setVisitCustomerId(e.target.value); setShowVisitAbono(false); setShowVisitJugReturn(false); }}>
                 <option value="">Seleccionar</option>
                 {visitAvailableCustomers.map(c => (
                   <option key={c.id} value={c.id}>{c.code} · {c.name}</option>
@@ -466,32 +550,63 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
                 )}
                 {!visitJugBalance.isFetching && !visitCreditBalance.isFetching && (
                   <>
-                    {((visitJugBalance.data?.jugsOutstanding ?? 0) > 0 || Number(visitCreditBalance.data?.currentBalance ?? 0) > 0) && (
-                      <div className="customer-context-banner" style={{ marginBottom: '0.5rem' }}>
-                        <strong style={{ fontSize: '0.85rem', display: 'block', marginBottom: '0.3rem' }}>📋 Situación del cliente</strong>
-                        {(visitJugBalance.data?.jugsOutstanding ?? 0) > 0 && (
-                          <div className="context-row jug-warning">
-                            <span>🧴</span>
-                            <span>Garrafones prestados: <strong>{visitJugBalance.data!.jugsOutstanding}</strong> — pendientes de devolver.</span>
-                          </div>
-                        )}
-                        {Number(visitCreditBalance.data?.currentBalance ?? 0) > 0 && (
-                          <div className="context-row credit-info">
-                            <span>💳</span>
-                            <span>Saldo deudor: <strong>Q{Number(visitCreditBalance.data!.currentBalance).toFixed(2)}</strong></span>
-                            {!showVisitAbono && (
-                              <button
-                                type="button"
-                                className="secondary"
-                                style={{ fontSize: '0.8rem', padding: '0.15rem 0.5rem', marginLeft: '0.5rem' }}
-                                onClick={() => setShowVisitAbono(true)}
-                              >
-                                + Registrar abono
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
+                    <div className="customer-context-banner" style={{ marginBottom: '0.5rem' }}>
+                      <strong style={{ fontSize: '0.85rem', display: 'block', marginBottom: '0.3rem' }}>📋 Situación del cliente</strong>
+                      {(visitJugBalance.data?.jugsOutstanding ?? 0) > 0 ? (
+                        <div className="context-row jug-warning">
+                          <span>🧴</span>
+                          <span>Garrafones prestados: <strong>{visitJugBalance.data!.jugsOutstanding}</strong> — pendientes de devolver.</span>
+                          {!showVisitJugReturn && (
+                            <button
+                              type="button"
+                              className="secondary"
+                              style={{ fontSize: '0.8rem', padding: '0.15rem 0.5rem', marginLeft: '0.5rem' }}
+                              onClick={() => setShowVisitJugReturn(true)}
+                            >
+                              + Registrar devolución
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="context-row" style={{ color: 'var(--muted)', fontSize: '0.82rem' }}>
+                          <span>🧴</span>
+                          <span>Sin garrafones pendientes.</span>
+                          {!showVisitJugReturn && (
+                            <button
+                              type="button"
+                              className="link-button"
+                              style={{ fontSize: '0.78rem', padding: '0 0.3rem', marginLeft: '0.4rem' }}
+                              onClick={() => setShowVisitJugReturn(true)}
+                            >
+                              + Recibir vacíos
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      {Number(visitCreditBalance.data?.currentBalance ?? 0) > 0 && (
+                        <div className="context-row credit-info">
+                          <span>💳</span>
+                          <span>Saldo deudor: <strong>Q{Number(visitCreditBalance.data!.currentBalance).toFixed(2)}</strong></span>
+                          {!showVisitAbono && (
+                            <button
+                              type="button"
+                              className="secondary"
+                              style={{ fontSize: '0.8rem', padding: '0.15rem 0.5rem', marginLeft: '0.5rem' }}
+                              onClick={() => setShowVisitAbono(true)}
+                            >
+                              + Registrar abono
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {showVisitJugReturn && (
+                      <InlineJugReturnForm
+                        customerId={visitCustomerId}
+                        routeId={visitRouteId}
+                        maxReturnable={visitJugBalance.data?.jugsOutstanding}
+                        onDone={() => setShowVisitJugReturn(false)}
+                      />
                     )}
                     {showVisitAbono && (
                       <InlineAbonoForm

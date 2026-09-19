@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { JugsPage } from './JugsPage';
 
@@ -42,7 +43,9 @@ describe('JugsPage', () => {
 
     render(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <JugsPage canRecord={true} canViewSummary={true} />
+        <MemoryRouter>
+          <JugsPage canRecord={true} canViewSummary={true} />
+        </MemoryRouter>
       </QueryClientProvider>
     );
 

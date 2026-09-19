@@ -7,7 +7,7 @@ afterEach(() => {
 });
 
 describe('captureCurrentLocation', () => {
-  it('resuelve inmediatamente cuando la primera lectura alcanza la precisión objetivo (<=20 m)', async () => {
+  it('resuelve inmediatamente cuando la primera lectura alcanza la precisión objetivo (<=10 m)', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-16T18:30:00.000Z'));
     let positionCallback: PositionCallback | null = null;
@@ -19,12 +19,12 @@ describe('captureCurrentLocation', () => {
     vi.stubGlobal('navigator', { geolocation: { watchPosition, clearWatch } });
 
     const promise = captureCurrentLocation('confirmar la venta');
-    positionCallback!({ coords: { latitude: 14.6349, longitude: -90.5069, accuracy: 15 } } as GeolocationPosition);
+    positionCallback!({ coords: { latitude: 14.6349, longitude: -90.5069, accuracy: 8 } } as GeolocationPosition);
 
     await expect(promise).resolves.toEqual({
       latitude: 14.6349,
       longitude: -90.5069,
-      accuracyMeters: 15,
+      accuracyMeters: 8,
       capturedAt: '2026-08-16T18:30:00.000Z',
     });
     expect(clearWatch).toHaveBeenCalledWith(1);

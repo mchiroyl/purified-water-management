@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CreditPage } from './CreditPage';
 
@@ -42,7 +43,9 @@ describe('CreditPage', () => {
 
     render(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <CreditPage canRecord={true} canVerify={true} />
+        <MemoryRouter>
+          <CreditPage canRecord={true} canVerify={true} />
+        </MemoryRouter>
       </QueryClientProvider>
     );
 
