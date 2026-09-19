@@ -18,6 +18,7 @@ export function AppShell() {
     void logout();
   };
   const isAdmin = user?.roles.includes('ADMINISTRADOR');
+  const isCreditAdmin = user?.roles.includes('ADMINISTRADOR_CREDITO');
   const canSeeAudit = isAdmin || user?.roles.includes('SUPERVISOR');
   const canCatalog = user?.roles.some(role => ['ADMINISTRADOR', 'BODEGA', 'SUPERVISOR'].includes(role));
   const canSeeCustomers = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'VENDEDOR'].includes(role));
@@ -27,6 +28,8 @@ export function AppShell() {
   const canSeeLoads = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
   const canSeeSales = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'VENDEDOR'].includes(role));
   const canVerifyTransfers = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR'].includes(role));
+  const canSeeCredit = isAdmin || isCreditAdmin || user?.roles.includes('VENDEDOR');
+  const canSeeJugs = isAdmin || isCreditAdmin || user?.roles.includes('VENDEDOR');
   const canSeeWastes = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
   const canSeeReturns = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
   const canSeeSettlements = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
@@ -59,6 +62,8 @@ export function AppShell() {
         { to: '/loads', label: 'Cargas', icon: '📥', visible: canSeeLoads },
         { to: '/sales', label: 'Ventas', icon: '💰', visible: canSeeSales },
         { to: '/transfers', label: 'Transferencias', icon: '🔄', visible: canVerifyTransfers },
+        { to: '/credit', label: 'Créditos y abonos', icon: '💳', visible: canSeeCredit },
+        { to: '/jugs', label: 'Control de garrafones', icon: '🧴', visible: canSeeJugs },
         { to: '/wastes', label: 'Mermas', icon: '📉', visible: canSeeWastes },
         { to: '/returns', label: 'Devoluciones', icon: '🔙', visible: canSeeReturns },
         { to: '/settlements', label: 'Liquidaciones', icon: '💵', visible: canSeeSettlements }

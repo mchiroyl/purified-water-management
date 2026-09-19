@@ -423,6 +423,50 @@ erDiagram
         uuid generated_device_id FK
         string sha256
     }
+    CREDIT_ACCOUNT_ENTRY {
+        uuid id PK
+        uuid customer_id FK
+        uuid sale_id FK
+        uuid payment_id FK
+        uuid credit_payment_id FK
+        string entry_type
+        decimal amount
+        decimal balance_after
+        uuid created_by FK
+        uuid device_id FK
+        timestamp created_at
+    }
+    CREDIT_PAYMENT {
+        uuid id PK
+        uuid customer_id FK
+        uuid route_load_id FK
+        decimal amount
+        string payment_method
+        string status
+        string reference
+        string bank
+        string rejection_reason
+        string notes
+        uuid collected_by FK
+        uuid device_id FK
+        uuid verified_by FK
+        timestamp verified_at
+        timestamp created_at
+    }
+    JUG_LOAN_EVENT {
+        uuid id PK
+        uuid customer_id FK
+        uuid route_id FK
+        uuid route_load_id FK
+        uuid sale_id FK
+        string event_type
+        int quantity
+        decimal unit_price
+        string notes
+        uuid registered_by FK
+        uuid device_id FK
+        timestamp created_at
+    }
     APP_USER ||--o{ USER_ROLE : has
     ROLE ||--o{ USER_ROLE : grants
     APP_USER ||--o| SELLER : represents
@@ -528,3 +572,12 @@ erDiagram
     PAYMENT ||--o| PAYMENT_REVERSAL : reverses
     SALE ||--o| RECEIPT_DOCUMENT : renders
     FILE_OBJECT ||--o| RECEIPT_DOCUMENT : stores
+
+    CUSTOMER ||--o{ JUG_LOAN_EVENT : loans
+    ROUTE ||--o{ JUG_LOAN_EVENT : route_loans
+    APP_USER ||--o{ JUG_LOAN_EVENT : registers_jug
+    CUSTOMER ||--o{ CREDIT_PAYMENT : pays_credit
+    CREDIT_PAYMENT ||--o| CREDIT_ACCOUNT_ENTRY : settles
+    APP_USER ||--o{ CREDIT_PAYMENT : collects_credit
+    APP_USER ||--o{ CREDIT_PAYMENT : verifies_credit
+

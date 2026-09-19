@@ -39,5 +39,24 @@ Leyenda: **Sí** permitido; **No** prohibido; **Cond.** permitido con condición
 | Registrar visita sin compra | No | No | Sí | No | GPS obligatorio + motivo predefinido ético. |
 | Ver mapa de ruta (en curso) | No | No | Sí | Cond. | Solo la ruta propia mientras STARTED. |
 | Ver historial geográfico | Sí | No | No | Cond. | Filtro por vendedor/fecha; sin acceso a datos de ventas de otros vendedores desde rol supervisor. |
+| Registrar préstamo/devolución garrafón | Sí | No | Sí | No | En cliente/ruta; inmutable una vez creado. |
+| Consultar saldos/historial garrafones | Sí | No | Sí | Sí | Disponible para vendedor en su ruta y auditoría. |
+| Registrar abono de crédito (efectivo/transferencia) | Sí | No | Sí | No | Aplica a clientes con crédito; genera comprobante. |
+| Verificar transferencia de abono | Sí | No | No | Cond. | Segregación obligatoria: nunca quien registró el abono. |
+| Consultar estado de cuenta y cartera | Sí | No | Cond. | Sí | Vendedor solo saldo actual; oficina estado completo. |
+
+## Rol Especializado: Administrador de Créditos (`ADMINISTRADOR_CREDITO`)
+
+Creado para la gestión de cuentas por cobrar en oficina sin otorgar privilegios administrativos globales (usuarios, configuración fiscal, catálogos ni auditoría profunda):
+
+| Operación | Permitido | Condición / Alcance |
+|---|:---:|---|
+| Registrar abono en efectivo o transferencia | Sí | En oficina para cualquier cliente. |
+| Verificar transferencias de crédito | Cond. | Nunca si el mismo usuario registró el cobro. |
+| Consultar estados de cuenta completos | Sí | Historial de cargos por venta, anulaciones y abonos. |
+| Monitorear cartera deudora por ruta | Sí | Visualización de clientes con saldo vencido/pendiente. |
+| Consultar saldos y resumen de garrafones por ruta | Sí | Monitoreo de envases pendientes en calle. |
+| Emitir / descargar comprobante PDF de abono | Sí | Generación bajo demanda reutilizable. |
+| Gestionar usuarios, catálogos o precios | No | Exclusivo del Administrador. |
 
 Toda operación con **Sí** o **Cond.** también aplica autorización a nivel de recurso. Un rol nunca concede acceso automático a rutas, vendedores o entidades fuera de su alcance.

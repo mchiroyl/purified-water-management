@@ -1,7 +1,8 @@
 import type { GeoLocationSnapshot } from '../offline/mobileDatabase';
 
-/** Precisión objetivo en metros. Si el dispositivo la alcanza antes del límite se resuelve inmediatamente. */
-const TARGET_ACCURACY_METERS = 20;
+/** Precisión objetivo en metros. El sistema resuelve inmediatamente al obtener <= 10 m;
+ *  lecturas de 5 m o mejores se prefieren al conservar siempre la más precisa. */
+const TARGET_ACCURACY_METERS = 10;
 /** Tiempo máximo de espera en milisegundos antes de aceptar la mejor lectura disponible. */
 const MAX_WAIT_MS = 30_000;
 
@@ -18,9 +19,9 @@ function locationError(label: string, error: GeolocationPositionError) {
  * Estrategia:
  * 1. Activa `watchPosition` con `enableHighAccuracy: true` y `maximumAge: 0`.
  * 2. Cada lectura recibida se compara con la mejor anterior; se conserva la de menor accuracy.
- * 3. Si la precisión alcanza <= TARGET_ACCURACY_METERS (20 m) se resuelve de inmediato.
+ * 3. Si la precisión alcanza <= TARGET_ACCURACY_METERS (10 m) se resuelve de inmediato.
  * 4. Tras MAX_WAIT_MS (30 s) se resuelve con la mejor lectura obtenida, aunque no haya
- *    alcanzado el objetivo.
+ *    alcanzado el objetivo (rango deseado: 5–10 m).
  * 5. Si transcurre el tiempo sin ninguna lectura válida se rechaza con mensaje descriptivo.
  */
 export function captureCurrentLocation(label: string): Promise<GeoLocationSnapshot> {

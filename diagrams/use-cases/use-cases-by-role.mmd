@@ -4,6 +4,12 @@ flowchart LR
     Admin --> A3["Revisar diferencias y liquidaciones"]
     Admin --> A4["Consultar auditoría y reportes"]
     Admin --> A5["Ver historial geográfico de rutas\n(mapa Leaflet/OSM por vendedor y fecha)"]
+    Admin --> A6["Gestionar créditos, abonos y control de garrafones"]
+
+    CreditAdmin["Administrador de Crédito"] --> CA1["Verificar transferencias de crédito"]
+    CreditAdmin --> CA2["Consultar estados de cuenta de clientes"]
+    CreditAdmin --> CA3["Monitorear cartera de crédito por ruta"]
+    CreditAdmin --> CA4["Consultar saldos y resumen de garrafones"]
 
     Warehouse["Bodega"] --> B1["Preparar y entregar carga"]
     Warehouse --> B2["Recibir devoluciones"]
@@ -17,6 +23,8 @@ flowchart LR
     Seller --> V6["Compartir comprobante"]
     Seller --> V7["Registrar visita sin compra\n(GPS + motivo: 'Cliente no estaba' / 'No necesitaba')"]
     Seller --> V8["Ver mi ruta en tiempo real\n(mapa interactivo durante jornada STARTED)"]
+    Seller --> V9["Registrar préstamo/devolución de garrafones"]
+    Seller --> V10["Registrar abono de crédito y emitir comprobante"]
 
     Supervisor["Supervisor"] --> S1["Revisar autorizaciones"]
     Supervisor --> S2["Validar transferencias"]
@@ -24,3 +32,5 @@ flowchart LR
 
     Customer["Cliente"] --> C1["Recibir producto"]
     Customer --> C2["Recibir comprobante digital"]
+    Customer --> C3["Recibir comprobante de abono (WhatsApp / PDF)"]
+

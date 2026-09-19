@@ -1,4 +1,4 @@
-﻿import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../app/PageHeader';
@@ -281,31 +281,54 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
                 <td><span className={`status ${customer.status === 'ACTIVE' ? 'active' : 'inactive'}`}>
                   {customer.registrationState === 'PENDING_REVIEW' ? 'Pendiente de revisión' : customer.status === 'ACTIVE' ? 'Activo' : 'Inactivo'}
                 </span></td>
-                {canManage && (
-                  <td><div className="inline-assignment">
-                    <select
-                      aria-label={`Ruta de ${customer.name}`}
-                      value={selection.routeId}
-                      onChange={e => setAssignments({ ...assignments, [customer.id]: { ...selection, routeId: e.target.value } })}
-                    >
-                      <option value="">Seleccionar ruta</option>
-                      {routes.data?.map(route => <option value={route.id} key={route.id}>{route.code} · {route.name}</option>)}
-                    </select>
-                    <input
-                      aria-label={`Vigencia de ruta de ${customer.name}`}
-                      type="date"
-                      min={dateBounds.min}
-                      max={dateBounds.max}
-                      {...calendarOnlyProps()}
-                      value={selection.validFrom}
-                      onChange={e => setAssignments({ ...assignments, [customer.id]: { ...selection, validFrom: e.target.value } })}
-                    />
-                    <button className="secondary" disabled={!selection.routeId || assign.isPending} onClick={() => assign.mutate({ customerId: customer.id, ...selection })}>
-                      Asignar ruta
-                    </button>
-                  </div></td>
-                )}
-                {!canManage && <td>—</td>}
+                <td>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <div className="action-buttons" style={{ display: 'flex', gap: '0.4rem' }}>
+                      <button
+                        type="button"
+                        className="secondary"
+                        style={{ padding: '0.2rem 0.6rem', fontSize: '0.85rem' }}
+                        title="Ver y registrar garrafones del cliente"
+                        onClick={() => navigate(`/jugs?customerId=${customer.id}`)}
+                      >
+                        🧴 Garrafones
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary"
+                        style={{ padding: '0.2rem 0.6rem', fontSize: '0.85rem' }}
+                        title="Ver estado de cuenta y abonar a crédito"
+                        onClick={() => navigate(`/credit?customerId=${customer.id}`)}
+                      >
+                        💳 Crédito
+                      </button>
+                    </div>
+                    {canManage && (
+                      <div className="inline-assignment">
+                        <select
+                          aria-label={`Ruta de ${customer.name}`}
+                          value={selection.routeId}
+                          onChange={e => setAssignments({ ...assignments, [customer.id]: { ...selection, routeId: e.target.value } })}
+                        >
+                          <option value="">Seleccionar ruta</option>
+                          {routes.data?.map(route => <option value={route.id} key={route.id}>{route.code} · {route.name}</option>)}
+                        </select>
+                        <input
+                          aria-label={`Vigencia de ruta de ${customer.name}`}
+                          type="date"
+                          min={dateBounds.min}
+                          max={dateBounds.max}
+                          {...calendarOnlyProps()}
+                          value={selection.validFrom}
+                          onChange={e => setAssignments({ ...assignments, [customer.id]: { ...selection, validFrom: e.target.value } })}
+                        />
+                        <button className="secondary" disabled={!selection.routeId || assign.isPending} onClick={() => assign.mutate({ customerId: customer.id, ...selection })}>
+                          Asignar ruta
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </td>
               </tr>
             );
             })}</tbody>

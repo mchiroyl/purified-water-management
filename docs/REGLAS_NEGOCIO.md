@@ -123,3 +123,18 @@ Fuente canónica: `docs/ERS_SRS.md`.
 - **RB-075:** Una visita sin compra (`NO_PURCHASE_VISIT`) requiere obligatoriamente captura de coordenadas GPS actuales y un motivo predefinido ético: *"Cliente no estaba"* o *"No necesitaba"*. No se registra ningún juicio sobre el cliente.
 - **RB-076:** El historial geográfico es consultable durante la jornada en curso (`STARTED`) y después de liquidar (`SETTLED`). El mapa se renderiza con Leaflet + OpenStreetMap sin depender de API keys ni servicios de pago.
 - **RB-077:** Las fechas de los selectores de historial de rutas se calculan siempre con la zona horaria local del dispositivo, no con UTC, para evitar desfases en zonas como Guatemala (UTC-6).
+
+## Préstamo y control de garrafones
+
+- **RB-078:** El garrafón físico prestado es un control de recipientes completamente independiente del inventario de líquido/productos. No consume ni altera existencias en bodega ni en el camión.
+- **RB-079:** El saldo de garrafones está asociado al cliente (`customer_id`) y a la ruta (`route_id`). Si el personal de la ruta rota o se reasigna el vendedor, el nuevo vendedor visualiza de inmediato el saldo exacto heredado.
+- **RB-080:** Todo evento de garrafón (`jug_loan_event`) es inmutable una vez insertado en base de datos. Está protegido por trigger contra `UPDATE` y `DELETE`.
+- **RB-081:** La cantidad en devoluciones (`RETURNED`) o cobros (`CHARGED_LOSS`, `CHARGED_DAMAGE`) no puede superar los garrafones pendientes actuales en poder del cliente.
+
+## Créditos y abonos
+
+- **RB-082:** Un abono en efectivo (`CASH`) reduce el saldo deudor del cliente de forma atómica (`current_balance = current_balance - amount`) e inserta una entrada inmutable en `credit_account_entry` con tipo `CREDIT_PAYMENT`.
+- **RB-083:** Un abono por transferencia (`TRANSFER`) se registra como `PENDING_VERIFICATION` con número de boleta obligatorio. No reduce el saldo del cliente hasta que un usuario autorizado lo apruebe.
+- **RB-084:** Segregación obligatoria en transferencias de crédito: el usuario que cobró y registró la transferencia tiene prohibido verificarla o aprobarla por sí mismo.
+- **RB-085:** El comprobante de abono se genera bajo demanda como documento PDF oficial a partir de los datos inmutables de `credit_payment` y la configuración de la empresa, permitiendo su descarga o envío directo por WhatsApp.
+

@@ -35,6 +35,8 @@ Consulte [la guía de instalación](docs/INSTALACION_LOCAL_PRIMERA_VEZ.md) para 
 - **Catálogo y precios:** productos, presentaciones, listas de precios versionadas, precios especiales y descuentos con aprobación segregada.
 - **Rutas y clientes:** asignación de vendedores y vehículos con vigencia, clientes permanentes, ocasionales y provisionales con flujo de revisión.
 - **Operación de ruta:** carga inicial + recargas, ventas con crédito, mermas, devoluciones, entrega de efectivo y liquidación.
+- **Control de garrafones:** registro y seguimiento de envases prestados (`LENT`), devoluciones (`RETURNED`) y cobro por pérdida o deterioro; saldos asociados al cliente y a la ruta para evitar pérdidas ante rotación de vendedores.
+- **Créditos y abonos:** gestión estructurada de cuentas por cobrar, abonos en efectivo o transferencias bancarias verificadas con segregación de funciones, estados de cuenta y comprobantes PDF compartibles directamente por WhatsApp.
 - **Visita sin compra:** el vendedor registra GPS + motivo ético (`"Cliente no estaba"` / `"No necesitaba"`) cuando visita a un cliente sin venta. Trazable en el mapa.
 - **Historial geográfico:** mapa interactivo con marcadores diferenciados por tipo (Inicio, Venta, Visita sin compra), polilínea vial vía OSRM y lista cronológica de paradas.
 - **Comprobantes y reportes:** PDF del comprobante interno, exportación a Excel y PDF de ventas, mermas y liquidaciones.

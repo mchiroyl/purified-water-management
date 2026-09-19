@@ -222,6 +222,31 @@ Devuelve la lista de vendedores disponibles para filtrar el historial geográfic
 | GET/POST | `/annulments` | solicitud de anulación |
 | POST | `/annulments/{id}/decision` | decisión y reversos |
 
+## Control de Garrafones
+
+Gestión aditiva e independiente del inventario físico de productos para envases prestados en ruta.
+
+| Método | Ruta | Roles autorizados | Función |
+|---|---|---|---|
+| POST | `/jugs/events` | `VENDEDOR`, `ADMINISTRADOR` | Registra préstamo (`LENT`), devolución (`RETURNED`) o cobro por pérdida/daño (`CHARGED_LOSS`, `CHARGED_DAMAGE`) |
+| GET | `/jugs/customers/{customerId}/balance` | `VENDEDOR`, `ADMINISTRADOR_CREDITO`, `ADMINISTRADOR`, `SUPERVISOR` | Consulta saldo de garrafones pendientes en poder del cliente |
+| GET | `/jugs/customers/{customerId}/history` | `VENDEDOR`, `ADMINISTRADOR_CREDITO`, `ADMINISTRADOR`, `SUPERVISOR` | Historial cronológico de movimientos de garrafón del cliente |
+| GET | `/jugs/routes/{routeId}/summary` | `ADMINISTRADOR_CREDITO`, `ADMINISTRADOR`, `SUPERVISOR` | Resumen de envases en calle por ruta y detalle de clientes con saldo |
+
+## Créditos y Abonos
+
+Control estructurado de cuentas por cobrar, pagos parciales (abonos), verificación segregada de transferencias y comprobantes PDF.
+
+| Método | Ruta | Roles autorizados | Función |
+|---|---|---|---|
+| POST | `/credit/payments` | `VENDEDOR`, `ADMINISTRADOR_CREDITO`, `ADMINISTRADOR` | Registra abono (efectivo con confirmación inmediata o transferencia pendiente) |
+| POST | `/credit/payments/{id}/decision` | `ADMINISTRADOR_CREDITO`, `ADMINISTRADOR` | Verifica (`APPROVE`) o rechaza (`REJECT`) transferencia con regla de segregación (quien cobró no puede verificar) |
+| GET | `/credit/payments/{id}/voucher` | `VENDEDOR`, `ADMINISTRADOR_CREDITO`, `ADMINISTRADOR` | Genera y descarga comprobante de abono en formato PDF bajo demanda |
+| GET | `/credit/payments/transfers/pending` | `ADMINISTRADOR_CREDITO`, `ADMINISTRADOR` | Lista transferencias de crédito pendientes de verificación |
+| GET | `/credit/customers/{customerId}/statement` | `ADMINISTRADOR_CREDITO`, `ADMINISTRADOR` | Estado de cuenta completo con detalle cronológico de compras, anulaciones y abonos |
+| GET | `/credit/customers/{customerId}/balance` | `VENDEDOR`, `ADMINISTRADOR_CREDITO`, `ADMINISTRADOR` | Saldo actual adeudado, límite autorizado y crédito disponible |
+| GET | `/credit/routes/{routeId}/pending` | `ADMINISTRADOR_CREDITO`, `ADMINISTRADOR` | Cartera pendiente y clientes deudores agrupados por ruta |
+
 El lote de sincronización conserva `clientOperationId`, `deviceId`, hash canónico, dependencias y payload. Repetir el mismo lote devuelve `ALREADY_PROCESSED`; no se deben generar nuevos UUID para “reintentar” una operación no resuelta.
 
 ## Liquidaciones, panel y reportes
