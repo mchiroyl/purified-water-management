@@ -142,8 +142,25 @@ En móvil se usa botón de menú y contenido desplazable; el cierre de sesión d
 - **Código de lista de precios automático**: campo eliminado del formulario; el servidor genera `LST-xxxx` (migración V32 + secuencia `price_list_code_seq`).
 - **GPS de alta precisión en ventas**: `watchPosition` espera hasta ≤20 m o 30 s; migración V33 aumenta columnas a `NUMERIC(12,8)`; mensaje "Refinando precisión GPS…" en UI.
 - **Coordenadas visibles solo para admin/supervisor**: endpoint `GET /api/sales/{id}/location` restringido con `@PreAuthorize`; botón "Ver ubicación" oculto al vendedor; panel con lat/lon/precisión y enlace Google Maps.
-- **Historial y comparación geográfica de rutas**: endpoint `GET /api/routes/{id}/route-history` y `GET /api/loads/{id}/route-map`; nueva pantalla `/route-history` con mapa interactivo OSM, distancia calculada por Haversine y comparación de tramos para admin/supervisor.
+### 2026-09-18 — Control de Garrafones y Gestión de Créditos/Abonos (V36–V37)
 
-**Pendiente:**
-- Fase 32: Implementar pruebas E2E con Playwright (escenarios online/offline y antifraude, flujo 1–28).
-- Fase 35: Revisar/actualizar Manual Técnico con los cambios de las fases 25–33.
+**Hecho:**
+- **Regla de oro cumplida:** Desarrollo 100% aditivo. Ningún endpoint, modelo, trigger ni lógica existente fue roto ni alterado.
+- **Control de Garrafones (Migración V36 + `/api/jugs` + UI `/jugs`):**
+  - Control de envases prestados (`LENT`), devueltos (`RETURNED`) y cobro por pérdida/daño (`CHARGED_LOSS`, `CHARGED_DAMAGE`) completamente independiente del inventario de productos.
+  - Tabla inmutable `jug_loan_event` protegida por trigger + vista `customer_jug_balance`.
+  - Saldos persistentes vinculados a `customer_id` y `route_id`, heredados automáticamente ante rotación de vendedores.
+  - Alta del rol `ADMINISTRADOR_CREDITO`.
+- **Gestión de Créditos y Abonos (Migración V37 + `/api/credit` + UI `/credit`):**
+  - Tabla `credit_payment` con soporte para abonos en efectivo (`CASH` con reducción inmediata de saldo) y transferencias bancarias (`TRANSFER` con estado `PENDING_VERIFICATION`).
+  - Extensión aditiva de `credit_account_entry` para aceptar `CREDIT_PAYMENT` preservando filas históricas de `SALE_CHARGE` y `SALE_VOID`.
+  - Segregación obligatoria de funciones: el usuario que cobró la transferencia no puede verificarla o aprobarla por sí mismo.
+  - Generación de comprobante oficial de abono en PDF bajo demanda (`CreditPaymentVoucherPdfPort` + `PdfBoxCreditVoucherGenerator`), sin consumir almacenamiento estático innecesario.
+  - Descarga y compartición directa de comprobantes de abono por WhatsApp (`shareCreditVoucherFile` / `downloadCreditVoucherFile`).
+  - Consulta de estados de cuenta completos con detalle cronológico y cartera deudora por ruta.
+  - Botones de acceso rápido *🧴 Garrafones* y *💳 Crédito* incorporados en la tabla de clientes.
+- **Pruebas y Verificación:**
+  - Tests unitarios de aplicación backend (`JugLoanApplicationServiceTest`, `CreditPaymentApplicationServiceTest`).
+  - Tests unitarios y de componentes frontend (`CreditPage.test.tsx`, `JugsPage.test.tsx`, `creditVoucherSharing.test.ts`).
+  - Suite de Vitest frontend: 39 suites y 86 pruebas pasando al 100%. Build de Vite sin errores.
+  - Documentación, diagramas (ERD, casos de uso) y matrices actualizados integralmente.

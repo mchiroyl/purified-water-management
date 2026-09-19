@@ -12,7 +12,7 @@ Alcance organizacional: una empresa purificadora
 | PWA | vite-plugin-pwa 1.3, Service Worker/Workbox, IndexedDB con `idb` 8 |
 | Estado/validación | TanStack Query 5, React Hook Form 7, Zod 4 |
 | API | Java 21, Spring Boot 4.1, Spring MVC, Security, Validation y Actuator |
-| Persistencia | Spring Data JPA, PostgreSQL 18.4, Flyway V1–V19 |
+| Persistencia | Spring Data JPA, PostgreSQL 18.4, Flyway V1–V37 |
 | Documentos | Apache PDFBox 3.0.8 y almacenamiento por volumen |
 | Pruebas | JUnit, Testcontainers 2, Vitest 4, Testing Library y Playwright 1.62 |
 | Ejecución | Docker Compose, imágenes multi-stage y procesos no privilegiados |
@@ -25,8 +25,22 @@ El backend es un monolito modular organizado en:
 
 - `domain`: entidades, value objects, reglas y puertos; no depende de Spring/JPA.
 - `application`: casos de uso, comandos, consultas y DTO de aplicación.
-- `infrastructure`: JPA, JWT, almacenamiento, PDF, seguridad y adaptadores externos.
-- `presentation`: controladores REST, validación de entrada y manejo de errores.
+  - `jugs`: `JugLoanApplicationService`, `JugLoanPort`, DTOs de eventos y saldos.
+  - `credit`: `CreditPaymentApplicationService`, `CreditPaymentPort`, `CreditPaymentVoucherPdfPort`, DTOs de pagos y estados de cuenta.
+- `infrastructure`: JPA/JDBC, JWT, almacenamiento, PDF (`PdfBoxCreditVoucherGenerator`), seguridad y adaptadores externos.
+- `presentation`: controladores REST (`JugLoanController`, `CreditPaymentController`), validación de entrada y manejo de errores.
+
+### 2.1 Módulos Aditivos Recientes (Migraciones V36 y V37)
+- **V36 (`V36__jug_loans_and_credit_admin_role.sql`):**
+  - Alta del rol `ADMINISTRADOR_CREDITO`.
+  - Tabla `jug_loan_event` protegida por trigger inmutable `reject_jug_loan_event_mutation`.
+  - Vista `customer_jug_balance` para agregación eficiente de envases en poder del cliente.
+- **V37 (`V37__credit_payments_and_account_entries.sql`):**
+  - Tabla `credit_payment` con soporte para `CASH` (inmediato) y `TRANSFER` (pendiente de verificación segregada), protegida por trigger.
+  - Extensión aditiva de `credit_account_entry` permitiendo `CREDIT_PAYMENT` sin alterar filas ni triggers históricos de `SALE_CHARGE` y `SALE_VOID`.
+- **Generación de Comprobantes de Abono bajo demanda:**
+  - `CreditPaymentVoucherPdfPort` implementado por `PdfBoxCreditVoucherGenerator`.
+  - Reutiliza el motor gráfico de PDFBox para generar el comprobante directamente en la respuesta HTTP `GET /api/credit/payments/{id}/voucher` sin consumir almacenamiento de disco estático innecesario.
 
 Las dependencias apuntan hacia dominio/aplicación. Los controladores no contienen reglas financieras ni de inventario. Las operaciones críticas delimitan su transacción en el caso de uso.
 

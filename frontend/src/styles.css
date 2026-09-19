@@ -309,3 +309,62 @@ h2 { margin-top: 0; }
 .leaflet-container { z-index: 0; border-radius: 8px; }
 .leaflet-pane { z-index: 1 !important; }
 .leaflet-top, .leaflet-bottom { z-index: 2 !important; }
+
+/* ── Banner contextual de garrafones + crédito ────────────────────────────── */
+.customer-context-banner {
+  margin: .5rem 0;
+  padding: .6rem .85rem;
+  border-radius: .6rem;
+  border: 1px solid var(--line);
+  background: rgba(18,76,84,.04);
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+  font-size: .86rem;
+}
+.customer-context-banner.loading { opacity: .7; }
+
+.context-row {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  padding: .3rem .5rem;
+  border-radius: .4rem;
+  flex-wrap: wrap;
+}
+.context-row.jug-warning {
+  background: rgba(217,119,6,.09);
+  border-left: 3px solid #d97706;
+  color: #92400e;
+}
+.context-row.credit-info {
+  background: rgba(37,99,235,.07);
+  border-left: 3px solid #2563eb;
+  color: #1e3a8a;
+}
+.context-row.credit-blocked {
+  background: rgba(220,38,38,.09);
+  border-left: 3px solid #dc2626;
+  color: #7f1d1d;
+  font-weight: 600;
+}
+
+/* ── Panel post-venta: préstamo de garrafón ─────────────────────────────────── */
+.post-sale-jug-panel {
+  margin-bottom: 1rem;
+  border: 2px solid var(--primary);
+  animation: slideIn .25s ease;
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Formulario de abono inline ─────────────────────────────────────────────── */
+.inline-abono-form {
+  padding: .7rem .85rem;
+  background: rgba(37,99,235,.05);
+  border: 1px solid rgba(37,99,235,.2);
+  border-radius: .55rem;
+  margin: .4rem 0;
+}

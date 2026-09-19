@@ -236,10 +236,40 @@ En **Reportes** seleccione ventas, mermas o liquidaciones, aplique fechas/filtro
 
 ![Reportes filtrables y exportables](assets/manual/11-reportes.png)
 
+## 13. Control de garrafones prestados y créditos
 
+### 13.1 Control de garrafones (`/jugs`)
+- **Objetivo:** Evitar pérdidas de envases cuando el personal de ruta rota o los clientes no entregan recipientes vacíos.
+- **Saldos por cliente:** Seleccione o busque al cliente para visualizar cuántos garrafones tiene actualmente en su poder y su historial de movimientos.
+- **Registrar movimiento:**
+  1. Ingrese a **Control de garrafones → Registrar Movimiento** (o desde la lista de clientes con el botón *🧴 Garrafones*).
+  2. Seleccione el cliente y la ruta.
+  3. Indique el tipo de evento:
+     - `Dejar Garrafones Prestados (+)`: Suma envases al saldo del cliente.
+     - `Recibir Vacíos Devueltos (-)`: Resta envases devueltos del saldo pendiente.
+     - `Cobrar Garrafón Perdido (-)` / `Cobrar Garrafón Dañado (-)`: Registra el cobro por pérdida o rotura con precio unitario (Q).
+  4. Ingrese cantidad y notas aclaratorias; pulse **Guardar Movimiento**.
+- **Resumen por ruta:** Muestra el total de garrafones en circulación en la calle por cada ruta de distribución.
 
-
-## 14. Reglas de seguridad para usuarios
+### 13.2 Créditos y abonos (`/credit`)
+- **Objetivo:** Administrar cuentas por cobrar, abonos parciales, comprobantes PDF y verificación de pagos por transferencia.
+- **Registrar abono:**
+  1. Ingrese a **Créditos y abonos → Registrar Abono** (o desde la tabla de clientes con el botón *💳 Crédito*).
+  2. Seleccione el cliente; el sistema muestra su límite autorizado, deuda actual y crédito disponible.
+  3. Ingrese el monto a abonar (no puede superar la deuda del cliente).
+  4. Elija el medio:
+     - **Efectivo:** Se confirma inmediatamente y descuenta el saldo del cliente al instante.
+     - **Transferencia bancaria:** Requiere ingresar el número de boleta/referencia y banco; queda en estado *Pendiente de verificación*.
+  5. Al registrarse, use los botones **Descargar Comprobante PDF** o **Compartir por WhatsApp** para entregar el recibo oficial al cliente.
+- **Verificar transferencias:**
+  - Disponible para el rol `ADMINISTRADOR` y el rol especializado `ADMINISTRADOR_CREDITO`.
+  - Muestra la lista de transferencias pendientes con boleta y monto.
+  - Regla de segregación: el usuario que cobró y registró la transferencia no puede verificarla por sí mismo.
+  - Al pulsar **Verificar**, el sistema valida el saldo y reduce la deuda del cliente; si se pulsa **Rechazar**, se solicita el motivo formal.
+- **Estados de cuenta:**
+  - Consulte cualquier cliente para visualizar su historial completo: compras a crédito (`CARGO (+)`) con número de venta, anulaciones (`ANULACIÓN (-)`) y abonos (`ABONO (-)`).
+- **Cartera por ruta:**
+  - Permite evaluar rápidamente el total adeudado y los clientes deudores en cada ruta.
 
 - No comparta contraseñas ni cuentas.
 - Use un nombre único por dispositivo.

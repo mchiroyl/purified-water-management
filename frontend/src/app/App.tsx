@@ -24,6 +24,8 @@ import { PendingOperationsPage } from '../offline/PendingOperationsPage';
 import { ReportsPage } from '../features/reports/ReportsPage';
 import { AuditPage } from '../features/audit/AuditPage';
 import { RouteHistoryPage } from '../features/routes/RouteHistoryPage';
+import { CreditPage } from '../features/credit/CreditPage';
+import { JugsPage } from '../features/jugs/JugsPage';
 import { AppShell } from './AppShell';
 import { DashboardPage } from './DashboardPage';
 
@@ -50,6 +52,11 @@ export function App() {
   const canSeeAnnulments = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'VENDEDOR'].includes(role));
   const isWarehouse = user.roles.includes('BODEGA');
   const isSeller = user.roles.includes('VENDEDOR');
+  const isCreditAdmin = user.roles.includes('ADMINISTRADOR_CREDITO');
+  const canSeeCredit = isAdmin || isCreditAdmin || isSeller;
+  const canVerifyCredit = isAdmin || isCreditAdmin;
+  const canSeeJugs = isAdmin || isCreditAdmin || isSeller;
+  const canRecordJugs = isAdmin || isSeller;
   const canReviewProvisional = isAdmin || user.roles.includes('SUPERVISOR');
   const canSeeAudit = isAdmin || user.roles.includes('SUPERVISOR');
   return (
@@ -79,6 +86,8 @@ export function App() {
         <Route path="loads" element={canSeeLoads ? <RouteLoadsPage canPrepare={isAdmin || isWarehouse} canConfirmWarehouse={isAdmin || isWarehouse} canReceive={isAdmin || isSeller} canStart={isAdmin || isSeller} canCorrect={isAdmin || isWarehouse} /> : <Navigate to="/" replace />} />
         <Route path="sales" element={canSeeSales ? <SalesPage canSell={isAdmin || isSeller} canViewLocation={isAdmin || user.roles.includes('SUPERVISOR')} /> : <Navigate to="/" replace />} />
         <Route path="transfers" element={canVerifyTransfers ? <TransfersPage /> : <Navigate to="/" replace />} />
+        <Route path="credit" element={canSeeCredit ? <CreditPage canRecord={isAdmin || isCreditAdmin || isSeller} canVerify={canVerifyCredit} currentUserId={user.id} /> : <Navigate to="/" replace />} />
+        <Route path="jugs" element={canSeeJugs ? <JugsPage canRecord={canRecordJugs} canViewSummary={isAdmin || isCreditAdmin} /> : <Navigate to="/" replace />} />
         <Route path="wastes" element={canSeeWastes ? <WastePage canReport canReview={isAdmin || isWarehouse || user.roles.includes('SUPERVISOR')} canManageCatalog={isAdmin} deviceId={user.deviceId} /> : <Navigate to="/" replace />} />
         <Route path="returns" element={canSeeReturns ? <ReturnsPage canReport canReceive={isAdmin || isWarehouse || user.roles.includes('SUPERVISOR')} deviceId={user.deviceId} /> : <Navigate to="/" replace />} />
         <Route path="settlements" element={canSeeSettlements ? <SettlementPage canClose={isAdmin || user.roles.includes('SUPERVISOR')} canReceiveCash={isAdmin || user.roles.includes('SUPERVISOR')} /> : <Navigate to="/" replace />} />

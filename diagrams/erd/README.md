@@ -27,6 +27,8 @@ PostgreSQL es la fuente oficial y autoritativa. El diagrama incluye las 54 tabla
 | V15 | Autorizaciones e incidencias |
 | V16 | Anulación segregada y reversos de pago |
 | V18 | Ampliación de auditoría correlacionada |
+| V36 | Préstamos y control de garrafones (`jug_loan_event`, `customer_jug_balance`), rol `ADMINISTRADOR_CREDITO` |
+| V37 | Abonos a crédito (`credit_payment`) y extensión de movimientos (`credit_account_entry`) |
 
 ## IndexedDB móvil
 
