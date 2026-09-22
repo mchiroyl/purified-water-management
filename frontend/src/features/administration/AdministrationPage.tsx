@@ -32,6 +32,7 @@ export function AdministrationPage() {
   const qrRequest = useQuery({ queryKey: ['administration', 'device-reenrollment', 'qr', qrToken], enabled: Boolean(qrToken), queryFn: () => apiRequest<Reenrollment>(`/administration/device-reenrollment/by-token/${encodeURIComponent(qrToken!)}`) });
   const [approvedNames, setApprovedNames] = useState<Record<string, string>>({});
   const [form, setForm] = useState({ username: '', email: '', password: '', roles: ['VENDEDOR'], sellerDisplayName: '' });
+  const [showPassword, setShowPassword] = useState(false);
   const [enrollmentUserId, setEnrollmentUserId] = useState('');
   const [createdInvitation, setCreatedInvitation] = useState<EnrollmentInvitation | null>(null);
   const create = useMutation({
@@ -71,7 +72,39 @@ export function AdministrationPage() {
       <h2 className="wide">Nuevo usuario</h2>
       <label>Usuario<input required minLength={3} value={form.username} onChange={event => setForm({ ...form, username: event.target.value })} /></label>
       <label>Correo<input required type="email" value={form.email} onChange={event => setForm({ ...form, email: event.target.value })} /></label>
-      <label>Contraseña temporal<input required type="password" minLength={12} value={form.password} onChange={event => setForm({ ...form, password: event.target.value })} /></label>
+      <label>
+        Contraseña temporal
+        <div className="password-input-wrapper">
+          <input
+            required
+            type={showPassword ? 'text' : 'password'}
+            minLength={12}
+            value={form.password}
+            onChange={event => setForm({ ...form, password: event.target.value })}
+          />
+          <button
+            type="button"
+            className="password-toggle-btn"
+            onClick={() => setShowPassword(prev => !prev)}
+            aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+            title={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+          >
+            {showPassword ? (
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49" />
+                <path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" />
+                <path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143" />
+                <line x1="2" y1="2" x2="22" y2="22" />
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            )}
+          </button>
+        </div>
+      </label>
       <fieldset className="role-fieldset"><legend>Roles</legend>{roleOptions.map(role => <label className="checkbox" key={role}>
         <input type="checkbox" checked={form.roles.includes(role)} onChange={() => toggleRole(role)} />{role}
       </label>)}</fieldset>
