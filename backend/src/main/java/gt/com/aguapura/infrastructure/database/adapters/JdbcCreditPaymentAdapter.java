@@ -270,9 +270,9 @@ public class JdbcCreditPaymentAdapter implements CreditPaymentPort {
         var company = jdbc.sql("""
                 SELECT cc.commercial_name, cc.legal_name, cc.tax_id, cc.address,
                        cc.phone, cc.whatsapp, cc.currency_code,
-                       f.storage_key as logo_storage_key, f.media_type as logo_media_type
+                       f.content as logo_content, f.media_type as logo_media_type
                 FROM company_configuration cc
-                LEFT JOIN file_object f ON f.id = cc.logo_file_id
+                LEFT JOIN file_object f ON f.id = cc.logo_file_id AND f.status = 'ACTIVE'
                 WHERE cc.singleton_key = true
                 """)
                 .query((rs, rowNum) -> new Object[]{
@@ -283,23 +283,13 @@ public class JdbcCreditPaymentAdapter implements CreditPaymentPort {
                         rs.getString("phone"),
                         rs.getString("whatsapp"),
                         rs.getString("currency_code"),
-                        rs.getString("logo_storage_key"),
+                        rs.getBytes("logo_content"),
                         rs.getString("logo_media_type")
                 })
                 .optional()
                 .orElseThrow(() -> new BusinessException("COMPANY_NOT_CONFIGURED", "Configuración de empresa no encontrada.", ErrorCategory.INTERNAL));
 
-        String logoStorageKey = (String) company[7];
-        byte[] logoBytes = null;
-        if (logoStorageKey != null && !logoStorageKey.isEmpty()) {
-            try {
-                Path logoPath = storageRoot.resolve(logoStorageKey).normalize();
-                if (Files.exists(logoPath)) {
-                    logoBytes = Files.readAllBytes(logoPath);
-                }
-            } catch (IOException ignored) {
-            }
-        }
+        byte[] logoBytes = (byte[]) company[7];
 
         String methodDisplay = "CASH".equals(payment.paymentMethod()) ? "Efectivo" : "Transferencia bancaria";
         String voucherNum = "AB-" + payment.id().toString().substring(0, 8).toUpperCase();
