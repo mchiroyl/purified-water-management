@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { apiRequest, setAccessToken } from './apiClient';
+import { apiRequest, resolveApiUrl, setAccessToken } from './apiClient';
 
 describe('apiClient', () => {
   beforeEach(() => setAccessToken('expired-token'));
@@ -155,5 +155,13 @@ describe('apiClient', () => {
 
     expect(refreshCalls).toBe(1);
     expect(fetcher).toHaveBeenCalledTimes(5);
+  });
+
+  it('resuelve URLs de la API correctamente tanto relativas como absolutas', () => {
+    expect(resolveApiUrl('')).toBe('');
+    expect(resolveApiUrl(null)).toBe('');
+    expect(resolveApiUrl('https://custom.host/img.png')).toBe('https://custom.host/img.png');
+    expect(resolveApiUrl('/api/company-configuration/logo')).toBe('/api/company-configuration/logo');
+    expect(resolveApiUrl('/connectivity')).toBe('/api/connectivity');
   });
 });

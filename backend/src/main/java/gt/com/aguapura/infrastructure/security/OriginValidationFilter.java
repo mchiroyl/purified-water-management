@@ -32,8 +32,8 @@ public class OriginValidationFilter extends OncePerRequestFilter {
             String fetchSite = request.getHeader("Sec-Fetch-Site");
             String origin = request.getHeader("Origin");
             boolean crossSite = "cross-site".equalsIgnoreCase(fetchSite);
-            boolean foreignOrigin = origin != null && !properties.allowedOrigins().contains(origin);
-            if (crossSite || foreignOrigin) {
+            boolean foreignOrigin = origin == null ? crossSite : !properties.allowedOrigins().contains(origin);
+            if (foreignOrigin) {
                 response.sendError(HttpServletResponse.SC_FORBIDDEN);
                 return;
             }

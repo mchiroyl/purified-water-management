@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useSession } from '../features/auth/SessionContext';
 import { ConnectionIndicator } from '../features/connectivity/ConnectionIndicator';
-import { apiRequest } from '../services/apiClient';
+import { apiRequest, resolveApiUrl } from '../services/apiClient';
 
 export function AppShell() {
   const { user, logout } = useSession();
@@ -136,7 +136,7 @@ export function AppShell() {
     <div className="app-shell">
       <header>
         <div className="header-brand">
-          {company.data?.logoUrl && <img src={`${company.data.logoUrl}?v=${company.data.version}`} alt="" />}
+          {company.data?.logoUrl && <img src={`${resolveApiUrl(company.data.logoUrl)}?v=${company.data.version}`} alt="" />}
           <div><strong>{company.data?.commercialName ?? 'Agua Pura'}</strong><span className="user-name">{user?.displayName}</span></div>
         </div>
         <ConnectionIndicator />

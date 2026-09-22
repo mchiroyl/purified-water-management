@@ -1,3 +1,5 @@
+import { resolveApiUrl } from '../../services/apiClient';
+
 export type ConnectionState = 'UNKNOWN' | 'CHECKING' | 'OFFLINE' | 'DEGRADED' | 'ONLINE';
 export type ConnectionCheckReason =
   | 'STARTUP'
@@ -63,9 +65,9 @@ export class ConnectionManager {
   private started = false;
 
   constructor(options: ConnectionManagerOptions = {}) {
-    this.endpoint = options.endpoint ?? '/api/connectivity';
+    this.endpoint = options.endpoint ?? resolveApiUrl('/connectivity');
     this.fetcher = options.fetcher ?? fetch;
-    this.timeoutMs = options.timeoutMs ?? 3_000;
+    this.timeoutMs = options.timeoutMs ?? 10_000;
     this.minimumIntervalMs = options.minimumIntervalMs ?? 2_000;
     this.retryBaseMs = options.retryBaseMs ?? 10_000;
     this.retryMaximumMs = options.retryMaximumMs ?? 60_000;

@@ -15,6 +15,12 @@ public record SecurityProperties(
         boolean cookieSecure,
         List<String> allowedOrigins
 ) implements SessionPolicy {
+    public SecurityProperties {
+        if (allowedOrigins != null) {
+            allowedOrigins = allowedOrigins.stream().map(String::trim).toList();
+        }
+    }
+
     public Duration accessTokenDuration() {
         return Duration.ofMinutes(accessTokenMinutes);
     }

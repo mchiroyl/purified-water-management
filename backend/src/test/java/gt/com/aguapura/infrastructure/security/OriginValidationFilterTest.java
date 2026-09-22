@@ -38,4 +38,16 @@ class OriginValidationFilterTest {
 
         assertThat(response.getStatus()).isEqualTo(200);
     }
+
+    @Test
+    void allowsConfiguredOriginWhenCrossSite() throws Exception {
+        var request = new MockHttpServletRequest("POST", "/api/auth/refresh");
+        request.addHeader("Origin", "http://localhost:3000");
+        request.addHeader("Sec-Fetch-Site", "cross-site");
+        var response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, new MockFilterChain());
+
+        assertThat(response.getStatus()).isEqualTo(200);
+    }
 }
