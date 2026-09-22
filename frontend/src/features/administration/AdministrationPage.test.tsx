@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, vi } from 'vitest';
 import { AdministrationPage } from './AdministrationPage';
 
@@ -32,5 +32,26 @@ describe('AdministrationPage', () => {
     expect(await screen.findByText('Juan Pérez')).toBeInTheDocument();
     expect(await screen.findByText('Teléfono de Juan')).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: /reinscripciones de dispositivos/i })).toBeInTheDocument();
+  });
+
+  it('permite alternar la visibilidad de la contraseña temporal con el icono de ojo', () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } }))));
+
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <AdministrationPage />
+    </QueryClientProvider>);
+
+    const toggleButton = screen.getByRole('button', { name: /mostrar contraseña/i });
+    const passwordInput = screen.getByLabelText(/contraseña temporal/i);
+
+    expect(passwordInput).toHaveAttribute('type', 'password');
+
+    fireEvent.click(toggleButton);
+    expect(passwordInput).toHaveAttribute('type', 'text');
+    expect(screen.getByRole('button', { name: /ocultar contraseña/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /ocultar contraseña/i }));
+    expect(passwordInput).toHaveAttribute('type', 'password');
+    expect(screen.getByRole('button', { name: /mostrar contraseña/i })).toBeInTheDocument();
   });
 });
