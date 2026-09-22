@@ -60,7 +60,7 @@ public class FileSystemReceiptDocumentAdapter implements ReceiptDocumentPort {
                        c.name customer_name,seller.display_name seller_name,
                        CASE WHEN EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=s.id AND ar.status='APPROVED')
                             THEN 'ANULADA' ELSE 'CONFIRMADA' END receipt_status,
-                       f.storage_key logo_storage_key,f.media_type logo_media_type
+                       f.content logo_content,f.media_type logo_media_type
                 FROM sale s JOIN customer c ON c.id=s.customer_id JOIN seller ON seller.id=s.seller_id
                 LEFT JOIN file_object f ON f.id=s.company_logo_file_id
                 WHERE s.id=:saleId
@@ -82,7 +82,7 @@ public class FileSystemReceiptDocumentAdapter implements ReceiptDocumentPort {
                 ORDER BY created_at,payment_method
                 """).param("saleId", saleId).query((rs, row) -> new ReceiptPdfPort.Payment(
                 rs.getString("payment_method"), rs.getBigDecimal("amount"), rs.getString("status"))).list();
-        byte[] logo = source.logoStorageKey() == null ? null : read(root.resolve(source.logoStorageKey()).normalize());
+        byte[] logo = source.logoContent();
         return new ReceiptPdfPort.ReceiptData(source.commercialName(), source.legalName(), source.taxId(),
                 source.address(), source.phone(), source.whatsapp(), source.email(), source.currencyCode(),
                 source.timezone(), source.legend(), logo, source.logoMediaType(), source.documentNumber(),
@@ -148,7 +148,7 @@ public class FileSystemReceiptDocumentAdapter implements ReceiptDocumentPort {
                 rs.getString("company_address"), rs.getString("company_phone"), rs.getString("company_whatsapp"),
                 rs.getString("company_email"), rs.getString("company_timezone"), rs.getString("document_legend"),
                 rs.getString("customer_name"), rs.getString("seller_name"), rs.getString("receipt_status"),
-                rs.getString("logo_storage_key"), rs.getString("logo_media_type"));
+                rs.getBytes("logo_content"), rs.getString("logo_media_type"));
     }
 
     private byte[] read(Path target) {
@@ -184,6 +184,6 @@ public class FileSystemReceiptDocumentAdapter implements ReceiptDocumentPort {
     private record Source(String documentNumber, Instant createdAt, BigDecimal subtotal, BigDecimal total,
                           String currencyCode, String commercialName, String legalName, String taxId,
                           String address, String phone, String whatsapp, String email, String timezone, String legend,
-                          String customerName, String sellerName, String status, String logoStorageKey,
+                          String customerName, String sellerName, String status, byte[] logoContent,
                           String logoMediaType) { }
 }
