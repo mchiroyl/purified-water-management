@@ -1,11 +1,30 @@
 import { ApiError, type ApiErrorPayload } from '../types/api';
 
-const baseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
+export const baseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
 let accessToken: string | null = null;
 let refreshPromise: Promise<string> | null = null;
 
 export function setAccessToken(token: string | null): void {
   accessToken = token;
+}
+
+export function resolveApiUrl(path?: string | null): string {
+  if (!path) return '';
+  if (/^https?:\/\//i.test(path)) return path;
+  const base = (baseUrl || '/api').replace(/\/+$/, '');
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+
+  if (base.endsWith('/api')) {
+    if (cleanPath.startsWith('/api/')) {
+      return `${base}${cleanPath.slice(4)}`;
+    }
+    return `${base}${cleanPath}`;
+  }
+
+  if (cleanPath.startsWith('/api/')) {
+    return `${base}${cleanPath}`;
+  }
+  return `${base}/api${cleanPath}`;
 }
 
 function isAuthEndpoint(path: string): boolean {

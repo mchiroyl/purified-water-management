@@ -85,7 +85,7 @@ public class AuthController {
     public ResponseEntity<Void> logout(@CookieValue(name = REFRESH_COOKIE, required = false) String refreshToken) {
         service.logout(refreshToken);
         var expired = ResponseCookie.from(REFRESH_COOKIE, "")
-                .httpOnly(true).secure(properties.cookieSecure()).sameSite("Strict")
+                .httpOnly(true).secure(properties.cookieSecure()).sameSite(cookieSameSite())
                 .path("/api/auth").maxAge(0).build();
         return ResponseEntity.noContent().header(HttpHeaders.SET_COOKIE, expired.toString()).build();
     }
@@ -95,15 +95,19 @@ public class AuthController {
                                                @AuthenticationPrincipal Jwt jwt) {
         service.changePassword(java.util.UUID.fromString(jwt.getClaimAsString("userId")), request);
         var expired = ResponseCookie.from(REFRESH_COOKIE, "")
-                .httpOnly(true).secure(properties.cookieSecure()).sameSite("Strict")
+                .httpOnly(true).secure(properties.cookieSecure()).sameSite(cookieSameSite())
                 .path("/api/auth").maxAge(0).build();
         return ResponseEntity.noContent().header(HttpHeaders.SET_COOKIE, expired.toString()).build();
     }
 
     private ResponseEntity<AuthResponse> withRefreshCookie(AuthResponse response, String refreshToken) {
         var cookie = ResponseCookie.from(REFRESH_COOKIE, refreshToken)
-                .httpOnly(true).secure(properties.cookieSecure()).sameSite("Strict")
+                .httpOnly(true).secure(properties.cookieSecure()).sameSite(cookieSameSite())
                 .path("/api/auth").maxAge(properties.refreshTokenDuration()).build();
         return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, cookie.toString()).body(response);
+    }
+
+    private String cookieSameSite() {
+        return properties.cookieSecure() ? "None" : "Lax";
     }
 }

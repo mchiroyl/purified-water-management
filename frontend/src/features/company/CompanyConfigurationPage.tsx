@@ -1,10 +1,10 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { PageHeader } from '../../app/PageHeader';
-import { apiRequest } from '../../services/apiClient';
+import { apiRequest, resolveApiUrl } from '../../services/apiClient';
 
 const schema = z.object({
   commercialName: z.string().min(2).max(150),
@@ -34,6 +34,21 @@ export function CompanyConfigurationPage() {
     defaultValues: { currencyCode: 'GTQ', timezone: 'America/Guatemala', receiptPrefix: 'V', nextReceiptNumber: 1, phone: '', whatsapp: '', email: '', documentLegend: '' }
   });
   useEffect(() => { if (query.data) reset(query.data); }, [query.data, reset]);
+
+  const previewUrl = useMemo(() => {
+    if (logo) return URL.createObjectURL(logo);
+    if (query.data?.logoUrl) return `${resolveApiUrl(query.data.logoUrl)}?v=${query.data.version}`;
+    return null;
+  }, [logo, query.data?.logoUrl, query.data?.version]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl && previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
   const mutation = useMutation({
     mutationFn: async (data: CompanyForm) => {
       let saved = await apiRequest<CompanyResponse>('/company-configuration', { method: 'PUT', body: JSON.stringify(data) });
@@ -46,6 +61,7 @@ export function CompanyConfigurationPage() {
     },
     onSuccess: (data) => {
       queryClient.setQueryData(['company-configuration'], data);
+      queryClient.invalidateQueries({ queryKey: ['company-configuration'] });
       setLogo(null);
       setMessage('Datos guardados correctamente.');
     }
@@ -56,7 +72,9 @@ export function CompanyConfigurationPage() {
       <PageHeader eyebrow="Configuración" title="Datos de la empresa" description="Esta información se utilizará en la aplicación y en todos los comprobantes." />
       <form className="form-grid panel" onSubmit={handleSubmit((data) => mutation.mutate(data))} noValidate>
         <div className="logo-editor wide">
-          <div className="company-logo-preview">{query.data?.logoUrl ? <img src={`${query.data.logoUrl}?v=${query.data.version}`} alt="Logotipo actual" /> : <span>Sin logotipo</span>}</div>
+          <div className="company-logo-preview">
+            {previewUrl ? <img src={previewUrl} alt="Logotipo de la empresa" /> : <span>Sin logotipo</span>}
+          </div>
           <label>Logotipo (PNG, JPG o WebP; máximo 2 MB)<input type="file" accept="image/png,image/jpeg,image/webp" onChange={event => setLogo(event.target.files?.[0] ?? null)} /></label>
         </div>
         <label>Nombre comercial<input {...register('commercialName')} /></label>
