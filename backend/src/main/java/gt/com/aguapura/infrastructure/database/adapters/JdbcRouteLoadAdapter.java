@@ -45,8 +45,34 @@ public class JdbcRouteLoadAdapter implements RouteLoadPort {
 
     @Override
     public Optional<UUID> findActiveRouteLocation(UUID routeId) {
-        return jdbc.sql("SELECT id FROM inventory_location WHERE route_id=:routeId AND active AND location_type='ROUTE'")
+        var existing = jdbc.sql("SELECT id FROM inventory_location WHERE route_id=:routeId AND active AND location_type='ROUTE'")
                 .param("routeId", routeId).query(UUID.class).optional();
+        if (existing.isPresent()) {
+            return existing;
+        }
+        var routeInfo = jdbc.sql("SELECT code, name FROM route WHERE id=:routeId AND status='ACTIVE'")
+                .param("routeId", routeId)
+                .query((rs, rowNum) -> java.util.Map.entry(rs.getString("code"), rs.getString("name")))
+                .optional();
+        if (routeInfo.isPresent()) {
+            UUID id = UUID.randomUUID();
+            String rawCode = routeInfo.get().getKey().replace("RUT-", "");
+            String code = ("IR-" + (rawCode.isBlank() ? id.toString().substring(0, 6) : rawCode)).toUpperCase(java.util.Locale.ROOT);
+            if (code.length() > 40) code = code.substring(0, 40);
+            if (exists("SELECT EXISTS(SELECT 1 FROM inventory_location WHERE code=:value)", code)) {
+                code = ("IR-" + id.toString().substring(0, 8)).toUpperCase(java.util.Locale.ROOT);
+            }
+            String name = "Inventario " + routeInfo.get().getValue();
+            if (name.length() > 160) name = name.substring(0, 160);
+            jdbc.sql("""
+                    INSERT INTO inventory_location(id, code, name, location_type, route_id, active)
+                    VALUES (:id, :code, :name, 'ROUTE', :routeId, true)
+                    ON CONFLICT (route_id) DO UPDATE SET active = true
+                    """).param("id", id).param("code", code).param("name", name).param("routeId", routeId).update();
+            return jdbc.sql("SELECT id FROM inventory_location WHERE route_id=:routeId AND active AND location_type='ROUTE'")
+                    .param("routeId", routeId).query(UUID.class).optional();
+        }
+        return Optional.empty();
     }
 
     @Override

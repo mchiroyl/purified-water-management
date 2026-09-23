@@ -12,6 +12,7 @@ import java.sql.Types;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -90,7 +91,19 @@ public class JdbcCustomerRouteAdapter implements CustomerRoutePort {
         jdbc.sql("INSERT INTO route(id, code, name, description) VALUES (:id, 'RUT-' || lpad(nextval('route_code_seq')::text, 6, '0'), :name, :description)")
                 .param("id", id).param("name", item.name())
                 .param("description", item.description()).update();
-        return findRoute(id);
+        var route = findRoute(id);
+        UUID locationId = UUID.randomUUID();
+        String rawCode = route.code().replace("RUT-", "");
+        String invCode = ("IR-" + (rawCode.isBlank() ? locationId.toString().substring(0, 6) : rawCode)).toUpperCase(Locale.ROOT);
+        if (invCode.length() > 40) invCode = invCode.substring(0, 40);
+        String invName = "Inventario " + route.name();
+        if (invName.length() > 160) invName = invName.substring(0, 160);
+        jdbc.sql("""
+                INSERT INTO inventory_location(id, code, name, location_type, route_id, active)
+                VALUES (:id, :code, :name, 'ROUTE', :routeId, true)
+                ON CONFLICT (route_id) DO UPDATE SET active = true
+                """).param("id", locationId).param("code", invCode).param("name", invName).param("routeId", id).update();
+        return route;
     }
 
     @Override
