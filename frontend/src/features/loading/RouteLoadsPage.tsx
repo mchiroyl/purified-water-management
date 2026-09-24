@@ -81,7 +81,14 @@ export function RouteLoadsPage({ canPrepare, canConfirmWarehouse, canReceive, ca
 
   return <main>
     <PageHeader eyebrow="Despacho y reparto" title="Cargas de ruta" description="Bodega confirma la entrega y el vendedor confirma la recepción desde su propio dispositivo." />
-    {canPrepare && <form className="panel section-panel" onSubmit={submit}><h2>{form.loadType === 'REPLENISHMENT' ? 'Nueva recarga de ruta' : 'Nueva carga inicial'}</h2><p className="muted">Una recarga repone producto al vendedor durante el recorrido; se recibe sin iniciar una segunda ruta ni liquidación.</p><div className="form-grid compact-form">
+    {canPrepare && <form className="panel section-panel" onSubmit={submit}>
+      <h2>{form.loadType === 'REPLENISHMENT' ? 'Nueva recarga de ruta' : 'Nueva carga inicial'}</h2>
+      <p className="muted">
+        {form.loadType === 'REPLENISHMENT'
+          ? 'Una recarga repone producto al vendedor durante el recorrido (requiere que la ruta ya tenga un recorrido iniciado).'
+          : 'Carga inicial con la que el camión o vendedor sale de bodega para iniciar su jornada de reparto.'}
+      </p>
+      <div className="form-grid compact-form">
       <label>Tipo de operación<select value={form.loadType} onChange={event => setForm({ ...form, loadType: event.target.value as 'INITIAL' | 'REPLENISHMENT' })}><option value="INITIAL">Carga inicial</option><option value="REPLENISHMENT">Recarga de ruta</option></select></label>
       <label>Ruta<select required value={form.routeId} onChange={event => setForm({ ...form, routeId: event.target.value })}><option value="">Seleccionar</option>{routes.data?.filter(route => route.status === 'ACTIVE').map(route => <option value={route.id} key={route.id}>{route.code} · {route.name}</option>)}</select></label>
       <label>Bodega origen<select required value={form.sourceLocationId} onChange={event => setForm({ ...form, sourceLocationId: event.target.value })}><option value="">Seleccionar</option>{locations.data?.filter(item => item.active && item.locationType === 'WAREHOUSE').map(item => <option value={item.id} key={item.id}>{item.code} · {item.name}</option>)}</select></label>
@@ -92,7 +99,16 @@ export function RouteLoadsPage({ canPrepare, canConfirmWarehouse, canReceive, ca
       <label>Cantidad<input required type="number" min="0.0001" step="0.0001" value={item.quantityBaseUnits} onChange={event => setItems(items.map((row, rowIndex) => rowIndex === index ? { ...row, quantityBaseUnits: Number(event.target.value) } : row))} /></label>
       {items.length > 1 && <button type="button" className="secondary" onClick={() => setItems(items.filter((_row, rowIndex) => rowIndex !== index))}>Quitar</button>}
     </div>)}</div><div className="form-actions"><button type="button" className="secondary" onClick={() => setItems([...items, { productId: '', quantityBaseUnits: 1 }])}>Agregar producto</button><button className="primary" disabled={create.isPending}>Preparar carga</button></div>
-      {create.error && <div className="alert error">{create.error.message}</div>}
+      {create.error && (
+        <div className="alert error">
+          <div>{create.error.message}</div>
+          {create.error.message.includes('La recarga requiere una ruta con recorrido iniciado') && (
+            <div style={{ marginTop: '0.45rem', fontSize: '0.88rem', fontWeight: 500, color: '#991b1b' }}>
+              👉 <strong>Solución:</strong> En el campo <strong>&quot;Tipo de operación&quot;</strong>, cambie a <strong>&quot;Carga inicial&quot;</strong>. La &quot;Recarga de ruta&quot; solo se usa cuando el vendedor ya está en ruta y necesita reposición adicional durante el día.
+            </div>
+          )}
+        </div>
+      )}
     </form>}
     <section className="section-panel"><div className="section-heading"><h2>Cargas registradas</h2><span>{loads.data?.length ?? 0} cargas</span></div>
       {loads.error && <div className="alert error">{loads.error.message}</div>}
