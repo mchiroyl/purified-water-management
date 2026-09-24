@@ -40,13 +40,63 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
   const [tiers, setTiers] = useState<DraftTier[]>([{ presentationId: '', minimumBaseUnits: 1, maximumBaseUnits: '', unitPrice: 0 }]);
   const [special, setSpecial] = useState({ customerId: '', presentationId: '', unitPrice: 0, validFrom: localDateTime(), validTo: '' });
   const [discount, setDiscount] = useState({ customerId: '', presentationId: '', quantityBaseUnits: 1, requestedPrice: 0, reason: '', expiresAt: localDateTime(2) });
+  const [versionSaved, setVersionSaved] = useState(false);
+  const [versionSuccessMessage, setVersionSuccessMessage] = useState('');
+  const [listMessage, setListMessage] = useState('');
+  const [specialMessage, setSpecialMessage] = useState('');
+  const [discountMessage, setDiscountMessage] = useState('');
   useEffect(() => { if (!selectedList && lists.data?.[0]) setSelectedList(lists.data[0].id); }, [lists.data, selectedList]);
   const refresh = () => void client.invalidateQueries({ queryKey: ['pricing'] });
-  const createList = useMutation({ mutationFn: () => apiRequest<PriceList>('/pricing/lists', { method: 'POST', body: JSON.stringify(listForm) }), onSuccess: data => { setListForm({ name: '', currencyCode: 'GTQ' }); setSelectedList(data.id); refresh(); } });
-  const createVersion = useMutation({ mutationFn: () => apiRequest<PriceList>(`/pricing/lists/${selectedList}/versions`, { method: 'POST', body: JSON.stringify({ validFrom: new Date(validFrom).toISOString(), tiers: tiers.map(item => ({ ...item, maximumBaseUnits: item.maximumBaseUnits === '' ? null : Number(item.maximumBaseUnits) })) }) }), onSuccess: refresh });
+  const resetVersionForm = () => {
+    setVersionSaved(false);
+    setVersionSuccessMessage('');
+    setTiers([{ presentationId: '', minimumBaseUnits: 1, maximumBaseUnits: '', unitPrice: 0 }]);
+    setValidFrom(localDateTime());
+  };
+  const createList = useMutation({
+    mutationFn: () => apiRequest<PriceList>('/pricing/lists', { method: 'POST', body: JSON.stringify(listForm) }),
+    onSuccess: data => {
+      setListForm({ name: '', currencyCode: 'GTQ' });
+      setSelectedList(data.id);
+      setListMessage(`¡Lista "${data.name}" (${data.code}) creada exitosamente!`);
+      refresh();
+    }
+  });
+  const createVersion = useMutation({
+    mutationFn: () => apiRequest<PriceList>(`/pricing/lists/${selectedList}/versions`, {
+      method: 'POST',
+      body: JSON.stringify({
+        validFrom: new Date(validFrom).toISOString(),
+        tiers: tiers.map(item => ({ ...item, maximumBaseUnits: item.maximumBaseUnits === '' ? null : Number(item.maximumBaseUnits) }))
+      })
+    }),
+    onSuccess: (data) => {
+      refresh();
+      setVersionSaved(true);
+      const vNum = data.versions?.at(-1)?.versionNumber;
+      setVersionSuccessMessage(
+        vNum ? `¡Versión ${vNum} registrada exitosamente! Se guardó en borrador. Recuerde activarla en "Ver precios registrados" para que entre en vigencia.`
+             : '¡Versión de precios registrada exitosamente! Se guardó en borrador. Recuerde activarla en "Ver precios registrados" para que entre en vigencia.'
+      );
+    }
+  });
   const activate = useMutation({ mutationFn: (id: string) => apiRequest<PriceList>(`/pricing/versions/${id}/activate`, { method: 'POST' }), onSuccess: refresh });
-  const createSpecial = useMutation({ mutationFn: () => apiRequest<Special>('/pricing/special-prices', { method: 'POST', body: JSON.stringify({ ...special, validFrom: new Date(special.validFrom).toISOString(), validTo: special.validTo ? new Date(special.validTo).toISOString() : null }) }), onSuccess: () => { setSpecial({ customerId: '', presentationId: '', unitPrice: 0, validFrom: localDateTime(), validTo: '' }); refresh(); } });
-  const requestDiscount = useMutation({ mutationFn: () => apiRequest<Discount>('/pricing/discounts', { method: 'POST', body: JSON.stringify({ ...discount, expiresAt: new Date(discount.expiresAt).toISOString() }) }), onSuccess: () => { setDiscount({ customerId: '', presentationId: '', quantityBaseUnits: 1, requestedPrice: 0, reason: '', expiresAt: localDateTime(2) }); refresh(); } });
+  const createSpecial = useMutation({
+    mutationFn: () => apiRequest<Special>('/pricing/special-prices', { method: 'POST', body: JSON.stringify({ ...special, validFrom: new Date(special.validFrom).toISOString(), validTo: special.validTo ? new Date(special.validTo).toISOString() : null }) }),
+    onSuccess: () => {
+      setSpecial({ customerId: '', presentationId: '', unitPrice: 0, validFrom: localDateTime(), validTo: '' });
+      setSpecialMessage('¡Precio especial por cliente guardado exitosamente!');
+      refresh();
+    }
+  });
+  const requestDiscount = useMutation({
+    mutationFn: () => apiRequest<Discount>('/pricing/discounts', { method: 'POST', body: JSON.stringify({ ...discount, expiresAt: new Date(discount.expiresAt).toISOString() }) }),
+    onSuccess: () => {
+      setDiscount({ customerId: '', presentationId: '', quantityBaseUnits: 1, requestedPrice: 0, reason: '', expiresAt: localDateTime(2) });
+      setDiscountMessage('¡Solicitud de descuento enviada para autorización!');
+      refresh();
+    }
+  });
   const decide = useMutation({ mutationFn: ({ id, decision }: { id: string; decision: string }) => apiRequest<Discount>(`/pricing/discounts/${id}/decision`, { method: 'POST', body: JSON.stringify({ decision }) }), onSuccess: refresh });
   const submit = (event: FormEvent, action: () => void) => { event.preventDefault(); action(); };
   const updateTier = (index: number, patch: Partial<DraftTier>) => setTiers(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item));
@@ -58,26 +108,82 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
   return <main><PageHeader eyebrow="Reglas comerciales" title={isCreateView ? 'Registrar precios' : 'Precios registrados'} description={isCreateView ? 'Configure listas, versiones y reglas comerciales. El servidor calculará el precio oficial.' : 'Consulte las listas, versiones y reglas comerciales vigentes.'} actions={<button type="button" className="secondary" onClick={() => navigate(isCreateView ? '/pricing/list' : '/pricing')}>{isCreateView ? 'Ver precios registrados' : 'Registrar nuevos precios'}</button>} />
     {canManage && isCreateView && <>
       <form className="panel inline-form" onSubmit={event => submit(event, () => createList.mutate())}><h2>Nueva lista</h2>
+        {listMessage && <div className="alert success wide">✅ {listMessage}</div>}
         <label>Nombre<input required value={listForm.name} onChange={event => setListForm({ ...listForm, name: event.target.value })} /></label>
         <label>Moneda<input required maxLength={3} value={listForm.currencyCode} onChange={event => setListForm({ ...listForm, currencyCode: event.target.value.toUpperCase() })} /></label>
         <button className="primary">Crear lista</button>{createList.error && <div className="alert error wide">{createList.error.message}</div>}
       </form>
-      <form className="panel section-panel" onSubmit={event => submit(event, () => createVersion.mutate())}><h2>Nueva versión de precios</h2>
-        <div className="inline-form"><label>Lista<select value={selectedList} onChange={event => setSelectedList(event.target.value)}><option value="">Seleccionar</option>{lists.data?.map(item => <option value={item.id} key={item.id}>{item.code} · {item.name}</option>)}</select></label>
-          <label>Vigente desde<input type="datetime-local" min={dateBounds.min} max={dateBounds.max} {...calendarOnlyProps()} value={validFrom} onChange={event => setValidFrom(event.target.value)} /></label></div>
-        <div className="tier-editor">{tiers.map((tier, index) => <div className="tier-row" key={index}>
-          <label>Presentación<select required value={tier.presentationId} onChange={event => updateTier(index, { presentationId: event.target.value })}><option value="">Seleccionar</option>{presentations.map(item => <option value={item.id} key={item.id}>{item.productName} · {item.name}</option>)}</select></label>
-          <label>Desde<input type="number" min="1" value={tier.minimumBaseUnits} onChange={event => updateTier(index, { minimumBaseUnits: Number(event.target.value) })} /></label>
-          <label>Hasta<input type="number" min="1" placeholder="Sin límite" value={tier.maximumBaseUnits} onChange={event => updateTier(index, { maximumBaseUnits: event.target.value })} /></label>
-          <label>Precio unitario<input type="number" min="0.01" step="0.01" value={tier.unitPrice} onChange={event => updateTier(index, { unitPrice: Number(event.target.value) })} /></label>
-          {tiers.length > 1 && <button type="button" className="secondary danger-button" onClick={() => setTiers(current => current.filter((_, itemIndex) => itemIndex !== index))}>Quitar</button>}
-        </div>)}</div>
-        <div className="form-actions"><button type="button" className="secondary" onClick={() => setTiers(current => [...current, { presentationId: current.at(-1)?.presentationId ?? '', minimumBaseUnits: 1, maximumBaseUnits: '', unitPrice: 0 }])}>Agregar tramo</button><button className="primary" disabled={!selectedList}>Guardar versión</button></div>
+      <form className={`panel section-panel ${versionSaved ? 'form-dimmed' : ''}`} onSubmit={event => submit(event, () => createVersion.mutate())}>
+        <div className="section-heading">
+          <h2>Nueva versión de precios</h2>
+          {versionSaved && <span className="status active">Guardado</span>}
+        </div>
+        {versionSuccessMessage && (
+          <div className="alert success wide" style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.6rem' }}>
+            <span>✅ {versionSuccessMessage}</span>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button type="button" className="secondary" style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }} onClick={() => navigate('/pricing/list')}>
+                Ver precios registrados
+              </button>
+              <button type="button" className="secondary" style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }} onClick={resetVersionForm}>
+                + Registrar otra versión
+              </button>
+            </div>
+          </div>
+        )}
+        <fieldset disabled={versionSaved || createVersion.isPending} style={{ border: 'none', padding: 0, margin: 0 }}>
+          <div className="inline-form">
+            <label>Lista
+              <select value={selectedList} onChange={event => { setSelectedList(event.target.value); if (versionSaved) resetVersionForm(); }}>
+                <option value="">Seleccionar</option>
+                {lists.data?.map(item => <option value={item.id} key={item.id}>{item.code} · {item.name}</option>)}
+              </select>
+            </label>
+            <label>Vigente desde
+              <input type="datetime-local" min={dateBounds.min} max={dateBounds.max} {...calendarOnlyProps()} value={validFrom} onChange={event => setValidFrom(event.target.value)} />
+            </label>
+          </div>
+          <div className="tier-editor">
+            {tiers.map((tier, index) => <div className="tier-row" key={index}>
+              <label>Presentación
+                <select required value={tier.presentationId} onChange={event => updateTier(index, { presentationId: event.target.value })}>
+                  <option value="">Seleccionar</option>
+                  {presentations.map(item => <option value={item.id} key={item.id}>{item.productName} · {item.name}</option>)}
+                </select>
+              </label>
+              <label>Desde
+                <input type="number" min="1" value={tier.minimumBaseUnits} onChange={event => updateTier(index, { minimumBaseUnits: Number(event.target.value) })} />
+              </label>
+              <label>Hasta
+                <input type="number" min="1" placeholder="Sin límite" value={tier.maximumBaseUnits} onChange={event => updateTier(index, { maximumBaseUnits: event.target.value })} />
+              </label>
+              <label>Precio unitario
+                <input type="number" min="0.01" step="0.01" value={tier.unitPrice} onChange={event => updateTier(index, { unitPrice: Number(event.target.value) })} />
+              </label>
+              {!versionSaved && tiers.length > 1 && (
+                <button type="button" className="secondary danger-button" onClick={() => setTiers(current => current.filter((_, itemIndex) => itemIndex !== index))}>
+                  Quitar
+                </button>
+              )}
+            </div>)}
+          </div>
+          <div className="form-actions">
+            {!versionSaved && (
+              <button type="button" className="secondary" onClick={() => setTiers(current => [...current, { presentationId: current.at(-1)?.presentationId ?? '', minimumBaseUnits: 1, maximumBaseUnits: '', unitPrice: 0 }])}>
+                Agregar tramo
+              </button>
+            )}
+            <button className="primary" disabled={!selectedList || versionSaved || createVersion.isPending}>
+              {createVersion.isPending ? 'Guardando…' : versionSaved ? '✓ Versión guardada' : 'Guardar versión'}
+            </button>
+          </div>
+        </fieldset>
         {createVersion.error && <div className="alert error">{createVersion.error.message}</div>}
       </form>
     </>}
     {!isCreateView && <section className="pricing-list section-panel"><h2>Listas y versiones registradas</h2><p className="muted">Ordenadas desde la versión más reciente.</p><div className="table-wrap pricing-table-wrap"><table><thead><tr><th>Lista</th><th>Versión</th><th>Vigente desde</th><th>Tramos configurados</th><th>Estado</th><th>Opciones</th></tr></thead><tbody>{registeredVersions.map(({ list, version }) => <tr key={version.id}><td><strong>{list.name}</strong><small>{list.code} · {list.currencyCode}</small></td><td>Versión {version.versionNumber}</td><td>{formatDate(version.validFrom)}</td><td>{version.tiers.map(tier => <span className="table-line" key={tier.id}>{tier.presentationName} · {tier.minimumBaseUnits}–{tier.maximumBaseUnits ?? '∞'} · Q{tier.unitPrice.toFixed(2)}</span>)}</td><td><span className={`status ${version.status === 'ACTIVE' ? 'active' : 'inactive'}`}>{version.status}</span></td><td>{canManage && ['DRAFT', 'SCHEDULED'].includes(version.status) && <button className="secondary" onClick={() => activate.mutate(version.id)}>{version.status === 'DRAFT' ? 'Activar' : 'Reprogramar'}</button>}</td></tr>)}</tbody></table>{registeredVersions.length === 0 && <p className="muted">Aún no hay versiones registradas.</p>}</div></section>}
     {canManage && isCreateView && <form className="panel section-panel inline-form" onSubmit={event => submit(event, () => createSpecial.mutate())}><h2 className="wide">Registrar precio especial por cliente</h2>
+      {specialMessage && <div className="alert success wide">✅ {specialMessage}</div>}
       <label>Cliente<select required value={special.customerId} onChange={event => setSpecial({ ...special, customerId: event.target.value })}><option value="">Seleccionar</option>{customers.data?.map(item => <option value={item.id} key={item.id}>{item.code} · {item.name}</option>)}</select></label>
       <label>Presentación<select required value={special.presentationId} onChange={event => setSpecial({ ...special, presentationId: event.target.value })}><option value="">Seleccionar</option>{presentations.map(item => <option value={item.id} key={item.id}>{item.productName} · {item.name}</option>)}</select></label>
       <label>Precio<input type="number" min="0.01" step="0.01" value={special.unitPrice} onChange={event => setSpecial({ ...special, unitPrice: Number(event.target.value) })} /></label>
@@ -87,6 +193,7 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
     </form>}
     {!isCreateView && (canManage || canApprove) && <section className="panel section-panel"><h2>Precios especiales registrados</h2><div className="table-wrap pricing-table-wrap"><table><thead><tr><th>Cliente</th><th>Presentación</th><th>Precio</th><th>Vigencia</th><th>Estado</th></tr></thead><tbody>{registeredSpecials.map(item => <tr key={item.id}><td>{item.customerName}</td><td>{item.presentationName}</td><td>Q{item.unitPrice.toFixed(2)}</td><td>{formatDate(item.validFrom)}<small>Hasta: {formatDate(item.validTo)}</small></td><td><span className={`status ${item.status === 'ACTIVE' ? 'active' : 'inactive'}`}>{item.status}</span></td></tr>)}</tbody></table>{registeredSpecials.length === 0 && <p className="muted">Aún no hay precios especiales registrados.</p>}</div></section>}
     {canRequestDiscount && isCreateView && <form className="panel section-panel form-grid" onSubmit={event => submit(event, () => requestDiscount.mutate())}><h2 className="wide">Solicitar descuento extraordinario</h2>
+      {discountMessage && <div className="alert success wide">✅ {discountMessage}</div>}
       <label>Cliente<select required value={discount.customerId} onChange={event => setDiscount({ ...discount, customerId: event.target.value })}><option value="">Seleccionar</option>{customers.data?.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
       <label>Presentación<select required value={discount.presentationId} onChange={event => setDiscount({ ...discount, presentationId: event.target.value })}><option value="">Seleccionar</option>{presentations.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
       <label>Cantidad base<input type="number" min="1" value={discount.quantityBaseUnits} onChange={event => setDiscount({ ...discount, quantityBaseUnits: Number(event.target.value) })} /></label><label>Precio solicitado<input type="number" min="0.01" step="0.01" value={discount.requestedPrice} onChange={event => setDiscount({ ...discount, requestedPrice: Number(event.target.value) })} /></label>

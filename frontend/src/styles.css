@@ -51,6 +51,8 @@ h2 { margin-top: 0; }
 .alert { padding: .75rem; border-radius: .65rem; font-weight: 650; }
 .alert.error { color: var(--danger); background: #fff0ee; }
 .alert.success { color: var(--success); background: #ecfdf3; }
+.form-dimmed { background: #f8fafb !important; }
+.form-dimmed fieldset { opacity: .55; pointer-events: none; filter: grayscale(35%); transition: opacity .25s ease, filter .25s ease; }
 .status-panel { padding: .9rem 1rem; border: 1px solid var(--line); border-radius: .75rem; background: #f8fcfd; color: var(--muted); }
 .app-shell { min-height: 100vh; display: grid; grid-template-areas: "header" "main" "bottom"; grid-template-rows: auto 1fr auto; }
 .app-shell > header { grid-area: header; position: sticky; top: 0; z-index: 5; display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .8rem 1rem; background: rgba(255,255,255,.94); border-bottom: 1px solid var(--line); backdrop-filter: blur(12px); }
