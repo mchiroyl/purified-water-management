@@ -45,7 +45,6 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
   const [versionSuccessMessage, setVersionSuccessMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
-  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const desdeInputRef = useRef<HTMLInputElement>(null);
   const [listMessage, setListMessage] = useState('');
   const [specialMessage, setSpecialMessage] = useState('');
@@ -54,10 +53,6 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
   const refresh = () => void client.invalidateQueries({ queryKey: ['pricing'] });
 
   const closeToast = () => {
-    if (toastTimerRef.current) {
-      clearTimeout(toastTimerRef.current);
-      toastTimerRef.current = null;
-    }
     setShowToast(false);
     setTimeout(() => {
       desdeInputRef.current?.focus();
@@ -65,35 +60,13 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
   };
 
   const triggerSavedToast = (message: string) => {
-    if (toastTimerRef.current) {
-      clearTimeout(toastTimerRef.current);
-    }
     setToastMessage(message);
     setShowToast(true);
 
     // Limpiar campos inmediatamente para evitar doble registro
     setTiers([emptyTier()]);
     setValidFrom(localDateTime());
-
-    // Posicionar el cursor en el campo 'desde'
-    setTimeout(() => {
-      desdeInputRef.current?.focus();
-    }, 50);
-
-    toastTimerRef.current = setTimeout(() => {
-      setShowToast(false);
-      toastTimerRef.current = null;
-      desdeInputRef.current?.focus();
-    }, 3000);
   };
-
-  useEffect(() => {
-    return () => {
-      if (toastTimerRef.current) {
-        clearTimeout(toastTimerRef.current);
-      }
-    };
-  }, []);
 
   const createList = useMutation({
     mutationFn: () => apiRequest<PriceList>('/pricing/lists', { method: 'POST', body: JSON.stringify(listForm) }),
@@ -154,8 +127,8 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
   const registeredDiscounts = [...(discounts.data ?? [])].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   return <main><PageHeader eyebrow="Reglas comerciales" title={isCreateView ? 'Registrar precios' : 'Precios registrados'} description={isCreateView ? 'Configure listas, versiones y reglas comerciales. El servidor calculará el precio oficial.' : 'Consulte las listas, versiones y reglas comerciales vigentes.'} actions={<button type="button" className="secondary" onClick={() => navigate(isCreateView ? '/pricing/list' : '/pricing')}>{isCreateView ? 'Ver precios registrados' : 'Registrar nuevos precios'}</button>} />
     {showToast && (
-      <div className="floating-toast-overlay" role="dialog" aria-modal="true" onClick={closeToast}>
-        <div className="floating-toast-card" onClick={event => event.stopPropagation()}>
+      <div className="floating-toast-overlay" role="dialog" aria-modal="true">
+        <div className="floating-toast-card">
           <div className="floating-toast-icon">✅</div>
           <div className="floating-toast-body">
             <h3>Datos grabados</h3>
