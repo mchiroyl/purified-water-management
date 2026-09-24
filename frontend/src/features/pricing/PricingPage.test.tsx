@@ -47,7 +47,7 @@ describe('PricingPage', () => {
     expect(screen.queryByText('Solicitudes de descuento registradas')).not.toBeInTheDocument();
   });
 
-  it('muestra mensaje de confirmación y atenúa el formulario al guardar una versión', async () => {
+  it('muestra ventana flotante Datos grabados, limpia los campos y permite cerrar con OK', async () => {
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = input.toString();
       if (url.includes('/pricing/lists') && !url.includes('/versions')) {
@@ -76,8 +76,15 @@ describe('PricingPage', () => {
     const saveButton = await screen.findByRole('button', { name: 'Guardar versión' });
     fireEvent.submit(saveButton.closest('form')!);
 
-    expect(await screen.findByText(/Versión 1 registrada exitosamente/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '✓ Versión guardada' })).toBeDisabled();
-    expect(screen.getByText('Guardado')).toBeInTheDocument();
+    expect(await screen.findByText('Datos grabados')).toBeInTheDocument();
+    expect(screen.getAllByText(/Versión 1 registrada exitosamente/i).length).toBeGreaterThanOrEqual(1);
+
+    const okButton = screen.getByRole('button', { name: 'OK' });
+    fireEvent.click(okButton);
+
+    expect(screen.queryByText('Datos grabados')).not.toBeInTheDocument();
+
+    const desdeInput = screen.getByPlaceholderText('1') as HTMLInputElement;
+    expect(desdeInput.value).toBe('');
   });
 });

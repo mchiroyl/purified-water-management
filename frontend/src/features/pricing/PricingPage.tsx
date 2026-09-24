@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '../../app/PageHeader';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiRequest } from '../../services/apiClient';
 import { calendarOnlyProps, currentMonthDateTimeBounds } from '../../utils/dateInput';
@@ -12,7 +12,9 @@ type Product = { id: string; name: string; presentations: Array<{ id: string; co
 type Customer = { id: string; code: string; name: string };
 type Special = { id: string; customerName: string; presentationName: string; unitPrice: number; validFrom: string; validTo?: string; status: string };
 type Discount = { id: string; requesterUsername: string; customerName: string; presentationName: string; normalPrice: number; requestedPrice: number; reason: string; status: string; expiresAt: string; createdAt: string };
-type DraftTier = { presentationId: string; minimumBaseUnits: number; maximumBaseUnits: string; unitPrice: number };
+type DraftTier = { presentationId: string; minimumBaseUnits: number | ''; maximumBaseUnits: string; unitPrice: number | '' };
+
+const emptyTier = (): DraftTier => ({ presentationId: '', minimumBaseUnits: '', maximumBaseUnits: '', unitPrice: '' });
 
 function localDateTime(hoursAhead = 0): string {
   const date = new Date(Date.now() + hoursAhead * 3_600_000);
@@ -37,22 +39,62 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
   const [listForm, setListForm] = useState({ name: '', currencyCode: 'GTQ' });
   const [selectedList, setSelectedList] = useState('');
   const [validFrom, setValidFrom] = useState(localDateTime());
-  const [tiers, setTiers] = useState<DraftTier[]>([{ presentationId: '', minimumBaseUnits: 1, maximumBaseUnits: '', unitPrice: 0 }]);
+  const [tiers, setTiers] = useState<DraftTier[]>([emptyTier()]);
   const [special, setSpecial] = useState({ customerId: '', presentationId: '', unitPrice: 0, validFrom: localDateTime(), validTo: '' });
   const [discount, setDiscount] = useState({ customerId: '', presentationId: '', quantityBaseUnits: 1, requestedPrice: 0, reason: '', expiresAt: localDateTime(2) });
-  const [versionSaved, setVersionSaved] = useState(false);
   const [versionSuccessMessage, setVersionSuccessMessage] = useState('');
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const desdeInputRef = useRef<HTMLInputElement>(null);
   const [listMessage, setListMessage] = useState('');
   const [specialMessage, setSpecialMessage] = useState('');
   const [discountMessage, setDiscountMessage] = useState('');
   useEffect(() => { if (!selectedList && lists.data?.[0]) setSelectedList(lists.data[0].id); }, [lists.data, selectedList]);
   const refresh = () => void client.invalidateQueries({ queryKey: ['pricing'] });
-  const resetVersionForm = () => {
-    setVersionSaved(false);
-    setVersionSuccessMessage('');
-    setTiers([{ presentationId: '', minimumBaseUnits: 1, maximumBaseUnits: '', unitPrice: 0 }]);
-    setValidFrom(localDateTime());
+
+  const closeToast = () => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+    setShowToast(false);
+    setTimeout(() => {
+      desdeInputRef.current?.focus();
+    }, 50);
   };
+
+  const triggerSavedToast = (message: string) => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
+    setToastMessage(message);
+    setShowToast(true);
+
+    // Limpiar campos inmediatamente para evitar doble registro
+    setTiers([emptyTier()]);
+    setValidFrom(localDateTime());
+
+    // Posicionar el cursor en el campo 'desde'
+    setTimeout(() => {
+      desdeInputRef.current?.focus();
+    }, 50);
+
+    toastTimerRef.current = setTimeout(() => {
+      setShowToast(false);
+      toastTimerRef.current = null;
+      desdeInputRef.current?.focus();
+    }, 3000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
+      }
+    };
+  }, []);
+
   const createList = useMutation({
     mutationFn: () => apiRequest<PriceList>('/pricing/lists', { method: 'POST', body: JSON.stringify(listForm) }),
     onSuccess: data => {
@@ -67,17 +109,22 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
       method: 'POST',
       body: JSON.stringify({
         validFrom: new Date(validFrom).toISOString(),
-        tiers: tiers.map(item => ({ ...item, maximumBaseUnits: item.maximumBaseUnits === '' ? null : Number(item.maximumBaseUnits) }))
+        tiers: tiers.map(item => ({
+          ...item,
+          minimumBaseUnits: item.minimumBaseUnits === '' ? 1 : Number(item.minimumBaseUnits),
+          unitPrice: item.unitPrice === '' ? 0 : Number(item.unitPrice),
+          maximumBaseUnits: item.maximumBaseUnits === '' ? null : Number(item.maximumBaseUnits)
+        }))
       })
     }),
     onSuccess: (data) => {
       refresh();
-      setVersionSaved(true);
       const vNum = data.versions?.at(-1)?.versionNumber;
-      setVersionSuccessMessage(
-        vNum ? `¡Versión ${vNum} registrada exitosamente! Se guardó en borrador. Recuerde activarla en "Ver precios registrados" para que entre en vigencia.`
-             : '¡Versión de precios registrada exitosamente! Se guardó en borrador. Recuerde activarla en "Ver precios registrados" para que entre en vigencia.'
-      );
+      const msg = vNum
+        ? `Versión ${vNum} registrada exitosamente. Se guardó en borrador.`
+        : 'Versión de precios registrada exitosamente. Se guardó en borrador.';
+      setVersionSuccessMessage(msg);
+      triggerSavedToast(msg);
     }
   });
   const activate = useMutation({ mutationFn: (id: string) => apiRequest<PriceList>(`/pricing/versions/${id}/activate`, { method: 'POST' }), onSuccess: refresh });
@@ -106,6 +153,22 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
   const registeredSpecials = [...(specials.data ?? [])].sort((a, b) => new Date(b.validFrom).getTime() - new Date(a.validFrom).getTime());
   const registeredDiscounts = [...(discounts.data ?? [])].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   return <main><PageHeader eyebrow="Reglas comerciales" title={isCreateView ? 'Registrar precios' : 'Precios registrados'} description={isCreateView ? 'Configure listas, versiones y reglas comerciales. El servidor calculará el precio oficial.' : 'Consulte las listas, versiones y reglas comerciales vigentes.'} actions={<button type="button" className="secondary" onClick={() => navigate(isCreateView ? '/pricing/list' : '/pricing')}>{isCreateView ? 'Ver precios registrados' : 'Registrar nuevos precios'}</button>} />
+    {showToast && (
+      <div className="floating-toast-overlay" role="dialog" aria-modal="true" onClick={closeToast}>
+        <div className="floating-toast-card" onClick={event => event.stopPropagation()}>
+          <div className="floating-toast-icon">✅</div>
+          <div className="floating-toast-body">
+            <h3>Datos grabados</h3>
+            <p>{toastMessage || 'La versión de precios se guardó exitosamente en borrador.'}</p>
+          </div>
+          <div className="floating-toast-actions">
+            <button type="button" className="primary" onClick={closeToast} autoFocus>
+              OK
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     {canManage && isCreateView && <>
       <form className="panel inline-form" onSubmit={event => submit(event, () => createList.mutate())}><h2>Nueva lista</h2>
         {listMessage && <div className="alert success wide">✅ {listMessage}</div>}
@@ -113,10 +176,9 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
         <label>Moneda<input required maxLength={3} value={listForm.currencyCode} onChange={event => setListForm({ ...listForm, currencyCode: event.target.value.toUpperCase() })} /></label>
         <button className="primary">Crear lista</button>{createList.error && <div className="alert error wide">{createList.error.message}</div>}
       </form>
-      <form className={`panel section-panel ${versionSaved ? 'form-dimmed' : ''}`} onSubmit={event => submit(event, () => createVersion.mutate())}>
+      <form className="panel section-panel" onSubmit={event => submit(event, () => createVersion.mutate())}>
         <div className="section-heading">
           <h2>Nueva versión de precios</h2>
-          {versionSaved && <span className="status active">Guardado</span>}
         </div>
         {versionSuccessMessage && (
           <div className="alert success wide" style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.6rem' }}>
@@ -125,16 +187,13 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
               <button type="button" className="secondary" style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }} onClick={() => navigate('/pricing/list')}>
                 Ver precios registrados
               </button>
-              <button type="button" className="secondary" style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }} onClick={resetVersionForm}>
-                + Registrar otra versión
-              </button>
             </div>
           </div>
         )}
-        <fieldset disabled={versionSaved || createVersion.isPending} style={{ border: 'none', padding: 0, margin: 0 }}>
+        <fieldset disabled={createVersion.isPending} style={{ border: 'none', padding: 0, margin: 0 }}>
           <div className="inline-form">
             <label>Lista
-              <select value={selectedList} onChange={event => { setSelectedList(event.target.value); if (versionSaved) resetVersionForm(); }}>
+              <select value={selectedList} onChange={event => setSelectedList(event.target.value)}>
                 <option value="">Seleccionar</option>
                 {lists.data?.map(item => <option value={item.id} key={item.id}>{item.code} · {item.name}</option>)}
               </select>
@@ -152,15 +211,37 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
                 </select>
               </label>
               <label>Desde
-                <input type="number" min="1" value={tier.minimumBaseUnits} onChange={event => updateTier(index, { minimumBaseUnits: Number(event.target.value) })} />
+                <input
+                  ref={index === 0 ? desdeInputRef : undefined}
+                  type="number"
+                  min="1"
+                  required
+                  placeholder="1"
+                  value={tier.minimumBaseUnits}
+                  onChange={event => updateTier(index, { minimumBaseUnits: event.target.value === '' ? '' : Number(event.target.value) })}
+                />
               </label>
               <label>Hasta
-                <input type="number" min="1" placeholder="Sin límite" value={tier.maximumBaseUnits} onChange={event => updateTier(index, { maximumBaseUnits: event.target.value })} />
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="Sin límite"
+                  value={tier.maximumBaseUnits}
+                  onChange={event => updateTier(index, { maximumBaseUnits: event.target.value })}
+                />
               </label>
               <label>Precio unitario
-                <input type="number" min="0.01" step="0.01" value={tier.unitPrice} onChange={event => updateTier(index, { unitPrice: Number(event.target.value) })} />
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  required
+                  placeholder="0.00"
+                  value={tier.unitPrice}
+                  onChange={event => updateTier(index, { unitPrice: event.target.value === '' ? '' : Number(event.target.value) })}
+                />
               </label>
-              {!versionSaved && tiers.length > 1 && (
+              {tiers.length > 1 && (
                 <button type="button" className="secondary danger-button" onClick={() => setTiers(current => current.filter((_, itemIndex) => itemIndex !== index))}>
                   Quitar
                 </button>
@@ -168,13 +249,23 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
             </div>)}
           </div>
           <div className="form-actions">
-            {!versionSaved && (
-              <button type="button" className="secondary" onClick={() => setTiers(current => [...current, { presentationId: current.at(-1)?.presentationId ?? '', minimumBaseUnits: 1, maximumBaseUnits: '', unitPrice: 0 }])}>
-                Agregar tramo
-              </button>
-            )}
-            <button className="primary" disabled={!selectedList || versionSaved || createVersion.isPending}>
-              {createVersion.isPending ? 'Guardando…' : versionSaved ? '✓ Versión guardada' : 'Guardar versión'}
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => setTiers(current => [
+                ...current,
+                {
+                  presentationId: current.at(-1)?.presentationId ?? '',
+                  minimumBaseUnits: current.at(-1)?.maximumBaseUnits ? Number(current.at(-1)?.maximumBaseUnits) + 1 : '',
+                  maximumBaseUnits: '',
+                  unitPrice: ''
+                }
+              ])}
+            >
+              Agregar tramo
+            </button>
+            <button className="primary" disabled={!selectedList || createVersion.isPending}>
+              {createVersion.isPending ? 'Guardando…' : 'Guardar versión'}
             </button>
           </div>
         </fieldset>
