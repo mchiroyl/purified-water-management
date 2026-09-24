@@ -42,7 +42,6 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
   const [tiers, setTiers] = useState<DraftTier[]>([emptyTier()]);
   const [special, setSpecial] = useState({ customerId: '', presentationId: '', unitPrice: 0, validFrom: localDateTime(), validTo: '' });
   const [discount, setDiscount] = useState({ customerId: '', presentationId: '', quantityBaseUnits: 1, requestedPrice: 0, reason: '', expiresAt: localDateTime(2) });
-  const [versionSuccessMessage, setVersionSuccessMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const desdeInputRef = useRef<HTMLInputElement>(null);
@@ -96,7 +95,6 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
       const msg = vNum
         ? `Versión ${vNum} registrada exitosamente. Se guardó en borrador.`
         : 'Versión de precios registrada exitosamente. Se guardó en borrador.';
-      setVersionSuccessMessage(msg);
       triggerSavedToast(msg);
     }
   });
@@ -153,16 +151,6 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
         <div className="section-heading">
           <h2>Nueva versión de precios</h2>
         </div>
-        {versionSuccessMessage && (
-          <div className="alert success wide" style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.6rem' }}>
-            <span>✅ {versionSuccessMessage}</span>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button type="button" className="secondary" style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }} onClick={() => navigate('/pricing/list')}>
-                Ver precios registrados
-              </button>
-            </div>
-          </div>
-        )}
         <fieldset disabled={createVersion.isPending} style={{ border: 'none', padding: 0, margin: 0 }}>
           <div className="inline-form">
             <label>Lista
