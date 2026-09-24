@@ -225,10 +225,15 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
                 <input
                   type="number"
                   min="1"
-                  placeholder="Sin límite"
+                  placeholder={index === tiers.length - 1 ? 'Sin límite (dejar vacío)' : 'Límite'}
                   value={tier.maximumBaseUnits}
                   onChange={event => updateTier(index, { maximumBaseUnits: event.target.value })}
                 />
+                {index === tiers.length - 1 && (
+                  <small style={{ color: '#0284c7', fontSize: '0.78rem', display: 'block', marginTop: '0.25rem', fontWeight: 500 }}>
+                    💡 Dejar vacío si es el último tramo (sin límite)
+                  </small>
+                )}
               </label>
               <label>Precio unitario
                 <input
@@ -269,7 +274,16 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
             </button>
           </div>
         </fieldset>
-        {createVersion.error && <div className="alert error">{createVersion.error.message}</div>}
+        {createVersion.error && (
+          <div className="alert error">
+            <div>{createVersion.error.message}</div>
+            {createVersion.error.message.includes('El último tramo debe cubrir todas las cantidades superiores') && (
+              <div style={{ marginTop: '0.45rem', fontSize: '0.88rem', fontWeight: 500, color: '#991b1b' }}>
+                👉 <strong>Solución:</strong> En el último tramo, borre el valor del campo <strong>&quot;Hasta&quot;</strong> y déjelo totalmente vacío para que aplique sin límite superior. Si tiene otro rango de cantidad, presione <strong>&quot;Agregar tramo&quot;</strong>.
+              </div>
+            )}
+          </div>
+        )}
       </form>
     </>}
     {!isCreateView && <section className="pricing-list section-panel"><h2>Listas y versiones registradas</h2><p className="muted">Ordenadas desde la versión más reciente.</p><div className="table-wrap pricing-table-wrap"><table><thead><tr><th>Lista</th><th>Versión</th><th>Vigente desde</th><th>Tramos configurados</th><th>Estado</th><th>Opciones</th></tr></thead><tbody>{registeredVersions.map(({ list, version }) => <tr key={version.id}><td><strong>{list.name}</strong><small>{list.code} · {list.currencyCode}</small></td><td>Versión {version.versionNumber}</td><td>{formatDate(version.validFrom)}</td><td>{version.tiers.map(tier => <span className="table-line" key={tier.id}>{tier.presentationName} · {tier.minimumBaseUnits}–{tier.maximumBaseUnits ?? '∞'} · Q{tier.unitPrice.toFixed(2)}</span>)}</td><td><span className={`status ${version.status === 'ACTIVE' ? 'active' : 'inactive'}`}>{version.status}</span></td><td>{canManage && ['DRAFT', 'SCHEDULED'].includes(version.status) && <button className="secondary" onClick={() => activate.mutate(version.id)}>{version.status === 'DRAFT' ? 'Activar' : 'Reprogramar'}</button>}</td></tr>)}</tbody></table>{registeredVersions.length === 0 && <p className="muted">Aún no hay versiones registradas.</p>}</div></section>}
