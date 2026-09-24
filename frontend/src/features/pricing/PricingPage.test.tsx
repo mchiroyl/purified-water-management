@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, vi } from 'vitest';
 import { PricingPage } from './PricingPage';
@@ -45,5 +45,39 @@ describe('PricingPage', () => {
     expect(screen.queryByText('Resumen de listas')).not.toBeInTheDocument();
     expect(screen.queryByText('Precios especiales registrados')).not.toBeInTheDocument();
     expect(screen.queryByText('Solicitudes de descuento registradas')).not.toBeInTheDocument();
+  });
+
+  it('muestra mensaje de confirmación y atenúa el formulario al guardar una versión', async () => {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input.toString();
+      if (url.includes('/pricing/lists') && !url.includes('/versions')) {
+        return Promise.resolve(new Response(JSON.stringify([{
+          id: 'l1', code: 'LST-0001', name: 'General', status: 'ACTIVE', currencyCode: 'GTQ', versions: []
+        }]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (url.includes('/products')) {
+        return Promise.resolve(new Response(JSON.stringify([{
+          id: 'p1', name: 'Garrafon', presentations: [{ id: 'pres1', code: 'G-18', name: 'Garrafón 18.9 L', active: true }]
+        }]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (url.includes('/versions') && init?.method === 'POST') {
+        return Promise.resolve(new Response(JSON.stringify({
+          id: 'l1', code: 'LST-0001', name: 'General', status: 'ACTIVE', currencyCode: 'GTQ',
+          versions: [{ id: 'v1', versionNumber: 1, validFrom: '2026-09-24T00:00:00Z', status: 'DRAFT', tiers: [] }]
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      return Promise.resolve(new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    }));
+
+    render(<MemoryRouter><QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <PricingPage canManage canApprove canRequestDiscount />
+    </QueryClientProvider></MemoryRouter>);
+
+    const saveButton = await screen.findByRole('button', { name: 'Guardar versión' });
+    fireEvent.submit(saveButton.closest('form')!);
+
+    expect(await screen.findByText(/Versión 1 registrada exitosamente/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '✓ Versión guardada' })).toBeDisabled();
+    expect(screen.getByText('Guardado')).toBeInTheDocument();
   });
 });
