@@ -181,4 +181,54 @@ describe('SalesPage', () => {
     expect(await screen.findByText(/Este dispositivo no permite obtener la ubicación/i)).toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([input, init]) => input.toString().endsWith('/sales') && (init as RequestInit | undefined)?.method === 'POST')).toBe(false);
   });
+
+  it('permite registrar un cliente provisional en ruta directamente desde la pantalla de venta', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = input.toString();
+      if (path.endsWith('/routes')) {
+        return Promise.resolve(new Response(JSON.stringify([{ id: 'route-1', code: 'R-01', name: 'Ruta norte', status: 'ACTIVE' }]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (path.endsWith('/customers/occasional') && init?.method === 'POST') {
+        return Promise.resolve(new Response(JSON.stringify({
+          id: 'cust-prov-1', code: 'CLI-000999', name: 'Comedor Doña Marta', status: 'ACTIVE',
+          routeId: 'route-1', customerType: 'OCCASIONAL', creditAllowed: false, creditLimit: 0, currentBalance: 0
+        }), { status: 201, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (path.endsWith('/customers')) {
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (path.endsWith('/products')) {
+        return Promise.resolve(new Response(JSON.stringify([{ id: 'p-1', code: 'GAR', name: 'Garrafon', active: true, controlsInventory: true, presentations: [{ id: 'pres-1', code: 'GAR-20', name: '20L', active: true }] }]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      return Promise.resolve(new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <SalesPage canSell={true} canViewLocation={false} />
+      </QueryClientProvider>
+    );
+
+    // Seleccionar ruta
+    await screen.findByRole('option', { name: /r-01.*ruta norte/i });
+    fireEvent.change(screen.getByLabelText('Ruta'), { target: { value: 'route-1' } });
+
+    // Abrir modal de cliente provisional
+    const openBtn = await screen.findByRole('button', { name: /cliente nuevo en ruta \(provisional\)/i });
+    fireEvent.click(openBtn);
+
+    expect(screen.getByRole('heading', { name: /cliente nuevo en ruta/i })).toBeInTheDocument();
+
+    // Llenar formulario
+    fireEvent.change(screen.getByPlaceholderText(/doña marta/i), { target: { value: 'Comedor Doña Marta' } });
+    fireEvent.change(screen.getByPlaceholderText(/frente al parque/i), { target: { value: 'Frente al parque central' } });
+
+    // Guardar
+    fireEvent.click(screen.getByRole('button', { name: /guardar y vender ahora/i }));
+
+    // Verificar que se registró y se muestra confirmación
+    expect(await screen.findByText(/cliente provisional registrado/i)).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input, init]) => input.toString().endsWith('/customers/occasional') && (init as RequestInit | undefined)?.method === 'POST')).toBe(true);
+  });
 });

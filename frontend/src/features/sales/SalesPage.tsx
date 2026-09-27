@@ -6,11 +6,13 @@ import { openMobileDatabase, type GeoLocationSnapshot } from '../../offline/mobi
 import { captureCurrentLocation } from '../../services/geolocation';
 import { cacheReceipt, findCachedReceipt, markReceiptPending } from './receiptOffline';
 import { downloadReceiptFile, shareReceiptFile } from './receiptSharing';
+import { useOptionalSession } from '../auth/SessionContext';
+import { queueProvisionalCustomer } from '../routes/provisionalCustomerOffline';
 import type { JugBalanceResponse } from '../jugs/types';
 import type { CreditBalanceResponse, CreditPaymentMethod } from '../credit/types';
 
 type Route = { id: string; code: string; name: string; status: string };
-type Customer = { id: string; code: string; name: string; status: string; routeId?: string; customerType: string; creditAllowed: boolean; creditLimit: number; currentBalance: number };
+type Customer = { id: string; code: string; name: string; status: string; routeId?: string; customerType: string; creditAllowed: boolean; creditLimit: number; currentBalance: number; registrationState?: string };
 type Presentation = { id: string; code: string; name: string; active: boolean };
 type Product = { id: string; code: string; name: string; active: boolean; controlsInventory: boolean; presentations: Presentation[] };
 type SaleItem = { id: string; productName: string; presentationName: string; presentationQuantity: number; quantityBaseUnits: number; unitPrice: number; lineTotal: number; priceSource: string };
@@ -27,18 +29,21 @@ type SaleLocation = { latitude: number; longitude: number; accuracyMeters: numbe
 // ── Banner contextual de cliente ────────────────────────────────────────────
 function CustomerContextBanner({
   customerId,
+  customer,
   jugBalance,
   creditBalance,
   jugLoading,
   creditLoading,
 }: {
   customerId: string;
+  customer?: Customer;
   jugBalance: JugBalanceResponse | undefined;
   creditBalance: CreditBalanceResponse | undefined;
   jugLoading: boolean;
   creditLoading: boolean;
 }) {
   if (!customerId) return null;
+  const isProvisional = customer?.customerType === 'OCCASIONAL' || customer?.registrationState === 'PROVISIONAL';
   if (jugLoading || creditLoading) {
     return (
       <div className="customer-context-banner loading">
@@ -51,9 +56,15 @@ function CustomerContextBanner({
   const available = Number(creditBalance?.availableCredit ?? 0);
   const hasDebt = creditDebt > 0;
   const creditExhausted = hasDebt && available <= 0;
-  if (!hasJugs && !hasDebt) return null;
+  if (!hasJugs && !hasDebt && !isProvisional) return null;
   return (
     <div className="customer-context-banner">
+      {isProvisional && (
+        <div className="context-row" style={{ background: '#fefce8', color: '#854d0e', border: '1px solid #fef08a', padding: '0.45rem 0.65rem', borderRadius: '0.45rem', fontSize: '0.84rem' }}>
+          <span>⚡</span>
+          <span><strong>Cliente Provisional en Ruta:</strong> Aplica tarifa estándar de lista general. Venta al contado o transferencia (crédito no disponible).</span>
+        </div>
+      )}
       {hasJugs && (
         <div className="context-row jug-warning">
           <span>🧴</span>
@@ -338,6 +349,84 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
   const [showVisitAbono, setShowVisitAbono] = useState(false);
   const [showVisitJugReturn, setShowVisitJugReturn] = useState(false);
 
+  // ── Alta rápida de cliente provisional en ruta ─────────────────────────────
+  const session = useOptionalSession();
+  const user = session?.user;
+  const [showProvisionalModal, setShowProvisionalModal] = useState(false);
+  const [provisionalForm, setProvisionalForm] = useState({ name: '', phone: '', addressReference: '' });
+  const [provisionalLoading, setProvisionalLoading] = useState(false);
+  const [provisionalError, setProvisionalError] = useState('');
+  const [provisionalSuccess, setProvisionalSuccess] = useState('');
+  const [localProvisionalCustomers, setLocalProvisionalCustomers] = useState<Customer[]>([]);
+
+  const handleSaveProvisional = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!routeId) return;
+    setProvisionalError('');
+    setProvisionalLoading(true);
+
+    try {
+      if (navigator.onLine) {
+        // Modo Online: registrar en el backend como cliente ocasional/provisional
+        const created = await apiRequest<Customer>('/customers/occasional', {
+          method: 'POST',
+          body: JSON.stringify({
+            routeId,
+            name: provisionalForm.name.trim(),
+            phone: provisionalForm.phone.trim() || undefined,
+            whatsapp: provisionalForm.phone.trim() || undefined,
+            addressReference: provisionalForm.addressReference.trim(),
+          }),
+        });
+
+        // Actualizar caché de clientes en memoria inmediatamente
+        queryClient.setQueryData<Customer[]>(['customers'], (old) => old ? [created, ...old] : [created]);
+        setCustomerId(created.id);
+        setProvisionalSuccess(`✅ Cliente provisional registrado: ${created.name} (${created.code}). Aplicando tarifa general.`);
+        setShowProvisionalModal(false);
+        setProvisionalForm({ name: '', phone: '', addressReference: '' });
+        setTimeout(() => setProvisionalSuccess(''), 10000);
+      } else {
+        // Modo Offline: guardar en base de datos local del teléfono (IndexedDB)
+        const sellerId = user?.id || '';
+        const deviceId = user?.deviceId || '';
+        const queued = await queueProvisionalCustomer({
+          routeId,
+          sellerId,
+          deviceId,
+          name: provisionalForm.name.trim(),
+          phone: provisionalForm.phone.trim(),
+          whatsapp: provisionalForm.phone.trim(),
+          addressReference: provisionalForm.addressReference.trim(),
+        });
+
+        const localCustomer: Customer = {
+          id: queued.localCustomerId,
+          code: 'PROV-LOCAL',
+          name: queued.name,
+          status: 'ACTIVE',
+          customerType: 'OCCASIONAL',
+          creditAllowed: false,
+          creditLimit: 0,
+          currentBalance: 0,
+          routeId,
+          registrationState: 'PROVISIONAL',
+        };
+
+        setLocalProvisionalCustomers(prev => [localCustomer, ...prev]);
+        setCustomerId(queued.localCustomerId);
+        setProvisionalSuccess(`📱 Cliente provisional guardado en el teléfono: ${queued.name}. Se sincronizará automáticamente al detectar internet.`);
+        setShowProvisionalModal(false);
+        setProvisionalForm({ name: '', phone: '', addressReference: '' });
+        setTimeout(() => setProvisionalSuccess(''), 10000);
+      }
+    } catch (err) {
+      setProvisionalError(err instanceof Error ? err.message : 'Error al registrar cliente provisional.');
+    } finally {
+      setProvisionalLoading(false);
+    }
+  };
+
   // ── Queries contextuales al seleccionar cliente (visita) ───────────────────
   const visitJugBalance = useQuery({
     queryKey: ['jugs', 'balance', visitCustomerId],
@@ -425,7 +514,10 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
   };
   const presentations = products.data?.filter(product => product.active && product.controlsInventory)
     .flatMap(product => product.presentations.filter(item => item.active).map(item => ({ ...item, product }))) ?? [];
-  const availableCustomers = customers.data?.filter(customer => customer.status === 'ACTIVE' && customer.routeId === routeId) ?? [];
+  const availableCustomers = [
+    ...localProvisionalCustomers.filter(c => c.routeId === routeId),
+    ...(customers.data?.filter(customer => customer.status === 'ACTIVE' && customer.routeId === routeId) ?? [])
+  ];
   const selectedCustomer = availableCustomers.find(customer => customer.id === customerId);
   const allowedPaymentMethods = ['CASH', 'TRANSFER', ...(selectedCustomer?.customerType === 'PERMANENT' && selectedCustomer.creditAllowed ? ['CREDIT'] : [])];
   const nextPaymentMethod = allowedPaymentMethods.find(method => !payments.some(payment => payment.method === method));
@@ -506,14 +598,48 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
         <label>Ruta<select required value={routeId} onChange={event => { setRouteId(event.target.value); setCustomerId(''); setPayments([newPayment()]); }}>
           <option value="">Seleccionar</option>{routes.data?.filter(route => route.status === 'ACTIVE').map(route => <option key={route.id} value={route.id}>{route.code} · {route.name}</option>)}
         </select></label>
-        <label>Cliente<select required value={customerId} disabled={!routeId} onChange={event => { setCustomerId(event.target.value); setPayments([newPayment()]); }}>
-          <option value="">Seleccionar</option>{availableCustomers.map(customer => <option key={customer.id} value={customer.id}>{customer.code} · {customer.name}</option>)}
-        </select></label>
+        <div>
+          <label>Cliente<select required value={customerId} disabled={!routeId} onChange={event => { setCustomerId(event.target.value); setPayments([newPayment()]); }}>
+            <option value="">Seleccionar</option>{availableCustomers.map(customer => (
+              <option key={customer.id} value={customer.id}>
+                {customer.customerType === 'OCCASIONAL' ? '⚡ ' : ''}{customer.code} · {customer.name} {customer.customerType === 'OCCASIONAL' ? '(Provisional)' : ''}
+              </option>
+            ))}
+          </select></label>
+          {routeId && (
+            <button
+              type="button"
+              className="secondary"
+              style={{
+                marginTop: '0.4rem',
+                fontSize: '0.82rem',
+                padding: '0.35rem 0.75rem',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                width: 'fit-content'
+              }}
+              onClick={() => {
+                setProvisionalError('');
+                setShowProvisionalModal(true);
+              }}
+            >
+              <span>➕</span> Cliente nuevo en ruta (Provisional)
+            </button>
+          )}
+        </div>
       </div>
+
+      {provisionalSuccess && (
+        <div className="alert success" style={{ margin: '0.65rem 0', fontSize: '0.88rem' }}>
+          {provisionalSuccess}
+        </div>
+      )}
 
       {/* ── Banner contextual de garrafones + crédito ───────────────────────── */}
       <CustomerContextBanner
         customerId={customerId}
+        customer={selectedCustomer}
         jugBalance={saleJugBalance.data}
         creditBalance={saleCreditBalance.data}
         jugLoading={saleJugBalance.isFetching}
@@ -752,5 +878,85 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
         )}
       </article>)}</div>
     </section>
+
+    {/* ── Modal de Alta Rápida de Cliente Provisional en Ruta ── */}
+    {showProvisionalModal && (
+      <div className="modal-backdrop" onClick={() => !provisionalLoading && setShowProvisionalModal(false)}>
+        <div className="modal-panel" style={{ maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h3 style={{ margin: 0, fontSize: '1.2rem' }}>➕ Cliente nuevo en ruta</h3>
+            <button 
+              type="button" 
+              className="secondary" 
+              style={{ border: 'none', background: 'transparent', fontSize: '1.2rem', cursor: 'pointer', padding: '0.2rem' }}
+              onClick={() => setShowProvisionalModal(false)}
+              disabled={provisionalLoading}
+            >
+              ✕
+            </button>
+          </div>
+          <p className="muted" style={{ fontSize: '0.86rem', marginTop: '-0.5rem', marginBottom: '1rem' }}>
+            Para clientes ocasionales que compran por primera vez en la ruta. Se aplicará automáticamente precio general de lista y pago al contado o transferencia.
+          </p>
+
+          <form onSubmit={handleSaveProvisional} className="form-grid compact-grid">
+            <label className="wide">
+              Nombre del cliente o negocio *
+              <input 
+                required 
+                autoFocus
+                placeholder="Ej. Tienda Doña Marta / Don Carlos" 
+                value={provisionalForm.name} 
+                onChange={e => setProvisionalForm({ ...provisionalForm, name: e.target.value })} 
+              />
+            </label>
+
+            <label className="wide">
+              Dirección o punto de referencia *
+              <input 
+                required 
+                placeholder="Ej. Frente al parque central / Casa verde" 
+                value={provisionalForm.addressReference} 
+                onChange={e => setProvisionalForm({ ...provisionalForm, addressReference: e.target.value })} 
+              />
+            </label>
+
+            <label className="wide">
+              Teléfono de contacto (opcional)
+              <input 
+                type="tel" 
+                placeholder="Ej. 5555-1234" 
+                value={provisionalForm.phone} 
+                onChange={e => setProvisionalForm({ ...provisionalForm, phone: e.target.value })} 
+              />
+            </label>
+
+            {provisionalError && (
+              <div className="alert error wide" style={{ fontSize: '0.85rem' }}>
+                {provisionalError}
+              </div>
+            )}
+
+            <div className="form-actions wide" style={{ marginTop: '0.75rem', display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button 
+                type="button" 
+                className="secondary" 
+                onClick={() => setShowProvisionalModal(false)}
+                disabled={provisionalLoading}
+              >
+                Cancelar
+              </button>
+              <button 
+                type="submit" 
+                className="primary" 
+                disabled={provisionalLoading || !provisionalForm.name.trim() || !provisionalForm.addressReference.trim()}
+              >
+                {provisionalLoading ? 'Guardando…' : 'Guardar y Vender Ahora'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    )}
   </main>;
 }
