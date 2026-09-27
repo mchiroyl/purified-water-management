@@ -514,12 +514,20 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
   };
   const presentations = products.data?.filter(product => product.active && product.controlsInventory)
     .flatMap(product => product.presentations.filter(item => item.active).map(item => ({ ...item, product }))) ?? [];
+  const serverCustomers = customers.data?.filter(customer => customer.status === 'ACTIVE' && customer.routeId === routeId) ?? [];
+  const serverCustomerIds = new Set(serverCustomers.map(c => c.id));
   const availableCustomers = [
-    ...localProvisionalCustomers.filter(c => c.routeId === routeId),
-    ...(customers.data?.filter(customer => customer.status === 'ACTIVE' && customer.routeId === routeId) ?? [])
+    ...serverCustomers,
+    ...localProvisionalCustomers.filter(c => c.routeId === routeId && !serverCustomerIds.has(c.id)),
   ];
   const selectedCustomer = availableCustomers.find(customer => customer.id === customerId);
-  const allowedPaymentMethods = ['CASH', 'TRANSFER', ...(selectedCustomer?.customerType === 'PERMANENT' && selectedCustomer.creditAllowed ? ['CREDIT'] : [])];
+  const isCreditAuthorized = Boolean(
+    selectedCustomer?.creditAllowed ||
+    saleCreditBalance.data?.creditAllowed ||
+    (saleCreditBalance.data && Number(saleCreditBalance.data.availableCredit ?? 0) > 0) ||
+    (saleCreditBalance.data && Number(saleCreditBalance.data.creditLimit ?? 0) > 0)
+  );
+  const allowedPaymentMethods = ['CASH', 'TRANSFER', ...(isCreditAuthorized ? ['CREDIT'] : [])];
   const nextPaymentMethod = allowedPaymentMethods.find(method => !payments.some(payment => payment.method === method));
 
   // ── Validación preventiva de crédito ────────────────────────────────────────
@@ -658,7 +666,7 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
       <h3>Forma de pago</h3><p className="muted">Con un solo medio puede dejar el monto vacío para aplicar el total calculado por el servidor.</p>
       <div className="data-list">{payments.map((payment, index) => <div className="payment-editor" key={index}>
         <label>Medio<select value={payment.method} onChange={event => setPayments(current => current.map((row, position) => position === index ? { ...row, method: event.target.value, reference: '', bank: '', evidenceReference: '' } : row))}>
-          <option value="CASH" disabled={payments.some((row, position) => position !== index && row.method === 'CASH')}>Efectivo</option><option value="TRANSFER" disabled={payments.some((row, position) => position !== index && row.method === 'TRANSFER')}>Transferencia</option>{selectedCustomer?.creditAllowed && <option value="CREDIT" disabled={payments.some((row, position) => position !== index && row.method === 'CREDIT')}>Crédito</option>}
+          <option value="CASH" disabled={payments.some((row, position) => position !== index && row.method === 'CASH')}>Efectivo</option><option value="TRANSFER" disabled={payments.some((row, position) => position !== index && row.method === 'TRANSFER')}>Transferencia</option>{isCreditAuthorized && <option value="CREDIT" disabled={payments.some((row, position) => position !== index && row.method === 'CREDIT')}>Crédito</option>}
         </select></label>
         <label>Monto {payments.length === 1 && '(opcional)'}<input required={payments.length > 1} type="number" min="0.01" step="0.01" value={payment.amount} onChange={event => setPayments(current => current.map((row, position) => position === index ? { ...row, amount: event.target.value } : row))} /></label>
         {payment.method === 'TRANSFER' && <><label>Referencia<input required value={payment.reference} onChange={event => setPayments(current => current.map((row, position) => position === index ? { ...row, reference: event.target.value } : row))} /></label><label>Banco<input value={payment.bank} onChange={event => setPayments(current => current.map((row, position) => position === index ? { ...row, bank: event.target.value } : row))} /></label><label>Evidencia opcional<input value={payment.evidenceReference} onChange={event => setPayments(current => current.map((row, position) => position === index ? { ...row, evidenceReference: event.target.value } : row))} /></label></>}
