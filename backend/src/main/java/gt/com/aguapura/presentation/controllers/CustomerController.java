@@ -4,6 +4,7 @@ import gt.com.aguapura.application.dto.route.AssignCustomerRouteRequest;
 import gt.com.aguapura.application.dto.route.CreateCustomerRequest;
 import gt.com.aguapura.application.dto.route.CustomerResponse;
 import gt.com.aguapura.application.dto.route.RouteResponse;
+import gt.com.aguapura.application.dto.route.UpdateCustomerRequest;
 import gt.com.aguapura.application.dto.customer.CreateOccasionalCustomerRequest;
 import gt.com.aguapura.application.dto.customer.ProvisionalReviewResponse;
 import gt.com.aguapura.application.dto.customer.RegistrationDecisionRequest;
@@ -48,6 +49,18 @@ public class CustomerController {
     public CustomerResponse create(@Valid @RequestBody CreateCustomerRequest request,
                                    @AuthenticationPrincipal Jwt jwt) {
         return service.createCustomer(request, actor(jwt));
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    public CustomerResponse update(@PathVariable UUID id,
+                                   @Valid @RequestBody UpdateCustomerRequest request,
+                                   @AuthenticationPrincipal Jwt jwt) {
+        var result = service.updateCustomer(id, request, actor(jwt));
+        audit.record(actor(jwt), device(jwt), "UPDATE_CUSTOMER", "CUSTOMER", id, Map.of(),
+                Map.of("name", result.name(), "status", result.status(), "creditAllowed", result.creditAllowed(),
+                        "creditLimit", result.creditLimit()));
+        return result;
     }
 
     @PostMapping("/occasional")

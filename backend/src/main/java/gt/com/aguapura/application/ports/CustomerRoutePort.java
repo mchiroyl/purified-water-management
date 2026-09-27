@@ -11,6 +11,7 @@ public interface CustomerRoutePort {
     boolean customerCodeExists(String code);
     boolean hasPotentialDuplicate(String normalizedName, String normalizedPhone, String normalizedWhatsapp);
     CustomerView createCustomer(NewCustomer customer);
+    CustomerView updateCustomer(UUID id, UpdateCustomer customer);
     List<CustomerView> findCustomers(Optional<UUID> sellerId);
     RouteView assignCustomerRoute(NewCustomerRoute assignment);
     boolean routeCodeExists(String code);
@@ -31,6 +32,10 @@ public interface CustomerRoutePort {
                        String normalizedPhone, String whatsapp, String normalizedWhatsapp,
                        String addressReference, String customerType, boolean creditAllowed,
                        BigDecimal creditLimit, UUID createdBy) {}
+    record UpdateCustomer(String name, String normalizedName, String contactName, String phone,
+                          String normalizedPhone, String whatsapp, String normalizedWhatsapp,
+                          String addressReference, boolean creditAllowed, BigDecimal creditLimit,
+                          String status) {}
     record CustomerView(UUID id, String code, String name, String contactName, String phone, String whatsapp,
                         String addressReference, String customerType, String status, boolean creditAllowed,
                         BigDecimal creditLimit, BigDecimal currentBalance, UUID routeId, String routeCode,
