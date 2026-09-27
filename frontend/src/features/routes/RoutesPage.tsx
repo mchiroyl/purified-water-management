@@ -45,6 +45,19 @@ export function RoutesPage({ canManage, view = 'create' }: { canManage: boolean;
   const unassign = useMutation({
     mutationFn: (routeId: string) => apiRequest<Route>(`/routes/${routeId}/assignment`, { method: 'DELETE' }),
     onSuccess: (_, routeId) => {
+      queryClient.setQueryData(['routes'], (old: Route[] | undefined) => {
+        if (!old) return old;
+        return old.map(r => r.id === routeId ? {
+          ...r,
+          sellerId: null,
+          sellerCode: null,
+          sellerName: null,
+          vehicleId: null,
+          vehicleCode: null,
+          licensePlate: null,
+          assignmentValidFrom: null
+        } : r);
+      });
       setAssignments(prev => {
         const next = { ...prev };
         delete next[routeId];
@@ -78,9 +91,11 @@ export function RoutesPage({ canManage, view = 'create' }: { canManage: boolean;
         const isAssigningThis = assign.isPending && assign.variables?.routeId === route.id;
         return <article className="route-card" key={route.id}><div className="route-card-title"><div><strong>{route.name}</strong><span>{route.code}</span></div><span className={`status ${route.status === 'ACTIVE' ? 'active' : 'inactive'}`}>{route.status === 'ACTIVE' ? 'Activa' : 'Inactiva'}</span></div>
           <p>
-            <strong>Vendedor:</strong> {route.sellerName ? `${route.sellerName} (${route.sellerCode})` : 'Sin vendedor'}<br />
-            <strong>Vehículo:</strong> {route.vehicleCode ? `${route.vehicleCode}${route.licensePlate ? ` · ${route.licensePlate}` : ''}` : 'Sin vehículo'}<br />
-            {route.assignmentValidFrom && <><small style={{ color: '#0369a1', fontWeight: 600 }}>{route.assignmentValidFrom > localDate() ? `Programada desde: ${route.assignmentValidFrom}` : `Vigente desde: ${route.assignmentValidFrom}`}</small><br /></>}
+            <strong>Vendedor:</strong> {route.sellerName ? `${route.sellerName} (${route.sellerCode})` : <span style={{ color: '#6b7280' }}>Sin vendedor asignado</span>}<br />
+            <strong>Vehículo:</strong> {route.vehicleCode ? `${route.vehicleCode}${route.licensePlate ? ` · ${route.licensePlate}` : ''}` : <span style={{ color: '#6b7280' }}>Sin vehículo asignado</span>}<br />
+            {hasAssignment && route.assignmentValidFrom ? (
+              <><small style={{ color: '#0369a1', fontWeight: 600 }}>{route.assignmentValidFrom > localDate() ? `Programada desde: ${route.assignmentValidFrom}` : `Vigente desde: ${route.assignmentValidFrom}`}</small><br /></>
+            ) : null}
             {route.customerCount} clientes
           </p>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
