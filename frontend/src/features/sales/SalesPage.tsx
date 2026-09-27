@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../app/PageHeader';
 import { useState, type FormEvent } from 'react';
 import { apiBlob, apiRequest } from '../../services/apiClient';
@@ -430,6 +431,7 @@ function InlineJugLoanForm({
 }
 
 export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canViewLocation: boolean }) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const sales = useQuery({ queryKey: ['sales'], queryFn: () => apiRequest<Sale[]>('/sales') });
   const routes = useQuery({ queryKey: ['routes'], queryFn: () => apiRequest<Route[]>('/routes'), enabled: canSell });
@@ -617,11 +619,7 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
     setShowSaleJugReturn(false);
     setShowSaleJugLoan(false);
     setShowSaleAbono(false);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    setTimeout(() => {
-      const select = document.getElementById('sale-customer-select');
-      select?.focus();
-    }, 150);
+    navigate('/');
   };
 
   const create = useMutation({
@@ -1277,7 +1275,7 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
             </button>
           </div>
 
-          {/* Botón OK — Siguiente Venta */}
+          {/* Botón OK — Ir al Panel Operativo */}
           <div className="floating-toast-actions" style={{ marginTop: '0.4rem' }}>
             <button
               type="button"
@@ -1286,7 +1284,7 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
               onClick={handleDismissConfirmedSale}
               autoFocus
             >
-              ✅ OK — Realizar siguiente venta
+              ✅ OK — Ir al Panel Operativo
             </button>
           </div>
         </div>
