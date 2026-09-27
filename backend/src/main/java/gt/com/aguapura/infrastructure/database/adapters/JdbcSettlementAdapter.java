@@ -251,7 +251,7 @@ public class JdbcSettlementAdapter implements SettlementPort {
                 INSERT INTO cash_delivery(id,route_load_id,amount,delivered_by,delivered_device_id,
                   received_by,received_device_id,notes)
                 SELECT :id,rl.id,:amount,rl.seller_received_by,COALESCE(rl.seller_received_device_id,:deviceId),:receivedBy,:deviceId,:notes
-                FROM route_load rl WHERE rl.id=:loadId AND rl.status IN ('STARTED', 'SETTLED')
+                FROM route_load rl WHERE rl.id=:loadId
                 """).param("id", id).param("amount", amount).param("receivedBy", receivedBy)
                 .param("deviceId", deviceId).param("notes", notes).param("loadId", routeLoadId).update();
         return jdbc.sql(cashSelect() + " WHERE cd.id=:id").param("id", id)
