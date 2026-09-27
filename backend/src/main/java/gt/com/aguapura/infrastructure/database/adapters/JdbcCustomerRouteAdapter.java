@@ -80,7 +80,9 @@ public class JdbcCustomerRouteAdapter implements CustomerRoutePort {
                     address_reference = :address,
                     credit_allowed = :creditAllowed,
                     credit_limit = :creditLimit,
-                    status = :status
+                    status = :status,
+                    customer_type = CASE WHEN :creditAllowed THEN 'PERMANENT' ELSE customer_type END,
+                    registration_state = CASE WHEN :creditAllowed THEN 'ACTIVE' ELSE registration_state END
                 WHERE id = :id
                 """).param("id", id)
                 .param("name", item.name())

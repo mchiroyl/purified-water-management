@@ -43,7 +43,7 @@ function CustomerContextBanner({
   creditLoading: boolean;
 }) {
   if (!customerId) return null;
-  const isProvisional = customer?.customerType === 'OCCASIONAL' || customer?.registrationState === 'PROVISIONAL';
+  const isProvisional = (customer?.customerType === 'OCCASIONAL' || customer?.registrationState === 'PROVISIONAL') && !customer?.creditAllowed;
   if (jugLoading || creditLoading) {
     return (
       <div className="customer-context-banner loading">
@@ -658,7 +658,7 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
       <h3>Forma de pago</h3><p className="muted">Con un solo medio puede dejar el monto vacío para aplicar el total calculado por el servidor.</p>
       <div className="data-list">{payments.map((payment, index) => <div className="payment-editor" key={index}>
         <label>Medio<select value={payment.method} onChange={event => setPayments(current => current.map((row, position) => position === index ? { ...row, method: event.target.value, reference: '', bank: '', evidenceReference: '' } : row))}>
-          <option value="CASH" disabled={payments.some((row, position) => position !== index && row.method === 'CASH')}>Efectivo</option><option value="TRANSFER" disabled={payments.some((row, position) => position !== index && row.method === 'TRANSFER')}>Transferencia</option>{selectedCustomer?.customerType === 'PERMANENT' && selectedCustomer.creditAllowed && <option value="CREDIT" disabled={payments.some((row, position) => position !== index && row.method === 'CREDIT')}>Crédito</option>}
+          <option value="CASH" disabled={payments.some((row, position) => position !== index && row.method === 'CASH')}>Efectivo</option><option value="TRANSFER" disabled={payments.some((row, position) => position !== index && row.method === 'TRANSFER')}>Transferencia</option>{selectedCustomer?.creditAllowed && <option value="CREDIT" disabled={payments.some((row, position) => position !== index && row.method === 'CREDIT')}>Crédito</option>}
         </select></label>
         <label>Monto {payments.length === 1 && '(opcional)'}<input required={payments.length > 1} type="number" min="0.01" step="0.01" value={payment.amount} onChange={event => setPayments(current => current.map((row, position) => position === index ? { ...row, amount: event.target.value } : row))} /></label>
         {payment.method === 'TRANSFER' && <><label>Referencia<input required value={payment.reference} onChange={event => setPayments(current => current.map((row, position) => position === index ? { ...row, reference: event.target.value } : row))} /></label><label>Banco<input value={payment.bank} onChange={event => setPayments(current => current.map((row, position) => position === index ? { ...row, bank: event.target.value } : row))} /></label><label>Evidencia opcional<input value={payment.evidenceReference} onChange={event => setPayments(current => current.map((row, position) => position === index ? { ...row, evidenceReference: event.target.value } : row))} /></label></>}
