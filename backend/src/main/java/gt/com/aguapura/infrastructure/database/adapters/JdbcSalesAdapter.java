@@ -142,8 +142,8 @@ public class JdbcSalesAdapter implements SalesPort {
                     .param("deviceId", item.deviceId()).update();
             if ("CREDIT".equals(payment.method())) {
                 var balanceAfter = jdbc.sql("""
-                        UPDATE customer SET current_balance=current_balance+:amount,updated_at=now()
-                        WHERE id=:customerId AND customer_type='PERMANENT' AND credit_allowed
+                        UPDATE customer SET current_balance=current_balance+:amount,customer_type='PERMANENT',updated_at=now()
+                        WHERE id=:customerId AND credit_allowed
                           AND current_balance+:amount<=credit_limit
                         RETURNING current_balance
                         """).param("amount", payment.amount()).param("customerId", item.customerId())
