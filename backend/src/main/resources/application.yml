@@ -21,6 +21,7 @@ spring:
   flyway:
     enabled: true
     validate-migration-naming: true
+    repair-on-migrate: true
   jackson:
     default-property-inclusion: non_null
   servlet:

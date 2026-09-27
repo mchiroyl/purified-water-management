@@ -222,6 +222,15 @@ public class JdbcCustomerRouteAdapter implements CustomerRoutePort {
         if (item.vehicleId() != null) ensureActive("vehicle", item.vehicleId(), "VEHICLE_NOT_FOUND", "No se encontró el vehículo activo.");
         var previous = jdbc.sql("SELECT valid_from FROM route_assignment WHERE route_id = :id AND valid_to IS NULL")
                 .param("id", item.routeId()).query(LocalDate.class).optional();
+        if (previous.isPresent() && previous.get().equals(item.validFrom())) {
+            jdbc.sql("""
+                    UPDATE route_assignment
+                    SET seller_id = :sellerId, vehicle_id = :vehicleId, assigned_by = :assignedBy
+                    WHERE route_id = :routeId AND valid_to IS NULL
+                    """).param("sellerId", item.sellerId()).param("vehicleId", item.vehicleId(), Types.OTHER)
+                    .param("assignedBy", item.assignedBy()).param("routeId", item.routeId()).update();
+            return findRoute(item.routeId());
+        }
         closePrevious("route_assignment", "route_id", item.routeId(), item.validFrom(), previous);
         jdbc.sql("""
                 INSERT INTO route_assignment(id, route_id, seller_id, vehicle_id, valid_from, assigned_by)
