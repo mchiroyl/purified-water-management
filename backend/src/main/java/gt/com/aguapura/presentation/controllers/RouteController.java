@@ -67,6 +67,14 @@ public class RouteController {
         return result;
     }
 
+    @DeleteMapping("/{id}/assignment")
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    public RouteResponse unassign(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
+        var result = service.unassignRoute(id, actor(jwt));
+        audit.record(actor(jwt), device(jwt), "UNASSIGN_ROUTE", "ROUTE", id, Map.of(), Map.of());
+        return result;
+    }
+
     @GetMapping("/{id}/route-history")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','SUPERVISOR')")
     public List<RouteHistoryResponse> getRouteHistory(@PathVariable UUID id,

@@ -240,6 +240,12 @@ public class JdbcSettlementAdapter implements SettlementPort {
                 .param("id", lockedLoad).update();
         if (loadChanged != 1) throw new BusinessException("SETTLEMENT_NOT_READY",
                 "La carga cambió de estado durante el cierre.", ErrorCategory.CONFLICT);
+        jdbc.sql("""
+                UPDATE route_assignment
+                SET valid_to = current_date
+                WHERE route_id = (SELECT route_id FROM route_load WHERE id = :loadId)
+                  AND (valid_to IS NULL OR valid_to >= current_date)
+                """).param("loadId", routeLoadId).update();
         return findOne(routeLoadId);
     }
 

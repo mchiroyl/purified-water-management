@@ -112,6 +112,11 @@ public class CustomerRouteApplicationService {
                 request.sellerId(), request.vehicleId(), request.validFrom(), actorId)));
     }
 
+    @Transactional
+    public RouteResponse unassignRoute(UUID routeId, UUID actorId) {
+        return route(persistence.unassignRoute(routeId));
+    }
+
     @Transactional(readOnly = true)
     public List<RouteHistoryResponse> getRouteHistory(UUID routeId, java.time.Instant from, java.time.Instant to) {
         return tracking.findRouteHistory(routeId, from, to).stream().map(h -> new RouteHistoryResponse(
