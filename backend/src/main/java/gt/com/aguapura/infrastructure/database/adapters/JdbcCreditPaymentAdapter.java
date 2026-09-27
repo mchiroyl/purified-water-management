@@ -80,6 +80,19 @@ public class JdbcCreditPaymentAdapter implements CreditPaymentPort {
 
         UUID paymentId = UUID.randomUUID();
         String status = "CASH".equals(method) ? "CONFIRMED" : "PENDING_VERIFICATION";
+        UUID routeLoadId = request.routeLoadId();
+        if (routeLoadId == null) {
+            routeLoadId = jdbc.sql("""
+                    SELECT id FROM route_load
+                    WHERE seller_received_by = :sellerId
+                      AND status IN ('CONFIRMED', 'WAREHOUSE_CONFIRMED', 'IN_PROGRESS', 'STARTED')
+                    ORDER BY started_at DESC LIMIT 1
+                    """)
+                    .param("sellerId", actorId)
+                    .query(UUID.class)
+                    .optional()
+                    .orElse(null);
+        }
 
         jdbc.sql("""
                 INSERT INTO credit_payment (
@@ -92,7 +105,7 @@ public class JdbcCreditPaymentAdapter implements CreditPaymentPort {
                 """)
                 .param("id", paymentId)
                 .param("customerId", request.customerId())
-                .param("routeLoadId", request.routeLoadId())
+                .param("routeLoadId", routeLoadId)
                 .param("amount", request.amount())
                 .param("method", method)
                 .param("status", status)

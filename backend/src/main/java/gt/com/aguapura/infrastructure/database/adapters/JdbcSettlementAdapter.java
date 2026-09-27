@@ -103,21 +103,35 @@ public class JdbcSettlementAdapter implements SettlementPort {
                   COALESCE((SELECT SUM(pay.amount) FROM payment pay JOIN sale sale ON sale.id=pay.sale_id
                     WHERE sale.route_id=rl.route_id AND pay.payment_method='CASH' AND pay.status='CONFIRMED'
                       AND NOT EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=sale.id AND ar.status='APPROVED')
-                      AND sale.created_at>=rl.started_at AND sale.created_at<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now())),0) expected_cash,
+                      AND sale.created_at>=rl.started_at AND sale.created_at<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now())),0) sales_cash,
+                  COALESCE((SELECT SUM(cp.amount) FROM credit_payment cp
+                    WHERE cp.payment_method='CASH' AND cp.status='CONFIRMED'
+                      AND (cp.route_load_id=rl.id OR (cp.collected_by=rl.seller_received_by AND cp.created_at>=rl.started_at
+                        AND cp.created_at<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now())))),0) credit_collections_cash,
                   COALESCE((SELECT SUM(cd.amount) FROM cash_delivery cd WHERE cd.route_load_id=rl.id),0) delivered_cash,
                   COALESCE((SELECT SUM(pay.amount) FROM payment pay JOIN sale sale ON sale.id=pay.sale_id
                     WHERE sale.route_id=rl.route_id AND pay.payment_method='TRANSFER' AND pay.status='VERIFIED'
                       AND NOT EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=sale.id AND ar.status='APPROVED')
-                      AND sale.created_at>=rl.started_at AND sale.created_at<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now())),0) verified_transfers,
+                      AND sale.created_at>=rl.started_at AND sale.created_at<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now())),0)
+                  +
+                  COALESCE((SELECT SUM(cp.amount) FROM credit_payment cp
+                    WHERE cp.payment_method='TRANSFER' AND cp.status='VERIFIED'
+                      AND (cp.route_load_id=rl.id OR (cp.collected_by=rl.seller_received_by AND cp.created_at>=rl.started_at
+                        AND cp.created_at<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now())))),0) verified_transfers,
                   COALESCE((SELECT SUM(pay.amount) FROM payment pay JOIN sale sale ON sale.id=pay.sale_id
                     WHERE sale.route_id=rl.route_id AND pay.payment_method='CREDIT' AND pay.status='APPLIED'
                       AND NOT EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=sale.id AND ar.status='APPROVED')
                       AND sale.created_at>=rl.started_at AND sale.created_at<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now())),0) applied_credit
                 FROM route_load rl WHERE rl.id=:id
-                """).param("id", routeLoadId).query((rs, row) -> new FinancialSource(
-                rs.getBigDecimal("sales_total"), rs.getBigDecimal("expected_cash"),
-                rs.getBigDecimal("delivered_cash"), rs.getBigDecimal("verified_transfers"),
-                rs.getBigDecimal("applied_credit"))).single();
+                """).param("id", routeLoadId).query((rs, row) -> {
+                    BigDecimal salesCash = rs.getBigDecimal("sales_cash");
+                    BigDecimal creditCollectionsCash = rs.getBigDecimal("credit_collections_cash");
+                    BigDecimal expectedCash = salesCash.add(creditCollectionsCash);
+                    return new FinancialSource(
+                            rs.getBigDecimal("sales_total"), salesCash, creditCollectionsCash,
+                            expectedCash, rs.getBigDecimal("delivered_cash"),
+                            rs.getBigDecimal("verified_transfers"), rs.getBigDecimal("applied_credit"));
+                }).single();
         var blockers = blockers(routeLoadId);
         return new Source(source.routeLoadId(), source.loadNumber(), source.routeId(), source.routeCode(),
                 source.routeName(), source.sellerName(), source.loadStatus(), source.startedAt(),
@@ -130,6 +144,10 @@ public class JdbcSettlementAdapter implements SettlementPort {
                 SELECT count(*) FROM payment p JOIN sale s ON s.id=p.sale_id JOIN route_load rl ON rl.route_id=s.route_id
                 WHERE rl.id=:id AND p.payment_method='TRANSFER' AND p.status='PENDING_VERIFICATION' AND s.created_at>=rl.started_at
                 AND NOT EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=s.id AND ar.status='APPROVED')
+                """);
+        addBlocker(result, loadId, "CREDIT_PAYMENT_TRANSFER_PENDING", """
+                SELECT count(*) FROM credit_payment cp JOIN route_load rl ON (cp.route_load_id=rl.id OR (cp.collected_by=rl.seller_received_by AND cp.created_at>=rl.started_at))
+                WHERE rl.id=:id AND cp.payment_method='TRANSFER' AND cp.status='PENDING_VERIFICATION'
                 """);
         addBlocker(result, loadId, "WASTE_PENDING", """
                 SELECT count(*) FROM waste w JOIN route_load rl ON rl.route_id=w.route_id WHERE rl.id=:id
@@ -167,10 +185,12 @@ public class JdbcSettlementAdapter implements SettlementPort {
         if (existing.filter("CLOSED"::equals).isPresent()) throw new BusinessException("SETTLEMENT_ALREADY_CLOSED",
                 "La liquidación cerrada es inmutable.", ErrorCategory.CONFLICT);
         jdbc.sql("""
-                INSERT INTO settlement(id,route_load_id,route_id,status,sales_total,expected_cash,delivered_cash,
-                  verified_transfers,applied_credit,monetary_difference,physical_difference_total,blocking_reasons)
-                VALUES (:id,:loadId,:routeId,:status,:sales,:cash,:delivered,:transfers,:credit,:moneyDiff,:physicalDiff,:blockers)
+                INSERT INTO settlement(id,route_load_id,route_id,status,sales_total,sales_cash,credit_collections_cash,
+                  expected_cash,delivered_cash,verified_transfers,applied_credit,monetary_difference,
+                  physical_difference_total,blocking_reasons)
+                VALUES (:id,:loadId,:routeId,:status,:sales,:salesCash,:creditCash,:cash,:delivered,:transfers,:credit,:moneyDiff,:physicalDiff,:blockers)
                 ON CONFLICT (route_load_id) DO UPDATE SET status=excluded.status,sales_total=excluded.sales_total,
+                  sales_cash=excluded.sales_cash,credit_collections_cash=excluded.credit_collections_cash,
                   expected_cash=excluded.expected_cash,delivered_cash=excluded.delivered_cash,
                   verified_transfers=excluded.verified_transfers,applied_credit=excluded.applied_credit,
                   monetary_difference=excluded.monetary_difference,physical_difference_total=excluded.physical_difference_total,
@@ -178,6 +198,8 @@ public class JdbcSettlementAdapter implements SettlementPort {
                 """).param("id", item.settlementId()).param("loadId", item.source().routeLoadId())
                 .param("routeId", item.source().routeId()).param("status", item.status())
                 .param("sales", item.source().financial().salesTotal())
+                .param("salesCash", item.source().financial().salesCash())
+                .param("creditCash", item.source().financial().creditCollectionsCash())
                 .param("cash", item.source().financial().expectedCash())
                 .param("delivered", item.source().financial().deliveredCash())
                 .param("transfers", item.source().financial().verifiedTransfers())
@@ -228,12 +250,28 @@ public class JdbcSettlementAdapter implements SettlementPort {
         jdbc.sql("""
                 INSERT INTO cash_delivery(id,route_load_id,amount,delivered_by,delivered_device_id,
                   received_by,received_device_id,notes)
-                SELECT :id,rl.id,:amount,rl.seller_received_by,rl.seller_received_device_id,:receivedBy,:deviceId,:notes
-                FROM route_load rl WHERE rl.id=:loadId AND rl.status='STARTED'
+                SELECT :id,rl.id,:amount,rl.seller_received_by,COALESCE(rl.seller_received_device_id,:deviceId),:receivedBy,:deviceId,:notes
+                FROM route_load rl WHERE rl.id=:loadId AND rl.status IN ('STARTED', 'SETTLED')
                 """).param("id", id).param("amount", amount).param("receivedBy", receivedBy)
                 .param("deviceId", deviceId).param("notes", notes).param("loadId", routeLoadId).update();
         return jdbc.sql(cashSelect() + " WHERE cd.id=:id").param("id", id)
                 .query((rs, row) -> cashRow(rs)).optional().orElseThrow(this::notFound);
+    }
+
+    @Override
+    public void reconcileClosedSettlementCash(UUID routeLoadId) {
+        jdbc.sql("""
+                UPDATE settlement SET
+                  delivered_cash = COALESCE((SELECT SUM(amount) FROM cash_delivery WHERE route_load_id=:loadId), 0),
+                  monetary_difference = expected_cash - COALESCE((SELECT SUM(amount) FROM cash_delivery WHERE route_load_id=:loadId), 0),
+                  version = version + 1
+                WHERE route_load_id = :loadId
+                """).param("loadId", routeLoadId).update();
+    }
+
+    @Override
+    public SettlementView findSettlementByRouteLoadId(UUID routeLoadId) {
+        return findOne(routeLoadId);
     }
 
     @Override
@@ -262,6 +300,7 @@ public class JdbcSettlementAdapter implements SettlementPort {
                 .param("id", item.routeLoadId()).query((rs, row) -> cashRow(rs)).list();
         return new SettlementView(item.id(), item.routeLoadId(), item.loadNumber(), item.routeId(), item.routeCode(),
                 item.routeName(), item.sellerName(), item.loadStatus(), item.status(), item.salesTotal(),
+                item.salesCash(), item.creditCollectionsCash(),
                 item.expectedCash(), item.deliveredCash(), item.verifiedTransfers(), item.appliedCredit(),
                 item.monetaryDifference(), item.physicalDifferenceTotal(), item.blockingReasons(), item.calculatedAt(),
                 item.closedBy(), item.closedByUsername(), item.closedAt(), item.closeNotes(), details, cash);
@@ -283,7 +322,9 @@ public class JdbcSettlementAdapter implements SettlementPort {
         return new SettlementView(rs.getObject("id", UUID.class), rs.getObject("route_load_id", UUID.class),
                 rs.getLong("load_number"), rs.getObject("route_id", UUID.class), rs.getString("route_code"),
                 rs.getString("route_name"), rs.getString("seller_name"), rs.getString("load_status"),
-                rs.getString("status"), rs.getBigDecimal("sales_total"), rs.getBigDecimal("expected_cash"),
+                rs.getString("status"), rs.getBigDecimal("sales_total"),
+                rs.getBigDecimal("sales_cash"), rs.getBigDecimal("credit_collections_cash"),
+                rs.getBigDecimal("expected_cash"),
                 rs.getBigDecimal("delivered_cash"), rs.getBigDecimal("verified_transfers"),
                 rs.getBigDecimal("applied_credit"), rs.getBigDecimal("monetary_difference"),
                 rs.getBigDecimal("physical_difference_total"), blockers,
