@@ -68,7 +68,7 @@ public final class PaymentPolicy {
         if (creditAmount == null || creditAmount.signum() <= 0) {
             return;
         }
-        if (!"PERMANENT".equals(customerType) && !creditAllowed) {
+        if (!"PERMANENT".equals(customerType)) {
             throw validation("CREDIT_CUSTOMER_TYPE_FORBIDDEN", "El crédito solo está disponible para clientes permanentes.");
         }
         if (!creditAllowed) {
