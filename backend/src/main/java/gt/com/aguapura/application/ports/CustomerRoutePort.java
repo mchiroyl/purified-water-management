@@ -26,6 +26,7 @@ public interface CustomerRoutePort {
     List<VehicleView> findVehicles();
     List<SellerOption> findSellers();
     RouteView assignRoute(NewRouteAssignment assignment);
+    RouteView unassignRoute(UUID routeId);
     Optional<UUID> findSellerIdByUserId(UUID userId);
 
     record NewCustomer(String code, String name, String normalizedName, String contactName, String phone,

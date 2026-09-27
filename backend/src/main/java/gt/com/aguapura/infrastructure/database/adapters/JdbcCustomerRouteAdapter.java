@@ -222,16 +222,20 @@ public class JdbcCustomerRouteAdapter implements CustomerRoutePort {
         if (item.vehicleId() != null) ensureActive("vehicle", item.vehicleId(), "VEHICLE_NOT_FOUND", "No se encontró el vehículo activo.");
         var previous = jdbc.sql("SELECT valid_from FROM route_assignment WHERE route_id = :id AND valid_to IS NULL")
                 .param("id", item.routeId()).query(LocalDate.class).optional();
-        if (previous.isPresent() && previous.get().equals(item.validFrom())) {
-            jdbc.sql("""
-                    UPDATE route_assignment
-                    SET seller_id = :sellerId, vehicle_id = :vehicleId, assigned_by = :assignedBy
-                    WHERE route_id = :routeId AND valid_to IS NULL
-                    """).param("sellerId", item.sellerId()).param("vehicleId", item.vehicleId(), Types.OTHER)
-                    .param("assignedBy", item.assignedBy()).param("routeId", item.routeId()).update();
-            return findRoute(item.routeId());
+        if (previous.isPresent()) {
+            if (!item.validFrom().isAfter(previous.get())) {
+                jdbc.sql("""
+                        UPDATE route_assignment
+                        SET seller_id = :sellerId, vehicle_id = :vehicleId, valid_from = :validFrom, assigned_by = :assignedBy
+                        WHERE route_id = :routeId AND valid_to IS NULL
+                        """).param("sellerId", item.sellerId()).param("vehicleId", item.vehicleId(), Types.OTHER)
+                        .param("validFrom", item.validFrom()).param("assignedBy", item.assignedBy())
+                        .param("routeId", item.routeId()).update();
+                return findRoute(item.routeId());
+            } else {
+                closePrevious("route_assignment", "route_id", item.routeId(), item.validFrom(), previous);
+            }
         }
-        closePrevious("route_assignment", "route_id", item.routeId(), item.validFrom(), previous);
         jdbc.sql("""
                 INSERT INTO route_assignment(id, route_id, seller_id, vehicle_id, valid_from, assigned_by)
                 VALUES (:id, :routeId, :sellerId, :vehicleId, :validFrom, :assignedBy)
@@ -239,6 +243,17 @@ public class JdbcCustomerRouteAdapter implements CustomerRoutePort {
                 .param("sellerId", item.sellerId()).param("vehicleId", item.vehicleId(), Types.OTHER)
                 .param("validFrom", item.validFrom()).param("assignedBy", item.assignedBy()).update();
         return findRoute(item.routeId());
+    }
+
+    @Override
+    public RouteView unassignRoute(UUID routeId) {
+        ensureActive("route", routeId, "ROUTE_NOT_FOUND", "No se encontró la ruta activa.");
+        jdbc.sql("""
+                UPDATE route_assignment
+                SET valid_to = current_date
+                WHERE route_id = :routeId AND (valid_to IS NULL OR valid_to >= current_date)
+                """).param("routeId", routeId).update();
+        return findRoute(routeId);
     }
 
     @Override
@@ -281,9 +296,8 @@ public class JdbcCustomerRouteAdapter implements CustomerRoutePort {
                 LEFT JOIN route r ON r.id = cr.route_id
                 LEFT JOIN LATERAL (
                     SELECT seller_id FROM route_assignment ra0
-                    WHERE ra0.route_id = r.id AND ra0.valid_from <= current_date
-                      AND (ra0.valid_to IS NULL OR ra0.valid_to >= current_date)
-                    ORDER BY ra0.valid_from DESC LIMIT 1
+                    WHERE ra0.route_id = r.id AND (ra0.valid_to IS NULL OR ra0.valid_to >= current_date)
+                    ORDER BY CASE WHEN ra0.valid_from <= current_date THEN 0 ELSE 1 END, ra0.valid_from DESC LIMIT 1
                 ) ra ON true
                 LEFT JOIN seller s ON s.id = ra.seller_id
                 WHERE 1=1
@@ -301,9 +315,8 @@ public class JdbcCustomerRouteAdapter implements CustomerRoutePort {
                 FROM route r
                 LEFT JOIN LATERAL (
                     SELECT seller_id, vehicle_id, valid_from FROM route_assignment ra0
-                    WHERE ra0.route_id = r.id AND ra0.valid_from <= current_date
-                      AND (ra0.valid_to IS NULL OR ra0.valid_to >= current_date)
-                    ORDER BY ra0.valid_from DESC LIMIT 1
+                    WHERE ra0.route_id = r.id AND (ra0.valid_to IS NULL OR ra0.valid_to >= current_date)
+                    ORDER BY CASE WHEN ra0.valid_from <= current_date THEN 0 ELSE 1 END, ra0.valid_from DESC LIMIT 1
                 ) ra ON true
                 LEFT JOIN seller s ON s.id = ra.seller_id
                 LEFT JOIN vehicle v ON v.id = ra.vehicle_id
