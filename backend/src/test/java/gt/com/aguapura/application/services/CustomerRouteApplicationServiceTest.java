@@ -58,6 +58,12 @@ class CustomerRouteApplicationServiceTest {
         @Override public boolean customerCodeExists(String code) { return false; }
         @Override public boolean hasPotentialDuplicate(String normalizedName, String normalizedPhone, String whatsapp) { return duplicate; }
         @Override public CustomerView createCustomer(NewCustomer customer) { createdCustomer = customer; return customerView(customer); }
+        @Override public CustomerView updateCustomer(UUID id, UpdateCustomer customer) {
+            return new CustomerView(id, "CLI-000001", customer.name(), customer.contactName(),
+                    customer.phone(), customer.whatsapp(), customer.addressReference(), "PERMANENT",
+                    customer.status(), customer.creditAllowed(), customer.creditLimit(), BigDecimal.ZERO, null, null,
+                    null, null, null, "ACTIVE", java.time.Instant.now());
+        }
         @Override public List<CustomerView> findCustomers(Optional<UUID> sellerId) { return new ArrayList<>(); }
         @Override public RouteView assignCustomerRoute(NewCustomerRoute item) { assignment = item; return routeView(item.routeId()); }
         @Override public boolean routeCodeExists(String code) { return false; }

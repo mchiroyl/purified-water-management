@@ -62,6 +62,43 @@ public class JdbcCustomerRouteAdapter implements CustomerRoutePort {
     }
 
     @Override
+    public CustomerView updateCustomer(UUID id, UpdateCustomer item) {
+        if (!Boolean.TRUE.equals(jdbc.sql("SELECT EXISTS(SELECT 1 FROM customer WHERE id = :id)")
+                .param("id", id).query(Boolean.class).single())) {
+            throw notFound("CUSTOMER_NOT_FOUND", "No se encontró el cliente.");
+        }
+        String status = (item.status() != null && !item.status().isBlank()) ? item.status() : "ACTIVE";
+        jdbc.sql("""
+                UPDATE customer
+                SET name = :name,
+                    normalized_name = :normalizedName,
+                    contact_name = :contactName,
+                    phone = :phone,
+                    normalized_phone = :normalizedPhone,
+                    whatsapp = :whatsapp,
+                    normalized_whatsapp = :normalizedWhatsapp,
+                    address_reference = :address,
+                    credit_allowed = :creditAllowed,
+                    credit_limit = :creditLimit,
+                    status = :status
+                WHERE id = :id
+                """).param("id", id)
+                .param("name", item.name())
+                .param("normalizedName", item.normalizedName())
+                .param("contactName", item.contactName())
+                .param("phone", item.phone())
+                .param("normalizedPhone", item.normalizedPhone())
+                .param("whatsapp", item.whatsapp())
+                .param("normalizedWhatsapp", item.normalizedWhatsapp())
+                .param("address", item.addressReference())
+                .param("creditAllowed", item.creditAllowed())
+                .param("creditLimit", item.creditLimit())
+                .param("status", status)
+                .update();
+        return findCustomer(id);
+    }
+
+    @Override
     public List<CustomerView> findCustomers(Optional<UUID> sellerId) {
         String filter = sellerId.isPresent() ? " AND ra.seller_id = :sellerId" : "";
         var statement = jdbc.sql(customerSelect() + filter + " ORDER BY c.name, c.code");

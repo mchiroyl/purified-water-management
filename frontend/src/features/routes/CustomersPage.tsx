@@ -33,10 +33,34 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
   const [localMessage, setLocalMessage] = useState('');
   const [reviewForms, setReviewForms] = useState<Record<string, { targetCustomerId: string; reason: string }>>({});
   const [assignments, setAssignments] = useState<Record<string, { routeId: string; validFrom: string }>>({});
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    contactName: '',
+    phone: '',
+    whatsapp: '',
+    addressReference: '',
+    creditAllowed: false,
+    creditLimit: 0,
+    status: 'ACTIVE',
+  });
   const create = useMutation({
     mutationFn: () => apiRequest<Customer>('/customers', { method: 'POST', body: JSON.stringify(form) }),
     onSuccess: () => {
       setForm(emptyForm);
+      void queryClient.invalidateQueries({ queryKey: ['customers'] });
+    }
+  });
+  const updateCustomer = useMutation({
+    mutationFn: () => {
+      if (!editingCustomer) throw new Error('Cliente no seleccionado');
+      return apiRequest<Customer>(`/customers/${editingCustomer.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(editForm),
+      });
+    },
+    onSuccess: () => {
+      setEditingCustomer(null);
       void queryClient.invalidateQueries({ queryKey: ['customers'] });
     }
   });
@@ -283,7 +307,7 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
                 </span></td>
                 <td>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                    <div className="action-buttons" style={{ display: 'flex', gap: '0.4rem' }}>
+                    <div className="action-buttons" style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                       <button
                         type="button"
                         className="secondary"
@@ -302,6 +326,35 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
                       >
                         💳 Crédito
                       </button>
+                      {canManage && (
+                        <button
+                          type="button"
+                          className="secondary"
+                          style={{
+                            padding: '0.2rem 0.6rem',
+                            fontSize: '0.85rem',
+                            color: '#007680',
+                            borderColor: '#007680',
+                            fontWeight: 600,
+                          }}
+                          title="Modificar datos, crédito o estado del cliente"
+                          onClick={() => {
+                            setEditingCustomer(customer);
+                            setEditForm({
+                              name: customer.name,
+                              contactName: customer.contactName || '',
+                              phone: customer.phone || '',
+                              whatsapp: customer.whatsapp || '',
+                              addressReference: customer.addressReference || '',
+                              creditAllowed: customer.creditAllowed,
+                              creditLimit: customer.creditLimit || 0,
+                              status: customer.status,
+                            });
+                          }}
+                        >
+                          ✏️ Modificar
+                        </button>
+                      )}
                     </div>
                     {canManage && (
                       <div className="inline-assignment">
@@ -337,6 +390,152 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
         {customers.data?.length === 0 && <p className="muted">Aún no hay clientes registrados.</p>}
         {assign.error && <div className="alert error">{assign.error.message}</div>}
       </section>}
+
+      {/* ── Modal de modificación de cliente ── */}
+      {editingCustomer && (
+        <div className="modal-backdrop" role="presentation">
+          <form
+            className="modal-panel"
+            onSubmit={e => {
+              e.preventDefault();
+              updateCustomer.mutate();
+            }}
+            aria-modal="true"
+            role="dialog"
+            style={{ maxWidth: '600px', width: '92%' }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
+              <div>
+                <h2 style={{ margin: 0 }}>Modificar cliente</h2>
+                <span className="muted" style={{ fontSize: '0.88rem' }}>
+                  {editingCustomer.code} · {editingCustomer.customerType === 'OCCASIONAL' ? 'Cliente Provisional' : 'Cliente Permanente'}
+                </span>
+              </div>
+              <span className={`status ${editForm.status === 'ACTIVE' ? 'active' : 'inactive'}`}>
+                {editForm.status === 'ACTIVE' ? 'Activo' : 'Inactivo'}
+              </span>
+            </div>
+
+            <div className="form-grid compact-form">
+              <label>
+                Nombre / Razón Social
+                <input
+                  required
+                  value={editForm.name}
+                  onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                />
+              </label>
+              <label>
+                Persona de contacto
+                <input
+                  placeholder="Opcional"
+                  value={editForm.contactName}
+                  onChange={e => setEditForm({ ...editForm, contactName: e.target.value })}
+                />
+              </label>
+              <label>
+                Teléfono
+                <input
+                  placeholder="Opcional"
+                  value={editForm.phone}
+                  onChange={e => setEditForm({ ...editForm, phone: e.target.value })}
+                />
+              </label>
+              <label>
+                WhatsApp
+                <input
+                  placeholder="Opcional"
+                  value={editForm.whatsapp}
+                  onChange={e => setEditForm({ ...editForm, whatsapp: e.target.value })}
+                />
+              </label>
+              <label className="wide">
+                Dirección o referencia
+                <textarea
+                  required
+                  value={editForm.addressReference}
+                  onChange={e => setEditForm({ ...editForm, addressReference: e.target.value })}
+                />
+              </label>
+
+              <label
+                className="checkbox wide"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  background: '#f8fafc',
+                  padding: '0.6rem 0.8rem',
+                  borderRadius: '0.5rem',
+                  border: '1px solid #e2e8f0',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={editForm.creditAllowed}
+                  onChange={e =>
+                    setEditForm({
+                      ...editForm,
+                      creditAllowed: e.target.checked,
+                      creditLimit: e.target.checked ? (editForm.creditLimit || 500) : 0,
+                    })
+                  }
+                />
+                <span><strong>Permitir crédito</strong> (autoriza al cliente para comprar al crédito en ruta)</span>
+              </label>
+
+              {editForm.creditAllowed && (
+                <label
+                  className="wide"
+                  style={{
+                    background: '#f0fdf4',
+                    padding: '0.6rem 0.8rem',
+                    borderRadius: '0.5rem',
+                    border: '1px solid #bbf7d0',
+                  }}
+                >
+                  <strong>Límite de crédito autorizado (Q)</strong>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    required
+                    value={editForm.creditLimit}
+                    onChange={e => setEditForm({ ...editForm, creditLimit: Number(e.target.value) })}
+                    style={{ marginTop: '0.35rem' }}
+                  />
+                </label>
+              )}
+
+              <label>
+                Estado
+                <select
+                  value={editForm.status}
+                  onChange={e => setEditForm({ ...editForm, status: e.target.value })}
+                >
+                  <option value="ACTIVE">Activo</option>
+                  <option value="INACTIVE">Inactivo</option>
+                </select>
+              </label>
+            </div>
+
+            {updateCustomer.error && (
+              <div className="alert error wide" style={{ marginTop: '0.85rem' }}>
+                {updateCustomer.error.message}
+              </div>
+            )}
+
+            <div className="form-actions" style={{ marginTop: '1.25rem', display: 'flex', justifyContent: 'flex-end', gap: '0.6rem' }}>
+              <button type="button" className="secondary" onClick={() => setEditingCustomer(null)}>
+                Cancelar
+              </button>
+              <button className="primary" disabled={updateCustomer.isPending || !editForm.name.trim()}>
+                {updateCustomer.isPending ? 'Guardando cambios…' : 'Guardar cambios'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </main>
   );
 }

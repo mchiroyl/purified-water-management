@@ -49,6 +49,30 @@ public class CustomerRouteApplicationService {
         return customer(created);
     }
 
+    @Transactional
+    public CustomerResponse updateCustomer(UUID id, UpdateCustomerRequest request, UUID actorId) {
+        String normalizedName = CustomerIdentityNormalizer.normalize(request.name());
+        String normalizedPhone = CustomerIdentityNormalizer.normalizeDigits(request.phone());
+        String normalizedWhatsapp = CustomerIdentityNormalizer.normalizeDigits(request.whatsapp());
+        boolean creditAllowed = request.creditAllowed();
+        BigDecimal limit = creditAllowed ? request.creditLimit() : BigDecimal.ZERO;
+        String status = (request.status() != null && !request.status().isBlank()) ? request.status().toUpperCase(Locale.ROOT) : "ACTIVE";
+        var updated = persistence.updateCustomer(id, new CustomerRoutePort.UpdateCustomer(
+                request.name().trim(),
+                normalizedName,
+                CustomerIdentityNormalizer.safe(request.contactName()),
+                CustomerIdentityNormalizer.safe(request.phone()),
+                normalizedPhone,
+                CustomerIdentityNormalizer.safe(request.whatsapp()),
+                normalizedWhatsapp,
+                request.addressReference().trim(),
+                creditAllowed,
+                limit,
+                status
+        ));
+        return customer(updated);
+    }
+
     @Transactional(readOnly = true)
     public List<CustomerResponse> findCustomers(UUID userId, boolean restrictedToSeller) {
         Optional<UUID> sellerId = restrictedToSeller ? Optional.of(resolveSeller(userId)) : Optional.empty();
