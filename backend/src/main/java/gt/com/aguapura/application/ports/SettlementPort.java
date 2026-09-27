@@ -13,6 +13,8 @@ public interface SettlementPort {
     SettlementView close(UUID routeLoadId, UUID actorId, UUID deviceId, String notes);
     CashDeliveryView addCashDelivery(UUID routeLoadId, UUID receivedBy, UUID deviceId,
                                      BigDecimal amount, String notes);
+    void reconcileClosedSettlementCash(UUID routeLoadId);
+    SettlementView findSettlementByRouteLoadId(UUID routeLoadId);
     List<SettlementView> findAll(Optional<UUID> sellerUserId);
 
     record Source(UUID routeLoadId, long loadNumber, UUID routeId, String routeCode,
@@ -23,7 +25,8 @@ public interface SettlementPort {
                          BigDecimal loadedUnits, BigDecimal soldUnits, BigDecimal returnedGoodUnits,
                          BigDecimal customerReturnUnits, BigDecimal approvedWasteUnits) {
     }
-    record FinancialSource(BigDecimal salesTotal, BigDecimal expectedCash, BigDecimal deliveredCash,
+    record FinancialSource(BigDecimal salesTotal, BigDecimal salesCash, BigDecimal creditCollectionsCash,
+                           BigDecimal expectedCash, BigDecimal deliveredCash,
                            BigDecimal verifiedTransfers, BigDecimal appliedCredit) {
     }
     record NewCalculation(UUID settlementId, Source source, String status,
@@ -34,7 +37,8 @@ public interface SettlementPort {
     }
     record SettlementView(UUID id, UUID routeLoadId, long loadNumber, UUID routeId,
                           String routeCode, String routeName, String sellerName, String loadStatus,
-                          String status, BigDecimal salesTotal, BigDecimal expectedCash,
+                          String status, BigDecimal salesTotal, BigDecimal salesCash,
+                          BigDecimal creditCollectionsCash, BigDecimal expectedCash,
                           BigDecimal deliveredCash, BigDecimal verifiedTransfers, BigDecimal appliedCredit,
                           BigDecimal monetaryDifference, BigDecimal physicalDifferenceTotal,
                           List<String> blockingReasons, Instant calculatedAt, UUID closedBy,

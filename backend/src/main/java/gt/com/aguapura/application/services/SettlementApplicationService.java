@@ -62,10 +62,17 @@ public class SettlementApplicationService {
     public SettlementResponse addCashDelivery(UUID loadId, CashDeliveryRequest request,
                                               UUID actorId, UUID deviceId) {
         var source = persistence.loadSource(loadId);
-        if (!"STARTED".equals(source.loadStatus())) throw new BusinessException("CASH_DELIVERY_LOAD_CLOSED",
-                "La carga de ruta no admite entregas de efectivo.", ErrorCategory.CONFLICT);
-        persistence.addCashDelivery(loadId, actorId, deviceId, request.amount(), request.notes().trim());
-        return calculate(loadId, 0, actorId, false);
+        if ("STARTED".equals(source.loadStatus())) {
+            persistence.addCashDelivery(loadId, actorId, deviceId, request.amount(), request.notes().trim());
+            return calculate(loadId, 0, actorId, false);
+        } else if ("SETTLED".equals(source.loadStatus())) {
+            persistence.addCashDelivery(loadId, actorId, deviceId, request.amount(), request.notes().trim());
+            persistence.reconcileClosedSettlementCash(loadId);
+            return response(persistence.findSettlementByRouteLoadId(loadId));
+        } else {
+            throw new BusinessException("CASH_DELIVERY_LOAD_CLOSED",
+                    "La carga de ruta no admite entregas de efectivo.", ErrorCategory.CONFLICT);
+        }
     }
 
     @Transactional(readOnly = true)
@@ -91,9 +98,9 @@ public class SettlementApplicationService {
                 row.deliveredAt())).toList();
         return new SettlementResponse(item.id(), item.routeLoadId(), item.loadNumber(), item.routeId(),
                 item.routeCode(), item.routeName(), item.sellerName(), item.loadStatus(), item.status(),
-                item.salesTotal(), item.expectedCash(), item.deliveredCash(), item.verifiedTransfers(),
-                item.appliedCredit(), item.monetaryDifference(), item.physicalDifferenceTotal(),
-                item.blockingReasons(), item.calculatedAt(), item.closedBy(), item.closedByUsername(),
-                item.closedAt(), item.closeNotes(), details, deliveries);
+                item.salesTotal(), item.salesCash(), item.creditCollectionsCash(), item.expectedCash(),
+                item.deliveredCash(), item.verifiedTransfers(), item.appliedCredit(), item.monetaryDifference(),
+                item.physicalDifferenceTotal(), item.blockingReasons(), item.calculatedAt(), item.closedBy(),
+                item.closedByUsername(), item.closedAt(), item.closeNotes(), details, deliveries);
     }
 }

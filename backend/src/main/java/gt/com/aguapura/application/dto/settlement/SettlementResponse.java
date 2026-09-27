@@ -7,7 +7,8 @@ import java.util.UUID;
 
 public record SettlementResponse(UUID id, UUID routeLoadId, long loadNumber, UUID routeId,
                                  String routeCode, String routeName, String sellerName, String loadStatus,
-                                 String status, BigDecimal salesTotal, BigDecimal expectedCash,
+                                 String status, BigDecimal salesTotal, BigDecimal salesCash,
+                                 BigDecimal creditCollectionsCash, BigDecimal expectedCash,
                                  BigDecimal deliveredCash, BigDecimal verifiedTransfers,
                                  BigDecimal appliedCredit, BigDecimal monetaryDifference,
                                  BigDecimal physicalDifferenceTotal, List<String> blockingReasons,

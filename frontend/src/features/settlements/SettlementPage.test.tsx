@@ -32,7 +32,7 @@ describe('SettlementPage', () => {
 
     expect(screen.getByRole('heading', { name: 'Liquidaciones' })).toBeInTheDocument();
     expect(await screen.findByText('Diferencia monetaria')).toBeInTheDocument();
-    expect(screen.getByText('Q200.00')).toBeInTheDocument();
+    expect(screen.getAllByText('Q200.00')[0]).toBeInTheDocument();
     expect(screen.getByText(/100 − 60 − 38 − 2 = 0/)).toBeInTheDocument();
     expect(screen.getByText(/Existen operaciones pendientes de sincronización/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /cerrar liquidación/i })).toBeDisabled();
