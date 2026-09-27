@@ -65,13 +65,10 @@ public class SettlementApplicationService {
         if ("STARTED".equals(source.loadStatus())) {
             persistence.addCashDelivery(loadId, actorId, deviceId, request.amount(), request.notes().trim());
             return calculate(loadId, 0, actorId, false);
-        } else if ("SETTLED".equals(source.loadStatus())) {
+        } else {
             persistence.addCashDelivery(loadId, actorId, deviceId, request.amount(), request.notes().trim());
             persistence.reconcileClosedSettlementCash(loadId);
             return response(persistence.findSettlementByRouteLoadId(loadId));
-        } else {
-            throw new BusinessException("CASH_DELIVERY_LOAD_CLOSED",
-                    "La carga de ruta no admite entregas de efectivo.", ErrorCategory.CONFLICT);
         }
     }
 
