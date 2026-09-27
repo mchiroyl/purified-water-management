@@ -85,10 +85,73 @@ describe('DashboardPage', () => {
     );
 
     expect(await screen.findByText('Ruta Retalhuleu')).toBeInTheDocument();
-    expect(screen.getByText(/amartinez/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/amartinez/i)[0]).toBeInTheDocument();
     expect(screen.getByText('100 GARRAFON')).toBeInTheDocument();
     expect(screen.getByText('30 GARRAFON')).toBeInTheDocument();
     expect(screen.getAllByText('70 GARRAFON')).toHaveLength(2);
     expect(screen.getByText('Tienda La Bendición')).toBeInTheDocument();
+  });
+
+  it('muestra la cabina especializada y operativa para el rol VENDEDOR', async () => {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = input.toString();
+      if (url.includes('/loads')) {
+        return Promise.resolve(new Response(JSON.stringify([{
+          id: 'load-s1', loadNumber: 'CRG-V01', routeId: 'r1', routeCode: 'RUT-01', routeName: 'Ruta Retalhuleu',
+          sourceLocationId: 'loc-1', sourceLocationName: 'Bodega Central', targetLocationId: 'loc-r1', targetLocationName: 'Inventario Ruta',
+          plannedDate: '2026-08-11', loadType: 'INITIAL', status: 'STARTED', sellerReceivedByUsername: 'cvendedor',
+          createdByUsername: 'admin', items: [{ id: 'it-1', productId: 'p1', productCode: 'GAR-20', productName: 'Garrafon 20L', baseUnitCode: 'GARRAFON', quantityBaseUnits: 50 }]
+        }]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (url.includes('/sales')) {
+        return Promise.resolve(new Response(JSON.stringify([{
+          id: 's-10', documentNumber: 'FAC-010', routeId: 'r1', routeCode: 'RUT-01', routeName: 'Ruta Retalhuleu',
+          sellerName: 'Carlos Vendedor', customerName: 'Restaurante El Mar', total: 400, createdAt: '2026-08-11T11:00:00Z',
+          items: [{ id: 'si-1', productName: 'Garrafon 20L', presentationQuantity: 20, quantityBaseUnits: 20, unitPrice: 20, lineTotal: 400 }]
+        }]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (url.includes('/inventory/locations')) {
+        return Promise.resolve(new Response(JSON.stringify([
+          { id: 'loc-r1', code: 'IR-01', name: 'Inventario Retalhuleu', locationType: 'ROUTE', routeId: 'r1', active: true, balances: [{ productId: 'p1', productCode: 'GAR-20', productName: 'Garrafon 20L', baseUnitCode: 'GARRAFON', quantityBaseUnits: 30 }] }
+        ]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({
+        generatedAt: '2026-08-11T15:00:00Z', timezone: 'America/Guatemala', currencyCode: 'GTQ',
+        salesToday: 400, expectedCash: 400, deliveredCash: 0, transfers: 0, credit: 0,
+        monetaryDifferences: 0, inventoryDifferences: 0, approvedWasteUnits: 0,
+        pendingWastes: 0, provisionalCustomers: 0, pendingTransfers: 0,
+        activeRoutes: 1, completedRoutes: 0, pendingOfflineOperations: 0,
+        pendingReturns: 0, pendingAuthorizations: 0, openIncidents: 0, alerts: []
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    }));
+
+    // Mock session as VENDEDOR
+    const SessionModule = await import('../features/auth/SessionContext');
+    vi.spyOn(SessionModule, 'useOptionalSession').mockReturnValue({
+      user: { id: 'u-seller', username: 'cvendedor', displayName: 'Carlos Vendedor', deviceId: 'dev-1', roles: ['VENDEDOR'], mustChangePassword: false },
+      busy: false,
+      initializing: false,
+      login: vi.fn(),
+      enroll: vi.fn(),
+      refresh: vi.fn(),
+      changePassword: vi.fn(),
+      logout: vi.fn(),
+    });
+
+    render(
+      <MemoryRouter>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <DashboardPage />
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText(/¡hola, carlos vendedor!/i)).toBeInTheDocument();
+    expect(screen.getByText(/vendedor en ruta/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /nueva venta/i })).toBeInTheDocument();
+    expect(screen.getByText('Efectivo en mano (A entregar)')).toBeInTheDocument();
+    expect(screen.getAllByText('Q400.00').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('30').length).toBeGreaterThan(0); // 30 restantes en camion
+    expect(screen.getByText('Restaurante El Mar')).toBeInTheDocument();
   });
 });
