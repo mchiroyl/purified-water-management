@@ -249,9 +249,9 @@ public class JdbcCustomerRouteAdapter implements CustomerRoutePort {
     public RouteView unassignRoute(UUID routeId) {
         ensureActive("route", routeId, "ROUTE_NOT_FOUND", "No se encontró la ruta activa.");
         jdbc.sql("""
-                UPDATE route_assignment
-                SET valid_to = current_date
-                WHERE route_id = :routeId AND (valid_to IS NULL OR valid_to >= current_date)
+                DELETE FROM route_assignment
+                WHERE route_id = :routeId
+                  AND (valid_to IS NULL OR valid_to >= current_date)
                 """).param("routeId", routeId).update();
         return findRoute(routeId);
     }
