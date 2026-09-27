@@ -78,6 +78,7 @@ class CustomerRouteApplicationServiceTest {
         @Override public List<VehicleView> findVehicles() { return new ArrayList<>(); }
         @Override public List<SellerOption> findSellers() { return new ArrayList<>(); }
         @Override public RouteView assignRoute(NewRouteAssignment assignment) { return null; }
+        @Override public RouteView unassignRoute(UUID routeId) { return routeView(routeId); }
         @Override public Optional<UUID> findSellerIdByUserId(UUID userId) { return Optional.empty(); }
 
         private CustomerView customerView(NewCustomer customer) {
