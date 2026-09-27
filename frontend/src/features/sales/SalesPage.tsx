@@ -622,6 +622,15 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
     navigate('/');
   };
 
+  function isJugPresentation(pres?: { code?: string; name?: string; product?: { code?: string; name?: string } }): boolean {
+    if (!pres) return false;
+    const target = `${pres.code || ''} ${pres.name || ''} ${pres.product?.code || ''} ${pres.product?.name || ''}`.toLowerCase();
+    return target.includes('garraf') || target.includes('gar-') || target.includes('jug') || target.includes('20l') || target.includes('19l');
+  }
+
+  const presentations = products.data?.filter(product => product.active && product.controlsInventory)
+    .flatMap(product => product.presentations.filter(item => item.active).map(item => ({ ...item, product }))) ?? [];
+
   const create = useMutation({
     mutationFn: (location: GeoLocationSnapshot) => apiRequest<Sale>('/sales', {
       method: 'POST',
@@ -630,8 +639,15 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
     }),
     onSuccess: async (sale) => {
       const cust = availableCustomers.find(c => c.id === customerId);
-      const totalUnits = items.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0);
-      const suggestedQty = Math.max(1, Math.round(totalUnits));
+      // Contar únicamente las unidades vendidas de presentaciones que son garrafones
+      const jugUnits = items.reduce((acc, it) => {
+        const pres = presentations.find(p => p.id === it.presentationId);
+        if (pres && isJugPresentation(pres)) {
+          return acc + (Number(it.quantity) || 0);
+        }
+        return acc;
+      }, 0);
+      const suggestedQty = Math.round(jugUnits);
       setConfirmedSaleModal({
         sale,
         customerName: cust?.name ?? sale.customerName ?? 'Cliente',
@@ -700,8 +716,6 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
       setIsCapturingLocation(false);
     }
   };
-  const presentations = products.data?.filter(product => product.active && product.controlsInventory)
-    .flatMap(product => product.presentations.filter(item => item.active).map(item => ({ ...item, product }))) ?? [];
   const serverCustomers = customers.data?.filter(customer => customer.status === 'ACTIVE' && customer.routeId === routeId) ?? [];
   const serverCustomerIds = new Set(serverCustomers.map(c => c.id));
   const availableCustomers = [
@@ -1222,17 +1236,23 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
             ) : (
               <>
                 <p style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', color: 'var(--muted)' }}>
-                  ¿El cliente quedó debiendo envases vacíos? Regístrelo como préstamo para mantener el saldo al día:
+                  {confirmedSaleModal.suggestedJugQty > 0
+                    ? `¿El cliente quedó debiendo envases vacíos de los ${confirmedSaleModal.suggestedJugQty} garrafón(es) vendidos? Puede ajustar la cantidad:`
+                    : '¿El cliente quedó debiendo envases vacíos o se entregaron garrafones en préstamo? Ingrese la cantidad:'}
                 </p>
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                   <label style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                     Cantidad:
                     <input
                       type="number"
-                      min="1"
+                      min="0"
                       step="1"
-                      value={postSaleJugQty}
-                      onChange={e => setPostSaleJugQty(Math.max(1, Number(e.target.value)))}
+                      value={postSaleJugQty === 0 ? '' : postSaleJugQty}
+                      placeholder="0"
+                      onChange={e => {
+                        const val = e.target.value;
+                        setPostSaleJugQty(val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0));
+                      }}
                       style={{ width: '4.5rem' }}
                     />
                   </label>
@@ -1240,10 +1260,10 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
                     type="button"
                     className="secondary"
                     style={{ fontSize: '0.85rem', padding: '0.4rem 0.75rem' }}
-                    disabled={postSaleLendMutation.isPending}
+                    disabled={postSaleLendMutation.isPending || postSaleJugQty <= 0}
                     onClick={() => { setPostSaleJugError(''); postSaleLendMutation.mutate(); }}
                   >
-                    {postSaleLendMutation.isPending ? 'Registrando…' : `+ Registrar ${postSaleJugQty} garrafón(es) en préstamo`}
+                    {postSaleLendMutation.isPending ? 'Registrando…' : `+ Registrar ${postSaleJugQty || 0} garrafón(es) en préstamo`}
                   </button>
                 </div>
                 {postSaleJugError && (
