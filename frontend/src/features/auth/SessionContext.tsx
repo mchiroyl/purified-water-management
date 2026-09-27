@@ -114,3 +114,7 @@ export function useSession(): SessionContextValue {
   if (!context) throw new Error('useSession debe utilizarse dentro de SessionProvider');
   return context;
 }
+
+export function useOptionalSession(): SessionContextValue | null {
+  return useContext(SessionContext);
+}
