@@ -96,7 +96,7 @@ public class JdbcRouteLoadAdapter implements RouteLoadPort {
         return Boolean.TRUE.equals(jdbc.sql("""
                 SELECT EXISTS(SELECT 1 FROM route_assignment ra JOIN seller s ON s.id=ra.seller_id
                 WHERE ra.route_id=:routeId AND s.user_id=:userId AND s.status='ACTIVE'
-                  AND ra.valid_from<=current_date AND (ra.valid_to IS NULL OR ra.valid_to>=current_date))
+                  AND (ra.valid_to IS NULL OR ra.valid_to>=current_date))
                 """).param("routeId", routeId).param("userId", userId).query(Boolean.class).single());
     }
 
@@ -125,7 +125,7 @@ public class JdbcRouteLoadAdapter implements RouteLoadPort {
         String filter = sellerUserId.isPresent() ? """
                  AND EXISTS(SELECT 1 FROM route_assignment ra JOIN seller s ON s.id=ra.seller_id
                     WHERE ra.route_id=rl.route_id AND s.user_id=:sellerUserId AND s.status='ACTIVE'
-                      AND ra.valid_from<=current_date AND (ra.valid_to IS NULL OR ra.valid_to>=current_date))
+                      AND (ra.valid_to IS NULL OR ra.valid_to>=current_date))
                 """ : "";
         var statement = jdbc.sql(loadSelect() + filter + " ORDER BY rl.planned_date DESC,rl.load_number DESC");
         if (sellerUserId.isPresent()) statement = statement.param("sellerUserId", sellerUserId.get());
