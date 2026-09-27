@@ -44,6 +44,8 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
     creditLimit: 0,
     status: 'ACTIVE',
   });
+  const [showUpdateSuccessModal, setShowUpdateSuccessModal] = useState(false);
+  const [updatedCustomerName, setUpdatedCustomerName] = useState('');
   const create = useMutation({
     mutationFn: () => apiRequest<Customer>('/customers', { method: 'POST', body: JSON.stringify(form) }),
     onSuccess: () => {
@@ -59,8 +61,11 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
         body: JSON.stringify(editForm),
       });
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      const name = data?.name || editForm.name;
       setEditingCustomer(null);
+      setUpdatedCustomerName(name);
+      setShowUpdateSuccessModal(true);
       void queryClient.invalidateQueries({ queryKey: ['customers'] });
     }
   });
@@ -534,6 +539,31 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* ── Ventana flotante: Datos actualizados ── */}
+      {showUpdateSuccessModal && (
+        <div className="floating-toast-overlay" role="dialog" aria-modal="true">
+          <div className="floating-toast-card">
+            <div className="floating-toast-icon">✅</div>
+            <div className="floating-toast-body">
+              <h3>Datos actualizados</h3>
+              <p>
+                Los datos del cliente <strong>{updatedCustomerName}</strong> se actualizaron exitosamente.
+              </p>
+            </div>
+            <div className="floating-toast-actions">
+              <button
+                type="button"
+                className="primary"
+                onClick={() => setShowUpdateSuccessModal(false)}
+                autoFocus
+              >
+                OK
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </main>
