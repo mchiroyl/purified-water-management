@@ -13,8 +13,16 @@ public final class CustomerIdentityNormalizer {
                 .replaceAll("\\s+", " ").trim();
     }
 
+    public static String normalize(String value) {
+        return name(value);
+    }
+
     public static String phone(String value) {
         return safe(value).replaceAll("\\D", "");
+    }
+
+    public static String normalizeDigits(String value) {
+        return phone(value);
     }
 
     public static String safe(String value) {

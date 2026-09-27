@@ -51,9 +51,9 @@ public class CustomerRouteApplicationService {
 
     @Transactional
     public CustomerResponse updateCustomer(UUID id, UpdateCustomerRequest request, UUID actorId) {
-        String normalizedName = CustomerIdentityNormalizer.normalize(request.name());
-        String normalizedPhone = CustomerIdentityNormalizer.normalizeDigits(request.phone());
-        String normalizedWhatsapp = CustomerIdentityNormalizer.normalizeDigits(request.whatsapp());
+        String normalizedName = CustomerIdentityNormalizer.name(request.name());
+        String normalizedPhone = CustomerIdentityNormalizer.phone(request.phone());
+        String normalizedWhatsapp = CustomerIdentityNormalizer.phone(request.whatsapp());
         boolean creditAllowed = request.creditAllowed();
         BigDecimal limit = creditAllowed ? request.creditLimit() : BigDecimal.ZERO;
         String status = (request.status() != null && !request.status().isBlank()) ? request.status().toUpperCase(Locale.ROOT) : "ACTIVE";
