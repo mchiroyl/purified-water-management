@@ -58,8 +58,10 @@ public class CustomerController {
                                    @AuthenticationPrincipal Jwt jwt) {
         var result = service.updateCustomer(id, request, actor(jwt));
         audit.record(actor(jwt), device(jwt), "UPDATE_CUSTOMER", "CUSTOMER", id, Map.of(),
-                Map.of("name", result.name(), "status", result.status(), "creditAllowed", result.creditAllowed(),
-                        "creditLimit", result.creditLimit()));
+                Map.of("name", result.name(),
+                        "status", result.status() != null ? result.status() : "ACTIVE",
+                        "creditAllowed", result.creditAllowed(),
+                        "creditLimit", result.creditLimit() != null ? result.creditLimit() : java.math.BigDecimal.ZERO));
         return result;
     }
 
