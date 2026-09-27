@@ -10,7 +10,7 @@ describe('DashboardPage', () => {
   it('muestra los indicadores oficiales y los pendientes operativos', async () => {
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const url = input.toString();
-      if (url.includes('/loads') || url.includes('/sales') || url.includes('/inventory/locations')) {
+      if (url.includes('/loads') || url.includes('/sales') || url.includes('/inventory/locations') || url.includes('/products') || url.includes('/pricing/lists')) {
         return Promise.resolve(new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
       }
       return Promise.resolve(new Response(JSON.stringify({
@@ -62,6 +62,9 @@ describe('DashboardPage', () => {
           { id: 'loc-1', code: 'BOD-01', name: 'Bodega Central', locationType: 'WAREHOUSE', active: true, balances: [{ productId: 'p1', productCode: 'GAR-20', productName: 'Garrafon 20L', baseUnitCode: 'GARRAFON', quantityBaseUnits: 200 }] },
           { id: 'loc-r1', code: 'IR-01', name: 'Inventario Retalhuleu', locationType: 'ROUTE', routeId: 'r1', active: true, balances: [{ productId: 'p1', productCode: 'GAR-20', productName: 'Garrafon 20L', baseUnitCode: 'GARRAFON', quantityBaseUnits: 70 }] }
         ]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (url.includes('/products') || url.includes('/pricing/lists')) {
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
       }
       return Promise.resolve(new Response(JSON.stringify({
         generatedAt: '2026-08-11T15:00:00Z', timezone: 'America/Guatemala', currencyCode: 'GTQ',

@@ -76,6 +76,53 @@ function CustomerContextBanner({
   );
 }
 
+// ── Badge de precio en vivo (Especial vs General) ───────────────────────────
+type PriceDecisionResponse = { unitPrice: number; source: string; priceVersionId?: string; priceTierId?: string; specialPriceId?: string };
+
+function ItemPriceBadge({ customerId, presentationId, quantity }: { customerId?: string; presentationId?: string; quantity: number }) {
+  const query = useQuery({
+    queryKey: ['pricing', 'resolve', customerId, presentationId, quantity],
+    enabled: Boolean(customerId && presentationId && quantity > 0),
+    queryFn: () => apiRequest<PriceDecisionResponse>('/pricing/resolve', {
+      method: 'POST',
+      body: JSON.stringify({ customerId, presentationId, quantityBaseUnits: quantity })
+    }),
+    staleTime: 30_000
+  });
+
+  if (!customerId || !presentationId || quantity <= 0) return null;
+  if (query.isLoading) {
+    return <span className="muted" style={{ fontSize: '0.82rem', padding: '0.2rem 0' }}>Cotizando precio oficial…</span>;
+  }
+  if (query.error || !query.data) return null;
+
+  const isSpecial = query.data.source === 'CUSTOMER_SPECIAL_PRICE';
+  const unitPrice = Number(query.data.unitPrice || 0);
+  const lineTotal = unitPrice * quantity;
+
+  return (
+    <div style={{
+      display: 'inline-flex',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      gap: '0.45rem',
+      padding: '0.35rem 0.75rem',
+      borderRadius: '0.55rem',
+      fontSize: '0.84rem',
+      fontWeight: 600,
+      background: isSpecial ? '#fef9c3' : '#f1f5f9',
+      color: isSpecial ? '#854d0e' : '#334155',
+      border: `1px solid ${isSpecial ? '#facc15' : '#cbd5e1'}`,
+      marginTop: '0.35rem',
+      width: 'fit-content'
+    }}>
+      <span>{isSpecial ? '⭐ Precio Especial asignado:' : '🏷️ Precio General de lista:'}</span>
+      <strong>Q{unitPrice.toFixed(2)} c/u</strong>
+      <span>· Subtotal: <strong>Q{lineTotal.toFixed(2)}</strong></span>
+    </div>
+  );
+}
+
 // ── Panel post-venta: registrar préstamo de garrafón ────────────────────────
 function PostSaleJugPanel({ sale, onDismiss }: { sale: Sale; onDismiss: () => void }) {
   const [quantity, setQuantity] = useState(1);
@@ -479,6 +526,7 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
           <option value="">Seleccionar</option>{presentations.map(presentation => <option key={presentation.id} value={presentation.id}>{presentation.product.code} · {presentation.product.name} · {presentation.name}</option>)}
         </select></label>
         <label>Cantidad<input required type="number" min="0.0001" step="0.0001" value={item.quantity} onChange={event => setItems(current => current.map((row, position) => position === index ? { ...row, quantity: Number(event.target.value) } : row))} /></label>
+        <ItemPriceBadge customerId={customerId} presentationId={item.presentationId} quantity={item.quantity} />
         {items.length > 1 && <button type="button" className="secondary" onClick={() => setItems(current => current.filter((_row, position) => position !== index))}>Quitar</button>}
       </div>)}</div>
       <h3>Forma de pago</h3><p className="muted">Con un solo medio puede dejar el monto vacío para aplicar el total calculado por el servidor.</p>

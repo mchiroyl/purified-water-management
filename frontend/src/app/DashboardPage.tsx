@@ -35,12 +35,20 @@ type Sale = {
   items: SaleItem[]; payments?: Payment[];
 };
 
+type ProductPresentation = { id: string; code: string; name: string; active: boolean };
+type Product = { id: string; code: string; name: string; presentations?: ProductPresentation[] };
+type PriceTier = { id: string; presentationId: string; minimumBaseUnits: number; unitPrice: number };
+type PriceVersion = { id: string; status: string; tiers: PriceTier[] };
+type PriceList = { id: string; status: string; versions: PriceVersion[] };
+
 function money(value: number, currency = 'GTQ'): string {
   return `${currency === 'GTQ' ? 'Q' : `${currency} `}${Number(value || 0).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export function DashboardPage() {
   const client = useQueryClient();
+  const products = useQuery({ queryKey: ['products'], queryFn: () => apiRequest<Product[]>('/products') });
+  const priceLists = useQuery({ queryKey: ['pricing', 'lists'], queryFn: () => apiRequest<PriceList[]>('/pricing/lists') });
   const dashboard = useQuery({
     queryKey: ['dashboard'],
     queryFn: () => apiRequest<Dashboard>('/dashboard'),
@@ -87,6 +95,40 @@ export function DashboardPage() {
       streetStockMap.set(b.productId, current);
     }
   }
+
+  // Mapeo de precios estándar (lista general) para valorización de inventario
+  const presentationPriceMap = new Map<string, number>();
+  const activePriceList = priceLists.data?.find(l => l.status === 'ACTIVE') ?? priceLists.data?.[0];
+  const activeVersion = activePriceList?.versions?.find(v => v.status === 'ACTIVE') ?? activePriceList?.versions?.[0];
+  if (activeVersion?.tiers) {
+    for (const t of activeVersion.tiers) {
+      if (!presentationPriceMap.has(t.presentationId) || t.minimumBaseUnits <= 1) {
+        presentationPriceMap.set(t.presentationId, Number(t.unitPrice));
+      }
+    }
+  }
+
+  const getProductPrice = (productId: string): number => {
+    const prod = products.data?.find(p => p.id === productId);
+    if (!prod?.presentations) return 0;
+    for (const pres of prod.presentations) {
+      if (presentationPriceMap.has(pres.id)) {
+        return presentationPriceMap.get(pres.id)!;
+      }
+    }
+    return 0;
+  };
+
+  const centralBalances = centralWarehouse?.balances ?? [];
+  const centralWarehouseValue = centralBalances.reduce((acc, b) => acc + (Number(b.quantityBaseUnits || 0) * getProductPrice(b.productId)), 0);
+  const streetStockValue = Array.from(streetStockMap.entries()).reduce((acc, [productId, item]) => {
+    return acc + (Number(item.totalQty || 0) * getProductPrice(productId));
+  }, 0);
+  const companyTotalValue = centralWarehouseValue + streetStockValue;
+
+  const allCompanyProductIds = new Set<string>();
+  centralBalances.forEach(b => allCompanyProductIds.add(b.productId));
+  streetStockMap.forEach((_, pid) => allCompanyProductIds.add(pid));
 
   // Últimas 5 ventas del día
   const recentSales = (sales.data ?? []).slice(0, 5);
@@ -312,16 +354,33 @@ export function DashboardPage() {
               {/* Tarjeta Bodega Central */}
               <article className="stock-card">
                 <h3><span>🏢</span> Bodega Central ({centralWarehouse?.name ?? 'GENERAL'})</h3>
-                {centralWarehouse?.balances && centralWarehouse.balances.length > 0 ? (
+                {centralBalances.length > 0 ? (
                   <div>
-                    {centralWarehouse.balances.map(b => (
-                      <div className="stock-item" key={b.productId}>
-                        <span>{b.productName}</span>
-                        <strong style={{ fontSize: '1.05rem' }}>
-                          {Number(b.quantityBaseUnits).toLocaleString('es-GT')} {b.baseUnitCode}
-                        </strong>
-                      </div>
-                    ))}
+                    {centralBalances.map(b => {
+                      const uPrice = getProductPrice(b.productId);
+                      const lTotal = Number(b.quantityBaseUnits || 0) * uPrice;
+                      return (
+                        <div className="stock-item" key={b.productId}>
+                          <span>{b.productName}</span>
+                          <div style={{ textAlign: 'right' }}>
+                            <strong style={{ fontSize: '1.05rem', display: 'block' }}>
+                              {Number(b.quantityBaseUnits).toLocaleString('es-GT')} {b.baseUnitCode}
+                            </strong>
+                            {uPrice > 0 && (
+                              <span style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>
+                                {money(lTotal, data.currencyCode)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div style={{ marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>Valor comercial en bodega:</span>
+                      <strong style={{ fontSize: '1.1rem', color: 'var(--primary-dark)' }}>
+                        {money(centralWarehouseValue, data.currencyCode)}
+                      </strong>
+                    </div>
                   </div>
                 ) : (
                   <p className="muted" style={{ padding: '0.75rem 0' }}>Sin existencias registradas en bodega central.</p>
@@ -333,14 +392,31 @@ export function DashboardPage() {
                 <h3><span>🚚</span> En Circulación (Camiones en calle)</h3>
                 {streetStockMap.size > 0 ? (
                   <div>
-                    {Array.from(streetStockMap.entries()).map(([productId, item]) => (
-                      <div className="stock-item" key={productId}>
-                        <span>{item.productName}</span>
-                        <strong style={{ fontSize: '1.05rem', color: '#087a54' }}>
-                          {Number(item.totalQty).toLocaleString('es-GT')} {item.baseUnitCode}
-                        </strong>
-                      </div>
-                    ))}
+                    {Array.from(streetStockMap.entries()).map(([productId, item]) => {
+                      const uPrice = getProductPrice(productId);
+                      const lTotal = Number(item.totalQty || 0) * uPrice;
+                      return (
+                        <div className="stock-item" key={productId}>
+                          <span>{item.productName}</span>
+                          <div style={{ textAlign: 'right' }}>
+                            <strong style={{ fontSize: '1.05rem', color: '#087a54', display: 'block' }}>
+                              {Number(item.totalQty).toLocaleString('es-GT')} {item.baseUnitCode}
+                            </strong>
+                            {uPrice > 0 && (
+                              <span style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>
+                                {money(lTotal, data.currencyCode)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div style={{ marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px dashed var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>Total potencial en calle:</span>
+                      <strong style={{ fontSize: '1.1rem', color: '#087a54' }}>
+                        {money(streetStockValue, data.currencyCode)}
+                      </strong>
+                    </div>
                   </div>
                 ) : (
                   <p className="muted" style={{ padding: '0.75rem 0' }}>No hay producto cargado en rutas en este momento.</p>
@@ -350,20 +426,38 @@ export function DashboardPage() {
               {/* Tarjeta Total Empresa */}
               <article className="stock-card" style={{ background: '#f8fafc' }}>
                 <h3><span>📦</span> Stock Total de la Empresa</h3>
-                {centralWarehouse?.balances && centralWarehouse.balances.length > 0 ? (
+                {allCompanyProductIds.size > 0 ? (
                   <div>
-                    {centralWarehouse.balances.map(b => {
-                      const onStreet = streetStockMap.get(b.productId)?.totalQty ?? 0;
-                      const totalCompany = Number(b.quantityBaseUnits || 0) + Number(onStreet || 0);
+                    {Array.from(allCompanyProductIds).map(pid => {
+                      const inWarehouse = Number(centralBalances.find(b => b.productId === pid)?.quantityBaseUnits || 0);
+                      const onStreet = Number(streetStockMap.get(pid)?.totalQty || 0);
+                      const totalCompany = inWarehouse + onStreet;
+                      const productName = centralBalances.find(b => b.productId === pid)?.productName ?? streetStockMap.get(pid)?.productName ?? 'Producto';
+                      const unitCode = centralBalances.find(b => b.productId === pid)?.baseUnitCode ?? streetStockMap.get(pid)?.baseUnitCode ?? 'unidades';
+                      const uPrice = getProductPrice(pid);
+                      const lTotal = totalCompany * uPrice;
                       return (
-                        <div className="stock-item" key={b.productId}>
-                          <span><strong>{b.productName}</strong></span>
-                          <strong style={{ fontSize: '1.15rem', color: 'var(--primary-dark)' }}>
-                            {totalCompany.toLocaleString('es-GT')} {b.baseUnitCode}
-                          </strong>
+                        <div className="stock-item" key={pid}>
+                          <span><strong>{productName}</strong></span>
+                          <div style={{ textAlign: 'right' }}>
+                            <strong style={{ fontSize: '1.15rem', color: 'var(--primary-dark)', display: 'block' }}>
+                              {totalCompany.toLocaleString('es-GT')} {unitCode}
+                            </strong>
+                            {uPrice > 0 && (
+                              <span style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>
+                                {money(lTotal, data.currencyCode)}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
+                    <div style={{ marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '2px solid var(--primary-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.82rem', color: 'var(--text)', fontWeight: 600 }}>Valor global consolidado:</span>
+                      <strong style={{ fontSize: '1.18rem', color: 'var(--primary-dark)' }}>
+                        {money(companyTotalValue, data.currencyCode)}
+                      </strong>
+                    </div>
                   </div>
                 ) : (
                   <p className="muted" style={{ padding: '0.75rem 0' }}>Calculando existencias globales…</p>
