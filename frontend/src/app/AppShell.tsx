@@ -29,7 +29,7 @@ export function AppShell() {
   const canSeeLoads = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
   const canSeeSales = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'VENDEDOR'].includes(role));
   const canVerifyTransfers = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR'].includes(role));
-  const canSeeCredit = isAdmin || isCreditAdmin || user?.roles.includes('VENDEDOR');
+  const canSeeCredit = isAdmin || isCreditAdmin || user?.roles.includes('SUPERVISOR');
   const canSeeJugs = isAdmin || isCreditAdmin || user?.roles.includes('SUPERVISOR');
   const canSeeWastes = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
   const canSeeReturns = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));

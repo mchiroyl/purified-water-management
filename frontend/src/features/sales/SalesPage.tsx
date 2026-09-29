@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../../app/PageHeader';
 import { useState, useEffect, type FormEvent } from 'react';
 import { apiBlob, apiRequest } from '../../services/apiClient';
@@ -332,8 +332,16 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
   const routes = useQuery({ queryKey: ['routes'], queryFn: () => apiRequest<Route[]>('/routes'), enabled: canSell });
   const customers = useQuery({ queryKey: ['customers'], queryFn: () => apiRequest<Customer[]>('/customers'), enabled: canSell });
   const products = useQuery({ queryKey: ['products'], queryFn: () => apiRequest<Product[]>('/products'), enabled: canSell });
+  const [searchParams] = useSearchParams();
   const [routeId, setRouteId] = useState('');
   const [customerId, setCustomerId] = useState('');
+
+  useEffect(() => {
+    const preselect = searchParams.get('customerId');
+    if (preselect) {
+      setCustomerId(preselect);
+    }
+  }, [searchParams]);
   const [items, setItems] = useState<ItemForm[]>([{ presentationId: '', quantity: 1 }]);
   const [payments, setPayments] = useState<PaymentForm[]>([newPayment()]);
   const [receiptError, setReceiptError] = useState('');

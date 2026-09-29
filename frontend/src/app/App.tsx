@@ -54,7 +54,7 @@ export function App() {
   const isWarehouse = user.roles.includes('BODEGA');
   const isSeller = user.roles.includes('VENDEDOR');
   const isCreditAdmin = user.roles.includes('ADMINISTRADOR_CREDITO');
-  const canSeeCredit = isAdmin || isCreditAdmin || isSeller;
+  const canSeeCredit = isAdmin || isCreditAdmin || user.roles.includes('SUPERVISOR');
   const canVerifyCredit = isAdmin || isCreditAdmin;
   const canSeeJugs = isAdmin || isCreditAdmin || user.roles.includes('SUPERVISOR');
   const canRecordJugs = isAdmin || user.roles.includes('SUPERVISOR');
