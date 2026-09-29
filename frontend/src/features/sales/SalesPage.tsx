@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../app/PageHeader';
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { apiBlob, apiRequest } from '../../services/apiClient';
 import { openMobileDatabase, type GeoLocationSnapshot } from '../../offline/mobileDatabase';
 import { captureCurrentLocation } from '../../services/geolocation';
@@ -491,9 +491,27 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
   const [showVisitAbono, setShowVisitAbono] = useState(false);
   const [showVisitJugReturn, setShowVisitJugReturn] = useState(false);
 
-  // ── Alta rápida de cliente provisional en ruta ─────────────────────────────
+  // ── Contexto de sesión y ruta asignada al vendedor ────────────────────────
   const session = useOptionalSession();
   const user = session?.user;
+  const isAdminOrSupervisor = Boolean(user?.roles.some(r => r === 'ADMINISTRADOR' || r === 'SUPERVISOR'));
+  const isSeller = Boolean(user?.roles.includes('VENDEDOR') && !isAdminOrSupervisor);
+  const assignedRoute = isSeller
+    ? (routes.data?.find(r => r.status === 'ACTIVE') ?? routes.data?.[0] ?? null)
+    : null;
+
+  useEffect(() => {
+    if (assignedRoute) {
+      if (routeId !== assignedRoute.id) {
+        setRouteId(assignedRoute.id);
+      }
+      if (visitRouteId !== assignedRoute.id) {
+        setVisitRouteId(assignedRoute.id);
+      }
+    }
+  }, [assignedRoute, routeId, visitRouteId]);
+
+  // ── Alta rápida de cliente provisional en ruta ─────────────────────────────
   const [showProvisionalModal, setShowProvisionalModal] = useState(false);
   const [provisionalForm, setProvisionalForm] = useState({ name: '', phone: '', addressReference: '' });
   const [provisionalLoading, setProvisionalLoading] = useState(false);
@@ -794,13 +812,49 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
   return <main>
     <PageHeader eyebrow="Operación en ruta" title="Ventas" description="Los precios, conversiones, totales, correlativos e inventario se calculan y confirman en el servidor." />
 
+    {isSeller && assignedRoute && (
+      <div className="assigned-route-card" style={{
+        margin: '0.75rem 0 1.25rem 0',
+        padding: '0.75rem 1rem',
+        background: '#f0fdf4',
+        border: '1px solid #86efac',
+        borderRadius: '0.5rem',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.75rem',
+        color: '#166534',
+        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)'
+      }}>
+        <span style={{ fontSize: '1.4rem' }}>📍</span>
+        <div>
+          <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#15803d', fontWeight: 700, display: 'block' }}>
+            Ruta asignada
+          </span>
+          <strong style={{ fontSize: '1.05rem', color: '#14532d' }}>
+            {assignedRoute.code} · {assignedRoute.name}
+          </strong>
+        </div>
+      </div>
+    )}
+
+    {isSeller && !assignedRoute && !routes.isLoading && (
+      <div className="alert warning" style={{ margin: '0.75rem 0 1.25rem 0' }}>
+        <span>⚠️</span>
+        <div>
+          <strong>Sin ruta asignada:</strong> No tienes una ruta activa asignada para el día de hoy. Comunícate con administración para que te asignen tu ruta operativa.
+        </div>
+      </div>
+    )}
+
     {canSell && <form className="panel section-panel" onSubmit={submit}>
       <h2>Nueva venta</h2>
       <div className="form-grid compact-grid">
-        <label>Ruta<select required value={routeId} onChange={event => { setRouteId(event.target.value); setCustomerId(''); setPayments([newPayment()]); setShowSaleJugReturn(false); setShowSaleJugLoan(false); setShowSaleAbono(false); }}>
-          <option value="">Seleccionar</option>{routes.data?.filter(route => route.status === 'ACTIVE').map(route => <option key={route.id} value={route.id}>{route.code} · {route.name}</option>)}
-        </select></label>
-        <div>
+        {!isSeller && (
+          <label>Ruta<select required value={routeId} onChange={event => { setRouteId(event.target.value); setCustomerId(''); setPayments([newPayment()]); setShowSaleJugReturn(false); setShowSaleJugLoan(false); setShowSaleAbono(false); }}>
+            <option value="">Seleccionar</option>{routes.data?.filter(route => route.status === 'ACTIVE').map(route => <option key={route.id} value={route.id}>{route.code} · {route.name}</option>)}
+          </select></label>
+        )}
+        <div style={isSeller ? { gridColumn: '1 / -1' } : undefined}>
           <label>Cliente<select id="sale-customer-select" required value={customerId} disabled={!routeId} onChange={event => { setCustomerId(event.target.value); setPayments([newPayment()]); setShowSaleJugReturn(false); setShowSaleJugLoan(false); setShowSaleAbono(false); }}>
             <option value="">Seleccionar</option>{availableCustomers.map(customer => (
               <option key={customer.id} value={customer.id}>
@@ -938,15 +992,17 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
         </p>
         {visitOpen && (
           <form onSubmit={e => void submitVisit(e)} className="form-grid compact-grid" style={{ marginTop: '1rem' }}>
-            <label>Ruta
-              <select required value={visitRouteId} onChange={e => { setVisitRouteId(e.target.value); setVisitCustomerId(''); setShowVisitAbono(false); setShowVisitJugReturn(false); }}>
-                <option value="">Seleccionar</option>
-                {routes.data?.filter(r => r.status === 'ACTIVE').map(r => (
-                  <option key={r.id} value={r.id}>{r.code} · {r.name}</option>
-                ))}
-              </select>
-            </label>
-            <label>Cliente
+            {!isSeller && (
+              <label>Ruta
+                <select required value={visitRouteId} onChange={e => { setVisitRouteId(e.target.value); setVisitCustomerId(''); setShowVisitAbono(false); setShowVisitJugReturn(false); }}>
+                  <option value="">Seleccionar</option>
+                  {routes.data?.filter(r => r.status === 'ACTIVE').map(r => (
+                    <option key={r.id} value={r.id}>{r.code} · {r.name}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <label style={isSeller ? { gridColumn: '1 / -1' } : undefined}>Cliente
               <select required value={visitCustomerId} disabled={!visitRouteId} onChange={e => { setVisitCustomerId(e.target.value); setShowVisitAbono(false); setShowVisitJugReturn(false); }}>
                 <option value="">Seleccionar</option>
                 {visitAvailableCustomers.map(c => (
