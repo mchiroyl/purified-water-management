@@ -38,8 +38,9 @@ export function App() {
   if (user.mustChangePassword) return <PasswordChangePage />;
   const isAdmin = user.roles.includes('ADMINISTRADOR');
   const canSeeCustomers = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'VENDEDOR'].includes(role));
-  const canSeeRoutes = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
-  const canSeePricing = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'VENDEDOR'].includes(role));
+  const canSeeRoutes = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA'].includes(role));
+  const canSeeVehicles = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA'].includes(role));
+  const canSeePricing = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR'].includes(role));
   const canSeeInventory = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
   const canManageInventory = user.roles.some(role => ['ADMINISTRADOR', 'BODEGA'].includes(role));
   const canSeeLoads = user.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
@@ -77,8 +78,8 @@ export function App() {
           deviceId={user.deviceId} /> : <Navigate to="/" replace />} />
         <Route path="routes" element={canSeeRoutes ? <RoutesPage canManage={isAdmin} /> : <Navigate to="/" replace />} />
         <Route path="routes/list" element={canSeeRoutes ? <RoutesPage canManage={isAdmin} view="list" /> : <Navigate to="/" replace />} />
-        <Route path="vehicles" element={canSeeRoutes ? <VehiclesPage /> : <Navigate to="/" replace />} />
-        <Route path="vehicles/list" element={canSeeRoutes ? <VehiclesPage view="list" /> : <Navigate to="/" replace />} />
+        <Route path="vehicles" element={canSeeVehicles ? <VehiclesPage /> : <Navigate to="/" replace />} />
+        <Route path="vehicles/list" element={canSeeVehicles ? <VehiclesPage view="list" /> : <Navigate to="/" replace />} />
         <Route path="route-history" element={isAdmin || user.roles.includes('SUPERVISOR') ? <RouteHistoryPage /> : <Navigate to="/" replace />} />
         <Route path="pricing" element={canSeePricing ? <PricingPage canManage={isAdmin} canApprove={isAdmin || user.roles.includes('SUPERVISOR')} canRequestDiscount={user.roles.includes('VENDEDOR')} /> : <Navigate to="/" replace />} />
         <Route path="pricing/list" element={canSeePricing ? <PricingPage view="list" canManage={isAdmin} canApprove={isAdmin || user.roles.includes('SUPERVISOR')} canRequestDiscount={user.roles.includes('VENDEDOR')} /> : <Navigate to="/" replace />} />
