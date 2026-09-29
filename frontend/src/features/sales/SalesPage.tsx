@@ -948,12 +948,15 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
         <ItemPriceBadge customerId={customerId} presentationId={item.presentationId} quantity={item.quantity} />
         {items.length > 1 && <button type="button" className="secondary" onClick={() => setItems(current => current.filter((_row, position) => position !== index))}>Quitar</button>}
       </div>)}</div>
-      <h3>Forma de pago</h3><p className="muted">Con un solo medio puede dejar el monto vacío para aplicar el total calculado por el servidor.</p>
+      <h3>Forma de pago</h3>
+      {payments.length > 1 && <p className="muted">Dividió el pago: especifique el monto para cada medio.</p>}
       <div className="data-list">{payments.map((payment, index) => <div className="payment-editor" key={index}>
-        <label>Medio<select value={payment.method} onChange={event => setPayments(current => current.map((row, position) => position === index ? { ...row, method: event.target.value, reference: '', bank: '', evidenceReference: '' } : row))}>
+        <label style={payments.length === 1 ? { gridColumn: '1 / -1' } : undefined}>Medio<select value={payment.method} onChange={event => setPayments(current => current.map((row, position) => position === index ? { ...row, method: event.target.value, reference: '', bank: '', evidenceReference: '' } : row))}>
           <option value="CASH" disabled={payments.some((row, position) => position !== index && row.method === 'CASH')}>Efectivo</option><option value="TRANSFER" disabled={payments.some((row, position) => position !== index && row.method === 'TRANSFER')}>Transferencia</option>{isCreditAuthorized && <option value="CREDIT" disabled={payments.some((row, position) => position !== index && row.method === 'CREDIT')}>Crédito</option>}
         </select></label>
-        <label>Monto {payments.length === 1 && '(opcional)'}<input required={payments.length > 1} type="number" min="0.01" step="0.01" value={payment.amount} onChange={event => setPayments(current => current.map((row, position) => position === index ? { ...row, amount: event.target.value } : row))} /></label>
+        {payments.length > 1 && (
+          <label>Monto<input required type="number" min="0.01" step="0.01" value={payment.amount} onChange={event => setPayments(current => current.map((row, position) => position === index ? { ...row, amount: event.target.value } : row))} /></label>
+        )}
         {payment.method === 'TRANSFER' && <><label>Referencia<input required value={payment.reference} onChange={event => setPayments(current => current.map((row, position) => position === index ? { ...row, reference: event.target.value } : row))} /></label><label>Banco<input value={payment.bank} onChange={event => setPayments(current => current.map((row, position) => position === index ? { ...row, bank: event.target.value } : row))} /></label><label>Evidencia opcional<input value={payment.evidenceReference} onChange={event => setPayments(current => current.map((row, position) => position === index ? { ...row, evidenceReference: event.target.value } : row))} /></label></>}
         {payment.method === 'CREDIT' && selectedCustomer && (
           <div>
@@ -970,7 +973,10 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
             )}
           </div>
         )}
-        {payments.length > 1 && <button type="button" className="secondary" onClick={() => setPayments(current => current.filter((_row, position) => position !== index))}>Quitar pago</button>}
+        {payments.length > 1 && <button type="button" className="secondary" onClick={() => setPayments(current => {
+          const next = current.filter((_row, position) => position !== index);
+          return next.length === 1 ? [{ ...next[0], amount: '' }] : next;
+        })}>Quitar pago</button>}
       </div>)}</div>
       <button type="button" className="secondary add-payment" disabled={!nextPaymentMethod} onClick={() => nextPaymentMethod && setPayments(current => [...current, newPayment(nextPaymentMethod)])}>Dividir pago</button>
       <div className="form-actions"><button type="button" className="secondary" onClick={() => setItems(current => [...current, { presentationId: '', quantity: 1 }])}>Agregar producto</button><button className="primary" disabled={isCapturingLocation || create.isPending || saleBlocked}>{isCapturingLocation ? 'Refinando precisión GPS…' : create.isPending ? 'Confirmando…' : 'Confirmar venta'}</button></div>
