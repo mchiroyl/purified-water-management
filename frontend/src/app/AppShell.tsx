@@ -22,8 +22,9 @@ export function AppShell() {
   const canSeeAudit = isAdmin || user?.roles.includes('SUPERVISOR');
   const canCatalog = user?.roles.some(role => ['ADMINISTRADOR', 'BODEGA', 'SUPERVISOR'].includes(role));
   const canSeeCustomers = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'VENDEDOR'].includes(role));
-  const canSeeRoutes = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
-  const canSeePricing = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'VENDEDOR'].includes(role));
+  const canSeeRoutes = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA'].includes(role));
+  const canSeeVehicles = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA'].includes(role));
+  const canSeePricing = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR'].includes(role));
   const canSeeInventory = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
   const canSeeLoads = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA', 'VENDEDOR'].includes(role));
   const canSeeSales = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'VENDEDOR'].includes(role));
@@ -51,7 +52,7 @@ export function AppShell() {
         { to: '/products', label: 'Productos', icon: '🏷️', visible: canCatalog },
         { to: '/customers', label: 'Clientes', icon: '👥', visible: canSeeCustomers },
         { to: '/routes', label: 'Rutas', icon: '🗺️', visible: canSeeRoutes },
-        { to: '/vehicles', label: 'Vehículos', icon: '🚚', visible: canSeeRoutes },
+        { to: '/vehicles', label: 'Vehículos', icon: '🚚', visible: canSeeVehicles },
         { to: '/pricing', label: 'Precios', icon: '💲', visible: canSeePricing }
       ]
     },
