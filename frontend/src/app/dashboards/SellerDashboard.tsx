@@ -130,22 +130,22 @@ export function SellerDashboard({
         <Link to="/sales" className="seller-action-card primary-action">
           <div className="action-icon">⚡</div>
           <span>Nueva Venta</span>
-          <small>Facturar con precio en vivo</small>
+          <small>Venta, abonos y envases</small>
         </Link>
-        <Link to="/jugs" className="seller-action-card secondary-action">
-          <div className="action-icon">🔄</div>
-          <span>Préstamo Garrafón</span>
-          <small>Devolución y control de envases</small>
-        </Link>
-        <Link to="/credit" className="seller-action-card secondary-action">
-          <div className="action-icon">💵</div>
-          <span>Cobro de Crédito</span>
-          <small>Recibir abono de cliente</small>
+        <Link to="/customers" className="seller-action-card secondary-action">
+          <div className="action-icon">👥</div>
+          <span>Mis Clientes</span>
+          <small>Directorio y altas en ruta</small>
         </Link>
         <Link to="/loads" className="seller-action-card secondary-action">
           <div className="action-icon">📦</div>
-          <span>Mi Carga / Ruta</span>
-          <small>Consultar o solicitar recarga</small>
+          <span>Mi Carga</span>
+          <small>Existencias en camión</small>
+        </Link>
+        <Link to="/settlements" className="seller-action-card secondary-action">
+          <div className="action-icon">💵</div>
+          <span>Liquidación</span>
+          <small>Cierre de turno y ventas</small>
         </Link>
       </div>
 

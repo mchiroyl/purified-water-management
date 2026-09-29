@@ -331,22 +331,35 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
                     <div className="action-buttons" style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                       <button
                         type="button"
-                        className="secondary"
+                        className="primary"
                         style={{ padding: '0.2rem 0.6rem', fontSize: '0.85rem' }}
-                        title="Ver y registrar garrafones del cliente"
-                        onClick={() => navigate(`/jugs?customerId=${customer.id}`)}
+                        title="Iniciar venta para este cliente"
+                        onClick={() => navigate(`/sales?customerId=${customer.id}`)}
                       >
-                        🧴 Garrafones
+                        ⚡ Vender
                       </button>
-                      <button
-                        type="button"
-                        className="secondary"
-                        style={{ padding: '0.2rem 0.6rem', fontSize: '0.85rem' }}
-                        title="Ver estado de cuenta y abonar a crédito"
-                        onClick={() => navigate(`/credit?customerId=${customer.id}`)}
-                      >
-                        💳 Crédito
-                      </button>
+                      {canManage && (
+                        <>
+                          <button
+                            type="button"
+                            className="secondary"
+                            style={{ padding: '0.2rem 0.6rem', fontSize: '0.85rem' }}
+                            title="Ver y registrar garrafones del cliente"
+                            onClick={() => navigate(`/jugs?customerId=${customer.id}`)}
+                          >
+                            🧴 Garrafones
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary"
+                            style={{ padding: '0.2rem 0.6rem', fontSize: '0.85rem' }}
+                            title="Ver estado de cuenta y abonar a crédito"
+                            onClick={() => navigate(`/credit?customerId=${customer.id}`)}
+                          >
+                            💳 Crédito
+                          </button>
+                        </>
+                      )}
                       {canManage && (
                         <button
                           type="button"
