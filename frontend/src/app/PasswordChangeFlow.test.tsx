@@ -21,6 +21,6 @@ describe('cambio obligatorio de contrasena', () => {
       </QueryClientProvider>
     );
 
-    expect(await screen.findByRole('heading', { name: /cambiar contrasena/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /cambiar contrase[ñn]a/i })).toBeInTheDocument();
   });
 });
