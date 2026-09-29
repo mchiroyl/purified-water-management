@@ -46,6 +46,12 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
   });
   const [showUpdateSuccessModal, setShowUpdateSuccessModal] = useState(false);
   const [updatedCustomerName, setUpdatedCustomerName] = useState('');
+  const [assignmentSuccess, setAssignmentSuccess] = useState<{
+    customerName: string;
+    customerCode?: string;
+    routeName: string;
+    validFrom: string;
+  } | null>(null);
   const create = useMutation({
     mutationFn: () => apiRequest<Customer>('/customers', { method: 'POST', body: JSON.stringify(form) }),
     onSuccess: () => {
@@ -72,7 +78,17 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
   const assign = useMutation({
     mutationFn: ({ customerId, routeId, validFrom }: { customerId: string; routeId: string; validFrom: string }) =>
       apiRequest<Route>(`/customers/${customerId}/route-assignment`, { method: 'POST', body: JSON.stringify({ routeId, validFrom }) }),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['customers'] })
+    onSuccess: (data, variables) => {
+      const customer = customers.data?.find(c => c.id === variables.customerId);
+      const route = routes.data?.find(r => r.id === variables.routeId);
+      setAssignmentSuccess({
+        customerName: customer?.name ?? 'Cliente',
+        customerCode: customer?.code,
+        routeName: route ? `${route.code} · ${route.name}` : (data?.name ?? 'Ruta'),
+        validFrom: variables.validFrom,
+      });
+      void queryClient.invalidateQueries({ queryKey: ['customers'] });
+    }
   });
   const decideReview = useMutation({
     mutationFn: ({ customerId, decision }: { customerId: string; decision: 'APPROVED' | 'REJECTED' | 'MERGED' }) => {
@@ -380,8 +396,12 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
                           value={selection.validFrom}
                           onChange={e => setAssignments({ ...assignments, [customer.id]: { ...selection, validFrom: e.target.value } })}
                         />
-                        <button className="secondary" disabled={!selection.routeId || assign.isPending} onClick={() => assign.mutate({ customerId: customer.id, ...selection })}>
-                          Asignar ruta
+                        <button
+                          className="secondary"
+                          disabled={!selection.routeId || assign.isPending}
+                          onClick={() => assign.mutate({ customerId: customer.id, ...selection })}
+                        >
+                          {assign.isPending && assign.variables?.customerId === customer.id ? 'Asignando…' : 'Asignar ruta'}
                         </button>
                       </div>
                     )}
@@ -561,6 +581,48 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
                 autoFocus
               >
                 OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Ventana emergente: Asignación de ruta exitosa ── */}
+      {assignmentSuccess && (
+        <div className="floating-toast-overlay" role="dialog" aria-modal="true" aria-labelledby="assignment-success-title">
+          <div className="floating-toast-card">
+            <div className="floating-toast-icon">✅</div>
+            <div className="floating-toast-body">
+              <h3 id="assignment-success-title">Ruta asignada exitosamente</h3>
+              <p>
+                El cliente <strong>{assignmentSuccess.customerCode ? `${assignmentSuccess.customerCode} · ` : ''}{assignmentSuccess.customerName}</strong> fue vinculado con éxito a la ruta:
+              </p>
+              <div style={{
+                margin: '0.75rem 0',
+                padding: '0.7rem 1rem',
+                background: '#f0fdf4',
+                border: '1px solid #86efac',
+                borderRadius: '0.65rem',
+                color: '#15803d',
+                textAlign: 'center',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+              }}>
+                <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#166534' }}>
+                  🚚 {assignmentSuccess.routeName}
+                </div>
+                <div style={{ marginTop: '0.25rem', fontSize: '0.82rem', color: '#15803d' }}>
+                  Vigencia a partir de: <strong>{assignmentSuccess.validFrom}</strong>
+                </div>
+              </div>
+            </div>
+            <div className="floating-toast-actions">
+              <button
+                type="button"
+                className="primary"
+                onClick={() => setAssignmentSuccess(null)}
+                autoFocus
+              >
+                Aceptar
               </button>
             </div>
           </div>
