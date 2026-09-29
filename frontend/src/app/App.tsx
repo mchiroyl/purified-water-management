@@ -56,8 +56,8 @@ export function App() {
   const isCreditAdmin = user.roles.includes('ADMINISTRADOR_CREDITO');
   const canSeeCredit = isAdmin || isCreditAdmin || isSeller;
   const canVerifyCredit = isAdmin || isCreditAdmin;
-  const canSeeJugs = isAdmin || isCreditAdmin || isSeller;
-  const canRecordJugs = isAdmin || isSeller;
+  const canSeeJugs = isAdmin || isCreditAdmin || user.roles.includes('SUPERVISOR');
+  const canRecordJugs = isAdmin || user.roles.includes('SUPERVISOR');
   const canReviewProvisional = isAdmin || user.roles.includes('SUPERVISOR');
   const canSeeAudit = isAdmin || user.roles.includes('SUPERVISOR');
   return (

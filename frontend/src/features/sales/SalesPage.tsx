@@ -37,10 +37,8 @@ function CustomerContextBanner({
   jugLoading,
   creditLoading,
   onToggleJugReturn,
-  onToggleJugLoan,
   onToggleAbono,
   isJugReturnOpen,
-  isJugLoanOpen,
   isAbonoOpen,
 }: {
   customerId: string;
@@ -50,10 +48,8 @@ function CustomerContextBanner({
   jugLoading: boolean;
   creditLoading: boolean;
   onToggleJugReturn: () => void;
-  onToggleJugLoan: () => void;
   onToggleAbono: () => void;
   isJugReturnOpen: boolean;
-  isJugLoanOpen: boolean;
   isAbonoOpen: boolean;
 }) {
   if (!customerId) return null;
@@ -84,24 +80,16 @@ function CustomerContextBanner({
             <span>🧴</span>
             <span>Garrafones prestados: <strong>{jugBalance!.jugsOutstanding}</strong> — pendientes de devolver o cobrar.</span>
           </div>
-          <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
-            <button type="button" className="secondary" style={{ fontSize: '0.8rem', padding: '0.2rem 0.55rem' }} onClick={onToggleJugReturn}>
-              {isJugReturnOpen ? '▲ Cerrar devolución' : '🔄 Devolver garrafones'}
-            </button>
-            <button type="button" className="secondary" style={{ fontSize: '0.8rem', padding: '0.2rem 0.55rem' }} onClick={onToggleJugLoan}>
-              {isJugLoanOpen ? '▲ Cerrar préstamo' : '➕ Prestar garrafón'}
-            </button>
-          </div>
+          <button type="button" className="secondary" style={{ fontSize: '0.8rem', padding: '0.2rem 0.55rem' }} onClick={onToggleJugReturn}>
+            {isJugReturnOpen ? '▲ Cerrar devolución' : '🔄 Devolver garrafones'}
+          </button>
         </div>
       ) : (
         <div className="context-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem', background: '#f8fafc', borderLeft: '3px solid #94a3b8', color: '#475569' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
             <span>🧴</span>
-            <span style={{ fontSize: '0.85rem' }}>Garrafones prestados: <strong>0</strong> (al día).</span>
+            <span style={{ fontSize: '0.85rem' }}>Garrafones prestados: <strong>0</strong> (al día, sin envases pendientes).</span>
           </div>
-          <button type="button" className="secondary" style={{ fontSize: '0.8rem', padding: '0.2rem 0.55rem' }} onClick={onToggleJugLoan}>
-            {isJugLoanOpen ? '▲ Ocultar' : '➕ Prestar garrafón'}
-          </button>
         </div>
       )}
       {hasDebt && (
@@ -336,99 +324,6 @@ function InlineJugReturnForm({
   );
 }
 
-// ── Mini-formulario de préstamo de garrafones inline ─────────────────────────
-function InlineJugLoanForm({
-  customerId,
-  routeId,
-  customerName,
-  onDone,
-  onSuccessToast,
-}: {
-  customerId: string;
-  routeId: string;
-  customerName?: string;
-  onDone: () => void;
-  onSuccessToast?: (toast: { title: string; message: string; icon?: string }) => void;
-}) {
-  const queryClient = useQueryClient();
-  const [quantity, setQuantity] = useState(1);
-  const [notes, setNotes] = useState('');
-  const [loanError, setLoanError] = useState('');
-  const [loanSuccess, setLoanSuccess] = useState('');
-
-  const lendJug = useMutation({
-    mutationFn: () =>
-      apiRequest('/jugs/events', {
-        method: 'POST',
-        body: JSON.stringify({
-          customerId,
-          routeId,
-          eventType: 'LENT',
-          quantity: Number(quantity),
-          notes: notes.trim() || 'Préstamo de garrafones en ruta',
-        }),
-      }),
-    onSuccess: () => {
-      const msg = `Se registraron exitosamente ${quantity} garrafón(es) en calidad de préstamo${customerName ? ` para ${customerName}` : ''}.`;
-      setLoanSuccess(`✅ ${msg}`);
-      void queryClient.invalidateQueries({ queryKey: ['jugs'] });
-      if (onSuccessToast) {
-        onSuccessToast({
-          title: 'Préstamo de garrafones registrado',
-          message: msg,
-          icon: '🧴',
-        });
-      }
-      setTimeout(onDone, 1800);
-    },
-    onError: (err: Error) => setLoanError(err.message || 'Error al registrar el préstamo.'),
-  });
-
-  return (
-    <div className="inline-abono-form" style={{ marginTop: '0.5rem', background: '#fffbeb', border: '1px solid #fde68a' }}>
-      <strong style={{ fontSize: '0.88rem', display: 'block', marginBottom: '0.4rem', color: '#92400e' }}>
-        🧴 Registrar entrega de garrafones en préstamo {customerName ? `a ${customerName}` : ''}
-      </strong>
-      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        <label style={{ fontSize: '0.85rem' }}>
-          Cantidad a prestar:
-          <input
-            type="number"
-            min="1"
-            step="1"
-            value={quantity}
-            onChange={e => setQuantity(Math.max(1, Number(e.target.value)))}
-            style={{ width: '5rem', marginLeft: '0.3rem' }}
-          />
-        </label>
-        <label style={{ fontSize: '0.85rem' }}>
-          Nota:
-          <input
-            type="text"
-            placeholder="Opcional"
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-            style={{ width: '10rem', marginLeft: '0.3rem' }}
-          />
-        </label>
-        <button
-          type="button"
-          className="primary"
-          style={{ fontSize: '0.85rem' }}
-          disabled={lendJug.isPending || quantity < 1}
-          onClick={() => { setLoanError(''); lendJug.mutate(); }}
-        >
-          {lendJug.isPending ? 'Registrando…' : 'Confirmar préstamo'}
-        </button>
-        <button type="button" className="secondary" style={{ fontSize: '0.85rem' }} onClick={onDone}>
-          Cancelar
-        </button>
-      </div>
-      {loanError && <div className="alert error" style={{ marginTop: '0.4rem', fontSize: '0.82rem' }}>{loanError}</div>}
-      {loanSuccess && <div className="alert success" style={{ marginTop: '0.4rem', fontSize: '0.82rem' }}>{loanSuccess}</div>}
-    </div>
-  );
-}
 
 export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canViewLocation: boolean }) {
   const navigate = useNavigate();
@@ -464,7 +359,6 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
 
   // ── Formularios contextuales inline en formulario de Venta ─────────────────
   const [showSaleJugReturn, setShowSaleJugReturn] = useState(false);
-  const [showSaleJugLoan, setShowSaleJugLoan] = useState(false);
   const [showSaleAbono, setShowSaleAbono] = useState(false);
 
   // ── Queries contextuales al seleccionar cliente (ventas) ────────────────────
@@ -635,7 +529,6 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
     setItems([{ presentationId: '', quantity: 1 }]);
     setPayments([newPayment()]);
     setShowSaleJugReturn(false);
-    setShowSaleJugLoan(false);
     setShowSaleAbono(false);
     navigate('/');
   };
@@ -673,7 +566,7 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
         customerId,
         suggestedJugQty: suggestedQty,
       });
-      setPostSaleJugQty(suggestedQty);
+      setPostSaleJugQty(0);
       setPostSaleJugLentSuccess(false);
       setPostSaleJugError('');
       await queryClient.invalidateQueries({ queryKey: ['sales'] });
@@ -850,12 +743,12 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
       <h2>Nueva venta</h2>
       <div className="form-grid compact-grid">
         {!isSeller && (
-          <label>Ruta<select required value={routeId} onChange={event => { setRouteId(event.target.value); setCustomerId(''); setPayments([newPayment()]); setShowSaleJugReturn(false); setShowSaleJugLoan(false); setShowSaleAbono(false); }}>
+          <label>Ruta<select required value={routeId} onChange={event => { setRouteId(event.target.value); setCustomerId(''); setPayments([newPayment()]); setShowSaleJugReturn(false); setShowSaleAbono(false); }}>
             <option value="">Seleccionar</option>{routes.data?.filter(route => route.status === 'ACTIVE').map(route => <option key={route.id} value={route.id}>{route.code} · {route.name}</option>)}
           </select></label>
         )}
         <div style={isSeller ? { gridColumn: '1 / -1' } : undefined}>
-          <label>Cliente<select id="sale-customer-select" required value={customerId} disabled={!routeId} onChange={event => { setCustomerId(event.target.value); setPayments([newPayment()]); setShowSaleJugReturn(false); setShowSaleJugLoan(false); setShowSaleAbono(false); }}>
+          <label>Cliente<select id="sale-customer-select" required value={customerId} disabled={!routeId} onChange={event => { setCustomerId(event.target.value); setPayments([newPayment()]); setShowSaleJugReturn(false); setShowSaleAbono(false); }}>
             <option value="">Seleccionar</option>{availableCustomers.map(customer => (
               <option key={customer.id} value={customer.id}>
                 {customer.customerType === 'OCCASIONAL' ? '⚡ ' : ''}{customer.code} · {customer.name} {customer.customerType === 'OCCASIONAL' ? '(Provisional)' : ''}
@@ -900,11 +793,9 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
         creditBalance={saleCreditBalance.data}
         jugLoading={saleJugBalance.isFetching}
         creditLoading={saleCreditBalance.isFetching}
-        onToggleJugReturn={() => { setShowSaleJugReturn(v => !v); setShowSaleJugLoan(false); setShowSaleAbono(false); }}
-        onToggleJugLoan={() => { setShowSaleJugLoan(v => !v); setShowSaleJugReturn(false); setShowSaleAbono(false); }}
-        onToggleAbono={() => { setShowSaleAbono(v => !v); setShowSaleJugReturn(false); setShowSaleJugLoan(false); }}
+        onToggleJugReturn={() => { setShowSaleJugReturn(v => !v); setShowSaleAbono(false); }}
+        onToggleAbono={() => { setShowSaleAbono(v => !v); setShowSaleJugReturn(false); }}
         isJugReturnOpen={showSaleJugReturn}
-        isJugLoanOpen={showSaleJugLoan}
         isAbonoOpen={showSaleAbono}
       />
 
@@ -915,16 +806,6 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
           customerName={selectedCustomer?.name}
           maxReturnable={saleJugBalance.data?.jugsOutstanding}
           onDone={() => setShowSaleJugReturn(false)}
-          onSuccessToast={setSuccessToast}
-        />
-      )}
-
-      {showSaleJugLoan && (
-        <InlineJugLoanForm
-          customerId={customerId}
-          routeId={routeId}
-          customerName={selectedCustomer?.name}
-          onDone={() => setShowSaleJugLoan(false)}
           onSuccessToast={setSuccessToast}
         />
       )}
@@ -1299,15 +1180,15 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
               <>
                 <p style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', color: 'var(--muted)' }}>
                   {confirmedSaleModal.suggestedJugQty > 0
-                    ? `¿El cliente quedó debiendo envases vacíos de los ${confirmedSaleModal.suggestedJugQty} garrafón(es) vendidos? Puede ajustar la cantidad:`
-                    : '¿El cliente quedó debiendo envases vacíos o se entregaron garrafones en préstamo? Ingrese la cantidad:'}
+                    ? `Se vendieron ${confirmedSaleModal.suggestedJugQty} garrafón(es). Si el cliente quedó debiendo envases vacíos (en préstamo), indique la cantidad:`
+                    : 'Si se entregaron envases vacíos o en préstamo al cliente, indique la cantidad:'}
                 </p>
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                   <label style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                    Cantidad:
+                    Cantidad a prestar:
                     <input
                       type="number"
-                      min="0"
+                      min="1"
                       step="1"
                       value={postSaleJugQty === 0 ? '' : postSaleJugQty}
                       placeholder="0"
@@ -1318,6 +1199,16 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
                       style={{ width: '4.5rem' }}
                     />
                   </label>
+                  {confirmedSaleModal.suggestedJugQty > 0 && postSaleJugQty !== confirmedSaleModal.suggestedJugQty && (
+                    <button
+                      type="button"
+                      className="secondary"
+                      style={{ fontSize: '0.8rem', padding: '0.25rem 0.5rem' }}
+                      onClick={() => setPostSaleJugQty(confirmedSaleModal.suggestedJugQty)}
+                    >
+                      Debió todos ({confirmedSaleModal.suggestedJugQty})
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="secondary"
