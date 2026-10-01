@@ -48,12 +48,16 @@ function money(value: number, currency = 'GTQ'): string {
   return `${currency === 'GTQ' ? 'Q' : `${currency} `}${Number(value || 0).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+type SettlementItem = { id: string; productName: string; loadedUnits: number; soldUnits: number; physicalDifference: number };
+type Settlement = { id: string; routeLoadId: string; loadNumber: number; routeCode: string; routeName: string; status: string; items: SettlementItem[] };
+
 interface SellerDashboardProps {
   user: SessionUser;
   dashboard: Dashboard;
   loads: RouteLoad[];
   locations: Location[];
   sales: Sale[];
+  settlements?: Settlement[];
   isRefreshing: boolean;
   onRefresh: () => void;
 }
@@ -64,6 +68,7 @@ export function SellerDashboard({
   loads,
   locations,
   sales,
+  settlements,
   isRefreshing,
   onRefresh,
 }: SellerDashboardProps) {
@@ -71,7 +76,15 @@ export function SellerDashboard({
   const sellerLoad = loads.find(l => 
     (l.sellerReceivedByUsername === user.username || l.createdByUsername === user.username) &&
     (l.status === 'STARTED' || l.status === 'RECEIVED' || l.status === 'PREPARED' || l.status === 'WAREHOUSE_CONFIRMED')
-  ) ?? loads.find(l => l.sellerReceivedByUsername === user.username || l.createdByUsername === user.username);
+  ) ?? loads.find(l => l.sellerReceivedByUsername === user.username || l.createdByUsername === user.username)
+    ?? loads.find(l => l.status === 'STARTED' || l.status === 'RECEIVED');
+
+  // Buscar liquidación oficial del servidor para esta carga o ruta si ya fue calculada
+  const currentSettlement = settlements?.find(st =>
+    st.routeLoadId === sellerLoad?.id ||
+    (sellerLoad?.loadNumber && String(st.loadNumber) === String(sellerLoad.loadNumber).replace(/\D/g, '')) ||
+    (sellerLoad?.routeCode && st.routeCode === sellerLoad.routeCode)
+  );
 
   // Momento de inicio o despacho de la carga activa
   const loadStartTime = sellerLoad?.startedAt || sellerLoad?.sellerReceivedAt || sellerLoad?.createdAt;
@@ -88,23 +101,9 @@ export function SellerDashboard({
     }
   };
 
-  // Ventas realizadas por este vendedor correspondientes estrictamente a esta carga activa
+  // Ventas de la ruta correspondientes a esta carga activa
   const sellerSales = sales.filter(s => {
-    // 1. Debe corresponder a este vendedor
-    const matchesUser = 
-      s.sellerName === user.displayName || 
-      s.sellerName === user.username ||
-      (s.sellerName && (
-        s.sellerName.toLowerCase() === user.displayName.toLowerCase() ||
-        s.sellerName.toLowerCase() === user.username.toLowerCase()
-      ));
-
-    // Si la venta tiene registrado un vendedor explícito diferente al usuario actual, descartarla
-    if (s.sellerName && !matchesUser) {
-      return false;
-    }
-
-    // 2. Si la carga tiene ruta asignada, la venta debe pertenecer a la misma ruta
+    // Si la carga tiene ruta asignada, la venta debe pertenecer a la misma ruta
     if (sellerLoad?.routeId && s.routeId && s.routeId !== sellerLoad.routeId) {
       return false;
     }
@@ -112,17 +111,18 @@ export function SellerDashboard({
       return false;
     }
 
-    // 3. Filtro de temporalidad: solo ventas de esta carga / jornada
+    // Filtro de temporalidad: ventas de la jornada o de la carga
+    if (sellerLoad?.plannedDate) {
+      const saleDate = getLocalDate(s.createdAt);
+      if (saleDate === sellerLoad.plannedDate || s.createdAt.startsWith(sellerLoad.plannedDate)) {
+        return true;
+      }
+    }
     if (loadStartTime) {
       const saleTime = new Date(s.createdAt).getTime();
       const startTime = new Date(loadStartTime).getTime() - 120_000; // 2 min de margen por sincronización
-      if (saleTime < startTime) {
-        return false;
-      }
-    } else if (sellerLoad?.plannedDate) {
-      const saleDate = getLocalDate(s.createdAt);
-      if (saleDate !== sellerLoad.plannedDate && !s.createdAt.startsWith(sellerLoad.plannedDate)) {
-        return false;
+      if (saleTime >= startTime) {
+        return true;
       }
     }
 
@@ -151,6 +151,7 @@ export function SellerDashboard({
 
     const totalItemLoaded = Number(item.quantityBaseUnits || 0) + replenishmentUnits;
 
+    // Ventas acumuladas en vivo
     const rawSoldQty = sellerSales.reduce((acc, s) => {
       const matches = s.items?.filter(it => 
         (it.productId && item.productId && it.productId === item.productId) ||
@@ -161,8 +162,15 @@ export function SellerDashboard({
       return acc + lineSum;
     }, 0);
 
-    // Las unidades vendidas del camión no pueden superar lo físicamente cargado
-    const soldQty = Math.min(totalItemLoaded, rawSoldQty);
+    // Unidades vendidas según liquidación oficial del servidor
+    const settlementItem = currentSettlement?.items?.find(it =>
+      (it.productName && item.productName && it.productName.trim().toLowerCase() === item.productName.trim().toLowerCase())
+    );
+    const settlementSold = Number(settlementItem?.soldUnits || 0);
+
+    // Usar la mayor cantidad de ventas verificadas
+    const effectiveSold = Math.max(rawSoldQty, settlementSold);
+    const soldQty = Math.min(totalItemLoaded, effectiveSold);
     const remainingOnTruck = Math.max(0, totalItemLoaded - soldQty);
 
     return {
