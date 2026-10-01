@@ -44,6 +44,9 @@ type PriceTier = { id: string; presentationId: string; minimumBaseUnits: number;
 type PriceVersion = { id: string; status: string; tiers: PriceTier[] };
 type PriceList = { id: string; status: string; versions: PriceVersion[] };
 
+type SettlementItem = { id: string; productName: string; loadedUnits: number; soldUnits: number; physicalDifference: number };
+type Settlement = { id: string; routeLoadId: string; loadNumber: number; routeCode: string; routeName: string; status: string; items: SettlementItem[] };
+
 export function DashboardPage() {
   const client = useQueryClient();
   const session = useOptionalSession();
@@ -90,13 +93,20 @@ export function DashboardPage() {
     refetchInterval: 30_000
   });
 
-  const isRefreshing = dashboard.isFetching || loads.isFetching || sales.isFetching || locations.isFetching;
+  const settlements = useQuery({
+    queryKey: ['settlements'],
+    queryFn: () => apiRequest<Settlement[]>('/settlements'),
+    refetchInterval: 30_000
+  });
+
+  const isRefreshing = dashboard.isFetching || loads.isFetching || sales.isFetching || locations.isFetching || settlements.isFetching;
 
   const handleRefresh = () => {
     client.invalidateQueries({ queryKey: ['dashboard'] });
     client.invalidateQueries({ queryKey: ['route-loads'] });
     client.invalidateQueries({ queryKey: ['inventory', 'locations'] });
     client.invalidateQueries({ queryKey: ['sales'] });
+    client.invalidateQueries({ queryKey: ['settlements'] });
     if (isAdminOrSupervisor) {
       client.invalidateQueries({ queryKey: ['products'] });
       client.invalidateQueries({ queryKey: ['pricing', 'lists'] });
@@ -133,6 +143,7 @@ export function DashboardPage() {
           loads={loads.data ?? []}
           locations={locations.data ?? []}
           sales={sales.data ?? []}
+          settlements={settlements.data ?? []}
           isRefreshing={isRefreshing}
           onRefresh={handleRefresh}
         />

@@ -166,7 +166,12 @@ public class JdbcSalesAdapter implements SalesPort {
 
     @Override
     public List<SaleView> findSales(Optional<UUID> sellerUserId) {
-        String filter = sellerUserId.isPresent() ? " AND seller.user_id=:sellerUserId" : "";
+        String filter = sellerUserId.isPresent() ? """
+                 AND (seller.user_id = :sellerUserId
+                      OR s.created_by = :sellerUserId
+                      OR EXISTS(SELECT 1 FROM route_assignment ra JOIN seller own ON own.id = ra.seller_id WHERE ra.route_id = s.route_id AND own.user_id = :sellerUserId)
+                      OR EXISTS(SELECT 1 FROM route_load rl WHERE rl.route_id = s.route_id AND (rl.seller_received_by = :sellerUserId OR rl.created_by = :sellerUserId)))
+                """ : "";
         var statement = jdbc.sql(saleSelect() + filter + " ORDER BY s.created_at DESC");
         if (sellerUserId.isPresent()) statement = statement.param("sellerUserId", sellerUserId.get());
         return statement.query((rs, row) -> saleRow(rs)).list().stream().map(this::withItems).toList();
@@ -174,7 +179,12 @@ public class JdbcSalesAdapter implements SalesPort {
 
     @Override
     public Optional<SaleView> findSale(UUID id, Optional<UUID> sellerUserId) {
-        String filter = sellerUserId.isPresent() ? " AND seller.user_id=:sellerUserId" : "";
+        String filter = sellerUserId.isPresent() ? """
+                 AND (seller.user_id = :sellerUserId
+                      OR s.created_by = :sellerUserId
+                      OR EXISTS(SELECT 1 FROM route_assignment ra JOIN seller own ON own.id = ra.seller_id WHERE ra.route_id = s.route_id AND own.user_id = :sellerUserId)
+                      OR EXISTS(SELECT 1 FROM route_load rl WHERE rl.route_id = s.route_id AND (rl.seller_received_by = :sellerUserId OR rl.created_by = :sellerUserId)))
+                """ : "";
         var statement = jdbc.sql(saleSelect() + " AND s.id=:id" + filter).param("id", id);
         if (sellerUserId.isPresent()) statement = statement.param("sellerUserId", sellerUserId.get());
         return statement.query((rs, row) -> saleRow(rs)).optional().map(this::withItems);
