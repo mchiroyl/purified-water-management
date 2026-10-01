@@ -74,30 +74,44 @@ export function SellerDashboard({
     return acc + (s.items?.reduce((iAcc, item) => iAcc + Number(item.quantityBaseUnits || 0), 0) || 0);
   }, 0);
 
-  // Carga total en unidades
-  const totalLoadedUnits = sellerLoad?.items.reduce((acc, it) => acc + Number(it.quantityBaseUnits || 0), 0) || 0;
-  const progressPct = totalLoadedUnits > 0 ? Math.min(100, Math.round((totalSoldUnits / totalLoadedUnits) * 100)) : 0;
+  // Recargas adicionales aprobadas/recibidas para esta misma ruta durante el recorrido
+  const routeReplenishments = loads.filter(l => 
+    sellerLoad &&
+    l.routeId === sellerLoad.routeId &&
+    l.loadType === 'REPLENISHMENT' &&
+    (l.status === 'STARTED' || l.status === 'RECEIVED' || l.status === 'SETTLED')
+  );
 
-  // Ubicación de ruta para existencias
-  const routeLoc = sellerLoad ? locations.find(l => l.routeId === sellerLoad.routeId || (l.locationType === 'ROUTE' && l.name?.includes(sellerLoad.routeName))) : null;
-
-  // Productos en el camión
+  // Productos en el camión basados en la carga activa y sus ventas
   const truckItems = (sellerLoad?.items ?? []).map(item => {
-    const soldQty = sellerSales.reduce((acc, s) => {
-      const match = s.items?.find(it => it.productName === item.productName || it.id === item.productId);
-      return acc + (Number(match?.quantityBaseUnits || 0));
+    // Unidades adicionales por recarga en ruta si existen
+    const replenishmentUnits = routeReplenishments.reduce((acc, rep) => {
+      const match = rep.items?.find(it => it.productId === item.productId || it.productName === item.productName);
+      return acc + Number(match?.quantityBaseUnits || 0);
     }, 0);
-    const onTruck = routeLoc?.balances?.find(b => b.productId === item.productId)?.quantityBaseUnits 
-      ?? Math.max(0, Number(item.quantityBaseUnits || 0) - soldQty);
+
+    const totalItemLoaded = Number(item.quantityBaseUnits || 0) + replenishmentUnits;
+
+    const soldQty = sellerSales.reduce((acc, s) => {
+      const matches = s.items?.filter(it => it.productName === item.productName || it.id === item.productId);
+      const lineSum = matches?.reduce((iAcc, it) => iAcc + Number(it.quantityBaseUnits || 0), 0) || 0;
+      return acc + lineSum;
+    }, 0);
+
+    const remainingOnTruck = Math.max(0, totalItemLoaded - soldQty);
+
     return {
       ...item,
+      quantityBaseUnits: totalItemLoaded,
       soldQty,
-      remainingOnTruck: onTruck
+      remainingOnTruck
     };
   });
 
-  const remainingTotalUnits = routeLoc?.balances?.reduce((acc, b) => acc + Number(b.quantityBaseUnits || 0), 0)
-    ?? Math.max(0, totalLoadedUnits - totalSoldUnits);
+  // Carga total en unidades (incluyendo recargas de ruta)
+  const totalLoadedUnits = truckItems.reduce((acc, it) => acc + Number(it.quantityBaseUnits || 0), 0);
+  const remainingTotalUnits = Math.max(0, totalLoadedUnits - totalSoldUnits);
+  const progressPct = totalLoadedUnits > 0 ? Math.min(100, Math.round((totalSoldUnits / totalLoadedUnits) * 100)) : 0;
 
   // Efectivo en mano que debe entregar el vendedor
   const cashInHand = Math.max(0, Number(dashboard.expectedCash || 0) - Number(dashboard.deliveredCash || 0));

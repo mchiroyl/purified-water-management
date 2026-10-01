@@ -245,9 +245,7 @@ export function AdminDashboard({
                 return acc + (s.items?.reduce((iAcc, item) => iAcc + Number(item.quantityBaseUnits || 0), 0) || 0);
               }, 0);
 
-              const routeLoc = locations.find(l => l.routeId === load.routeId || (l.locationType === 'ROUTE' && l.name?.includes(load.routeName)));
-              const remainingOnTruck = routeLoc?.balances?.reduce((acc, b) => acc + Number(b.quantityBaseUnits || 0), 0) 
-                ?? Math.max(0, totalLoadedUnits - totalSoldUnits);
+              const remainingOnTruck = Math.max(0, totalLoadedUnits - totalSoldUnits);
 
               const progressPct = totalLoadedUnits > 0 ? Math.min(100, Math.round((totalSoldUnits / totalLoadedUnits) * 100)) : 0;
 

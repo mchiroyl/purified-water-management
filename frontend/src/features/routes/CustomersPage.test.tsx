@@ -28,9 +28,12 @@ describe('CustomersPage', () => {
     expect(screen.getByRole('heading', { name: /^clientes$/i })).toBeInTheDocument();
     expect(await screen.findByText('Tienda Central')).toBeInTheDocument();
     expect(screen.getByText(/Ruta Centro.*Juan Pérez/i)).toBeInTheDocument();
-    const rows = within(screen.getByRole('table')).getAllByRole('row');
-    expect(rows[1]).toHaveTextContent('Tienda Nueva');
-    expect(rows[2]).toHaveTextContent('Tienda Central');
+    expect(screen.getByText('Tienda Nueva')).toBeInTheDocument();
+    expect(screen.getAllByText(/Sin Ruta Asignada/i).length).toBeGreaterThan(0);
+    const tables = screen.getAllByRole('table');
+    expect(tables).toHaveLength(2);
+    expect(within(tables[0]).getByText('Tienda Central')).toBeInTheDocument();
+    expect(within(tables[1]).getByText('Tienda Nueva')).toBeInTheDocument();
   });
 
   it('permite al vendedor guardar un provisional offline desde Clientes', async () => {
