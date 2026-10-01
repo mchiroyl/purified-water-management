@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, vi } from 'vitest';
 import { PricingPage } from './PricingPage';
@@ -86,5 +86,49 @@ describe('PricingPage', () => {
 
     const desdeInput = screen.getByPlaceholderText('1') as HTMLInputElement;
     expect(desdeInput.value).toBe('');
+  });
+
+  it('permite buscar cliente por nombre o código con lupa y seleccionar coincidencia en precio especial', async () => {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = input.toString();
+      if (url.includes('/customers')) {
+        return Promise.resolve(new Response(JSON.stringify([
+          { id: 'c1', code: 'CLI-001', name: 'Abarrotes La Bendición' },
+          { id: 'c2', code: 'CLI-002', name: 'Comedor Doña Mary' }
+        ]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (url.includes('/products')) {
+        return Promise.resolve(new Response(JSON.stringify([
+          { id: 'p1', name: 'Garrafón', presentations: [{ id: 'pres1', code: 'G-18', name: 'Garrafón 18.9 L', active: true }] }
+        ]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      return Promise.resolve(new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    }));
+
+    render(<MemoryRouter><QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <PricingPage canManage canApprove canRequestDiscount />
+    </QueryClientProvider></MemoryRouter>);
+
+    expect(await screen.findByText('Registrar precio especial por cliente')).toBeInTheDocument();
+
+    const searchInput = screen.getByPlaceholderText('Buscar por nombre o código...');
+    expect(searchInput).toBeInTheDocument();
+
+    // Escribir para ver coincidencias
+    fireEvent.change(searchInput, { target: { value: 'Mary' } });
+
+    // Debe mostrar la coincidencia de Doña Mary como opción en el dropdown y filtrar La Bendición
+    const dropdown = await screen.findByRole('listbox');
+    expect(dropdown).toBeInTheDocument();
+
+    const maryOption = within(dropdown).getByRole('option', { name: /Comedor Doña Mary/i });
+    expect(maryOption).toBeInTheDocument();
+    expect(within(dropdown).queryByRole('option', { name: /Abarrotes La Bendición/i })).not.toBeInTheDocument();
+
+    // Seleccionar la coincidencia
+    fireEvent.click(maryOption);
+
+    // El input debe reflejar el cliente seleccionado
+    expect((searchInput as HTMLInputElement).value).toBe('CLI-002 · Comedor Doña Mary');
   });
 });

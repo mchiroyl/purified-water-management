@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '../../app/PageHeader';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiRequest } from '../../services/apiClient';
 import { calendarOnlyProps, currentMonthDateTimeBounds } from '../../utils/dateInput';
@@ -41,6 +41,34 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
   const [validFrom, setValidFrom] = useState(localDateTime());
   const [tiers, setTiers] = useState<DraftTier[]>([emptyTier()]);
   const [special, setSpecial] = useState({ customerId: '', presentationId: '', unitPrice: 0, validFrom: localDateTime(), validTo: '' });
+  const [specialCustomerSearch, setSpecialCustomerSearch] = useState('');
+  const [isSpecialCustomerOpen, setIsSpecialCustomerOpen] = useState(false);
+  const specialCustomerPickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (specialCustomerPickerRef.current && !specialCustomerPickerRef.current.contains(event.target as Node)) {
+        setIsSpecialCustomerOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const matchingCustomers = useMemo(() => {
+    const list = customers.data ?? [];
+    const query = specialCustomerSearch.trim().toLowerCase();
+    if (!query) return list;
+    const selected = list.find(c => c.id === special.customerId);
+    if (selected && `${selected.code} · ${selected.name}`.toLowerCase() === query) {
+      return list;
+    }
+    return list.filter(c =>
+      c.name.toLowerCase().includes(query) ||
+      c.code.toLowerCase().includes(query)
+    );
+  }, [customers.data, specialCustomerSearch, special.customerId]);
+
   const [discount, setDiscount] = useState({ customerId: '', presentationId: '', quantityBaseUnits: 1, requestedPrice: 0, reason: '', expiresAt: localDateTime(2) });
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -103,6 +131,8 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
     mutationFn: () => apiRequest<Special>('/pricing/special-prices', { method: 'POST', body: JSON.stringify({ ...special, validFrom: new Date(special.validFrom).toISOString(), validTo: special.validTo ? new Date(special.validTo).toISOString() : null }) }),
     onSuccess: () => {
       setSpecial({ customerId: '', presentationId: '', unitPrice: 0, validFrom: localDateTime(), validTo: '' });
+      setSpecialCustomerSearch('');
+      setIsSpecialCustomerOpen(false);
       setSpecialMessage('¡Precio especial por cliente guardado exitosamente!');
       refresh();
     }
@@ -248,9 +278,122 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
       </form>
     </>}
     {!isCreateView && <section className="pricing-list section-panel"><h2>Listas y versiones registradas</h2><p className="muted">Ordenadas desde la versión más reciente.</p><div className="table-wrap pricing-table-wrap"><table><thead><tr><th>Lista</th><th>Versión</th><th>Vigente desde</th><th>Tramos configurados</th><th>Estado</th><th>Opciones</th></tr></thead><tbody>{registeredVersions.map(({ list, version }) => <tr key={version.id}><td><strong>{list.name}</strong><small>{list.code} · {list.currencyCode}</small></td><td>Versión {version.versionNumber}</td><td>{formatDate(version.validFrom)}</td><td>{version.tiers.map(tier => <span className="table-line" key={tier.id}>{tier.presentationName} · {tier.minimumBaseUnits}–{tier.maximumBaseUnits ?? '∞'} · Q{tier.unitPrice.toFixed(2)}</span>)}</td><td><span className={`status ${version.status === 'ACTIVE' ? 'active' : 'inactive'}`}>{version.status}</span></td><td>{canManage && ['DRAFT', 'SCHEDULED'].includes(version.status) && <button className="secondary" onClick={() => activate.mutate(version.id)}>{version.status === 'DRAFT' ? 'Activar' : 'Reprogramar'}</button>}</td></tr>)}</tbody></table>{registeredVersions.length === 0 && <p className="muted">Aún no hay versiones registradas.</p>}</div></section>}
-    {canManage && isCreateView && <form className="panel section-panel inline-form" onSubmit={event => submit(event, () => createSpecial.mutate())}><h2 className="wide">Registrar precio especial por cliente</h2>
+    {canManage && isCreateView && <form className="panel section-panel inline-form" onSubmit={event => {
+      event.preventDefault();
+      if (!special.customerId) {
+        setIsSpecialCustomerOpen(true);
+        return;
+      }
+      createSpecial.mutate();
+    }}><h2 className="wide">Registrar precio especial por cliente</h2>
       {specialMessage && <div className="alert success wide">✅ {specialMessage}</div>}
-      <label>Cliente<select required value={special.customerId} onChange={event => setSpecial({ ...special, customerId: event.target.value })}><option value="">Seleccionar</option>{customers.data?.map(item => <option value={item.id} key={item.id}>{item.code} · {item.name}</option>)}</select></label>
+      <div className="searchable-customer-field" ref={specialCustomerPickerRef}>
+        <label htmlFor="special-customer-input">Cliente</label>
+        <div className="searchable-customer-input-wrap">
+          <span className="search-icon" aria-hidden="true">🔍</span>
+          <input
+            id="special-customer-input"
+            type="text"
+            role="combobox"
+            aria-expanded={isSpecialCustomerOpen}
+            aria-autocomplete="list"
+            autoComplete="off"
+            placeholder="Buscar por nombre o código..."
+            value={specialCustomerSearch}
+            onChange={event => {
+              const val = event.target.value;
+              setSpecialCustomerSearch(val);
+              setIsSpecialCustomerOpen(true);
+              if (!val) {
+                setSpecial(prev => ({ ...prev, customerId: '' }));
+              } else if (special.customerId) {
+                const currentSel = customers.data?.find(c => c.id === special.customerId);
+                if (currentSel && `${currentSel.code} · ${currentSel.name}` !== val) {
+                  setSpecial(prev => ({ ...prev, customerId: '' }));
+                }
+              }
+            }}
+            onFocus={() => setIsSpecialCustomerOpen(true)}
+            onKeyDown={event => {
+              if (event.key === 'Escape') {
+                setIsSpecialCustomerOpen(false);
+              } else if (event.key === 'Enter') {
+                if (isSpecialCustomerOpen && matchingCustomers.length === 1) {
+                  event.preventDefault();
+                  const match = matchingCustomers[0];
+                  setSpecial(prev => ({ ...prev, customerId: match.id }));
+                  setSpecialCustomerSearch(`${match.code} · ${match.name}`);
+                  setIsSpecialCustomerOpen(false);
+                }
+              }
+            }}
+            style={{
+              borderColor: special.customerId ? 'var(--primary)' : undefined,
+              backgroundColor: special.customerId ? '#f0fdf4' : undefined
+            }}
+          />
+          {specialCustomerSearch && (
+            <button
+              type="button"
+              className="clear-btn"
+              title="Borrar y buscar otro cliente"
+              aria-label="Limpiar búsqueda de cliente"
+              onClick={() => {
+                setSpecialCustomerSearch('');
+                setSpecial(prev => ({ ...prev, customerId: '' }));
+                setIsSpecialCustomerOpen(true);
+              }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+        <input
+          tabIndex={-1}
+          required
+          aria-hidden="true"
+          value={special.customerId}
+          onChange={() => {}}
+          style={{ opacity: 0, width: 0, height: 0, position: 'absolute', pointerEvents: 'none' }}
+        />
+        {isSpecialCustomerOpen && (
+          <div className="customer-matches-dropdown" role="listbox">
+            <div className="customer-matches-header">
+              <span>{specialCustomerSearch ? 'Coincidencias encontradas' : 'Clientes disponibles'}</span>
+              <span>{matchingCustomers.length} {matchingCustomers.length === 1 ? 'resultado' : 'resultados'}</span>
+            </div>
+            {matchingCustomers.length === 0 ? (
+              <div className="customer-match-empty">
+                🔍 Sin coincidencias para &quot;{specialCustomerSearch}&quot;
+              </div>
+            ) : (
+              matchingCustomers.map(item => {
+                const isSelected = item.id === special.customerId;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="option"
+                    aria-selected={isSelected}
+                    className={`customer-match-item ${isSelected ? 'selected' : ''}`}
+                    onClick={() => {
+                      setSpecial(prev => ({ ...prev, customerId: item.id }));
+                      setSpecialCustomerSearch(`${item.code} · ${item.name}`);
+                      setIsSpecialCustomerOpen(false);
+                    }}
+                  >
+                    <span>
+                      <span className="customer-match-badge">{item.code}</span>
+                      <span>{item.name}</span>
+                    </span>
+                    {isSelected && <span style={{ color: 'var(--primary)', fontWeight: 800 }}>✓</span>}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        )}
+      </div>
       <label>Presentación<select required value={special.presentationId} onChange={event => setSpecial({ ...special, presentationId: event.target.value })}><option value="">Seleccionar</option>{presentations.map(item => <option value={item.id} key={item.id}>{item.productName} · {item.name}</option>)}</select></label>
       <label>Precio<input type="number" min="0.01" step="0.01" value={special.unitPrice} onChange={event => setSpecial({ ...special, unitPrice: Number(event.target.value) })} /></label>
       <label>Desde<input type="datetime-local" min={dateBounds.min} max={dateBounds.max} {...calendarOnlyProps()} value={special.validFrom} onChange={event => setSpecial({ ...special, validFrom: event.target.value })} /></label>
