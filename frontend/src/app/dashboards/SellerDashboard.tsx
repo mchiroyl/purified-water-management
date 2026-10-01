@@ -16,7 +16,9 @@ type RouteLoad = {
   id: string; loadNumber: string; routeId: string; routeCode: string; routeName: string;
   sourceLocationId: string; sourceLocationName: string; targetLocationId: string; targetLocationName: string;
   plannedDate: string; loadType: 'INITIAL' | 'REPLENISHMENT'; status: string;
-  sellerReceivedByUsername?: string; createdByUsername: string; items: RouteLoadItem[];
+  sellerReceivedByUsername?: string; sellerReceivedAt?: string;
+  startedByUsername?: string; startedAt?: string;
+  createdByUsername: string; createdAt?: string; items: RouteLoadItem[];
 };
 
 type Balance = { productId: string; productCode: string; productName: string; baseUnitCode: string; quantityBaseUnits: number };
@@ -25,7 +27,16 @@ type Location = {
   active: boolean; balances: Balance[];
 };
 
-type SaleItem = { id: string; productName: string; presentationQuantity: number; quantityBaseUnits: number; unitPrice: number; lineTotal: number };
+type SaleItem = {
+  id: string;
+  productId?: string;
+  productCode?: string;
+  productName: string;
+  presentationQuantity: number;
+  quantityBaseUnits: number;
+  unitPrice: number;
+  lineTotal: number;
+};
 type Payment = { id: string; method: string; amount: number; status: string };
 type Sale = {
   id: string; documentNumber: string; routeId?: string; routeCode: string; routeName: string;
@@ -62,42 +73,96 @@ export function SellerDashboard({
     (l.status === 'STARTED' || l.status === 'RECEIVED' || l.status === 'PREPARED' || l.status === 'WAREHOUSE_CONFIRMED')
   ) ?? loads.find(l => l.sellerReceivedByUsername === user.username || l.createdByUsername === user.username);
 
-  // Ventas realizadas por este vendedor
-  const sellerSales = sales.filter(s => 
-    s.sellerName === user.displayName || 
-    s.sellerName === user.username ||
-    (sellerLoad && (s.routeId === sellerLoad.routeId || s.routeCode === sellerLoad.routeCode))
-  );
+  // Momento de inicio o despacho de la carga activa
+  const loadStartTime = sellerLoad?.startedAt || sellerLoad?.sellerReceivedAt || sellerLoad?.createdAt;
 
-  // Total vendido hoy
-  const totalSoldUnits = sellerSales.reduce((acc, s) => {
-    return acc + (s.items?.reduce((iAcc, item) => iAcc + Number(item.quantityBaseUnits || 0), 0) || 0);
-  }, 0);
+  // Extraer fecha local YYYY-MM-DD
+  const getLocalDate = (isoStr?: string) => {
+    if (!isoStr) return '';
+    try {
+      const d = new Date(isoStr);
+      const offset = d.getTimezoneOffset() * 60_000;
+      return new Date(d.getTime() - offset).toISOString().slice(0, 10);
+    } catch {
+      return isoStr.slice(0, 10);
+    }
+  };
+
+  // Ventas realizadas por este vendedor correspondientes estrictamente a esta carga activa
+  const sellerSales = sales.filter(s => {
+    // 1. Debe corresponder a este vendedor
+    const matchesUser = 
+      s.sellerName === user.displayName || 
+      s.sellerName === user.username ||
+      (s.sellerName && (
+        s.sellerName.toLowerCase() === user.displayName.toLowerCase() ||
+        s.sellerName.toLowerCase() === user.username.toLowerCase()
+      ));
+
+    // Si la venta tiene registrado un vendedor explícito diferente al usuario actual, descartarla
+    if (s.sellerName && !matchesUser) {
+      return false;
+    }
+
+    // 2. Si la carga tiene ruta asignada, la venta debe pertenecer a la misma ruta
+    if (sellerLoad?.routeId && s.routeId && s.routeId !== sellerLoad.routeId) {
+      return false;
+    }
+    if (sellerLoad?.routeCode && s.routeCode && s.routeCode !== sellerLoad.routeCode) {
+      return false;
+    }
+
+    // 3. Filtro de temporalidad: solo ventas de esta carga / jornada
+    if (loadStartTime) {
+      const saleTime = new Date(s.createdAt).getTime();
+      const startTime = new Date(loadStartTime).getTime() - 120_000; // 2 min de margen por sincronización
+      if (saleTime < startTime) {
+        return false;
+      }
+    } else if (sellerLoad?.plannedDate) {
+      const saleDate = getLocalDate(s.createdAt);
+      if (saleDate !== sellerLoad.plannedDate && !s.createdAt.startsWith(sellerLoad.plannedDate)) {
+        return false;
+      }
+    }
+
+    return true;
+  });
 
   // Recargas adicionales aprobadas/recibidas para esta misma ruta durante el recorrido
   const routeReplenishments = loads.filter(l => 
     sellerLoad &&
     l.routeId === sellerLoad.routeId &&
     l.loadType === 'REPLENISHMENT' &&
-    (l.status === 'STARTED' || l.status === 'RECEIVED' || l.status === 'SETTLED')
+    (l.status === 'STARTED' || l.status === 'RECEIVED' || l.status === 'SETTLED' || l.status === 'WAREHOUSE_CONFIRMED')
   );
 
   // Productos en el camión basados en la carga activa y sus ventas
   const truckItems = (sellerLoad?.items ?? []).map(item => {
     // Unidades adicionales por recarga en ruta si existen
     const replenishmentUnits = routeReplenishments.reduce((acc, rep) => {
-      const match = rep.items?.find(it => it.productId === item.productId || it.productName === item.productName);
+      const match = rep.items?.find(it => 
+        (it.productId && item.productId && it.productId === item.productId) ||
+        (it.productName && item.productName && it.productName.trim().toLowerCase() === item.productName.trim().toLowerCase()) ||
+        (it.productCode && item.productCode && it.productCode.trim().toLowerCase() === item.productCode.trim().toLowerCase())
+      );
       return acc + Number(match?.quantityBaseUnits || 0);
     }, 0);
 
     const totalItemLoaded = Number(item.quantityBaseUnits || 0) + replenishmentUnits;
 
-    const soldQty = sellerSales.reduce((acc, s) => {
-      const matches = s.items?.filter(it => it.productName === item.productName || it.id === item.productId);
+    const rawSoldQty = sellerSales.reduce((acc, s) => {
+      const matches = s.items?.filter(it => 
+        (it.productId && item.productId && it.productId === item.productId) ||
+        (it.productName && item.productName && it.productName.trim().toLowerCase() === item.productName.trim().toLowerCase()) ||
+        (it.productCode && item.productCode && it.productCode.trim().toLowerCase() === item.productCode.trim().toLowerCase())
+      );
       const lineSum = matches?.reduce((iAcc, it) => iAcc + Number(it.quantityBaseUnits || 0), 0) || 0;
       return acc + lineSum;
     }, 0);
 
+    // Las unidades vendidas del camión no pueden superar lo físicamente cargado
+    const soldQty = Math.min(totalItemLoaded, rawSoldQty);
     const remainingOnTruck = Math.max(0, totalItemLoaded - soldQty);
 
     return {
@@ -108,9 +173,15 @@ export function SellerDashboard({
     };
   });
 
+  // Unidades vendidas en total del camión
+  const totalSoldUnits = truckItems.reduce((acc, it) => acc + it.soldQty, 0);
+
   // Carga total en unidades (incluyendo recargas de ruta)
   const totalLoadedUnits = truckItems.reduce((acc, it) => acc + Number(it.quantityBaseUnits || 0), 0);
-  const remainingTotalUnits = Math.max(0, totalLoadedUnits - totalSoldUnits);
+
+  // Total restante a bordo: suma exacta del stock en camión de cada producto
+  const remainingTotalUnits = truckItems.reduce((acc, it) => acc + it.remainingOnTruck, 0);
+
   const progressPct = totalLoadedUnits > 0 ? Math.min(100, Math.round((totalSoldUnits / totalLoadedUnits) * 100)) : 0;
 
   // Efectivo en mano que debe entregar el vendedor

@@ -16,7 +16,9 @@ type RouteLoad = {
   id: string; loadNumber: string; routeId: string; routeCode: string; routeName: string;
   sourceLocationId: string; sourceLocationName: string; targetLocationId: string; targetLocationName: string;
   plannedDate: string; loadType: 'INITIAL' | 'REPLENISHMENT'; status: string;
-  sellerReceivedByUsername?: string; createdByUsername: string; items: RouteLoadItem[];
+  sellerReceivedByUsername?: string; sellerReceivedAt?: string;
+  startedByUsername?: string; startedAt?: string;
+  createdByUsername: string; createdAt?: string; items: RouteLoadItem[];
 };
 
 type Balance = { productId: string; productCode: string; productName: string; baseUnitCode: string; quantityBaseUnits: number };
@@ -239,13 +241,24 @@ export function AdminDashboard({
               const firstItem = load.items[0];
               const unitLabel = firstItem?.baseUnitCode ?? 'unidades';
 
-              const routeSales = sales.filter(s => s.routeId === load.routeId || s.routeCode === load.routeCode);
+              const loadStartTime = load.startedAt || load.sellerReceivedAt || load.createdAt;
+              const routeSales = sales.filter(s => {
+                if (s.routeId !== load.routeId && s.routeCode !== load.routeCode) return false;
+                if (loadStartTime) {
+                  return new Date(s.createdAt).getTime() >= new Date(loadStartTime).getTime() - 120_000;
+                }
+                if (load.plannedDate) {
+                  return s.createdAt.slice(0, 10) === load.plannedDate || s.createdAt.startsWith(load.plannedDate);
+                }
+                return true;
+              });
               const totalSalesQ = routeSales.reduce((acc, s) => acc + Number(s.total || 0), 0);
               const totalSoldUnits = routeSales.reduce((acc, s) => {
                 return acc + (s.items?.reduce((iAcc, item) => iAcc + Number(item.quantityBaseUnits || 0), 0) || 0);
               }, 0);
 
-              const remainingOnTruck = Math.max(0, totalLoadedUnits - totalSoldUnits);
+              const cappedSoldUnits = Math.min(totalLoadedUnits, totalSoldUnits);
+              const remainingOnTruck = Math.max(0, totalLoadedUnits - cappedSoldUnits);
 
               const progressPct = totalLoadedUnits > 0 ? Math.min(100, Math.round((totalSoldUnits / totalLoadedUnits) * 100)) : 0;
 
