@@ -339,6 +339,9 @@ public class JdbcCreditPaymentAdapter implements CreditPaymentPort {
                 SELECT cae.id, cae.entry_type, cae.amount, cae.balance_after,
                        cae.created_at, u.username as created_by_name,
                        s.document_number as sale_doc_number,
+                       (SELECT STRING_AGG(CONCAT(si.quantity_base_units::int, 'x ', p.name), ', ')
+                        FROM sale_item si JOIN product p ON p.id = si.product_id
+                        WHERE si.sale_id = cae.sale_id) as sale_products,
                        cp.payment_method as cp_method, cp.reference as cp_reference
                 FROM credit_account_entry cae
                 JOIN app_user u ON u.id = cae.created_by
@@ -355,7 +358,8 @@ public class JdbcCreditPaymentAdapter implements CreditPaymentPort {
 
                     if ("SALE_CHARGE".equals(type)) {
                         docOrRef = rs.getString("sale_doc_number");
-                        description = "Compra a crédito (Doc: " + docOrRef + ")";
+                        String prods = rs.getString("sale_products");
+                        description = "Compra a crédito (Doc: " + docOrRef + (prods != null && !prods.isBlank() ? " · " + prods : "") + ")";
                     } else if ("SALE_VOID".equals(type)) {
                         docOrRef = rs.getString("sale_doc_number");
                         description = "Anulación de venta (Doc: " + docOrRef + ")";
