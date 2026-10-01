@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../app/PageHeader';
 import { getMobileDatabase } from '../../offline/SyncContext';
@@ -52,6 +52,14 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
     routeName: string;
     validFrom: string;
   } | null>(null);
+  const [selectedRouteFilter, setSelectedRouteFilter] = useState<string>('ALL');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped');
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+
+  const toggleGroupCollapse = (groupKey: string) => {
+    setCollapsedGroups(prev => ({ ...prev, [groupKey]: !prev[groupKey] }));
+  };
   const create = useMutation({
     mutationFn: () => apiRequest<Customer>('/customers', { method: 'POST', body: JSON.stringify(form) }),
     onSuccess: () => {
@@ -128,9 +136,223 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
     }
   };
   const submit = (event: FormEvent) => { event.preventDefault(); create.mutate(); };
-  const orderedCustomers = [...(customers.data ?? [])].sort((left, right) =>
-    new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+  const orderedCustomers = useMemo(() => [...(customers.data ?? [])].sort((left, right) =>
+    new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()), [customers.data]);
   const dateBounds = currentMonthDateBounds();
+
+  type RouteGroup = {
+    key: string;
+    routeId?: string;
+    routeCode?: string;
+    routeName: string;
+    sellerName?: string;
+    customers: Customer[];
+  };
+
+  // Filtrar clientes por búsqueda
+  const searchFilteredCustomers = useMemo(() => {
+    if (!searchQuery.trim()) return orderedCustomers;
+    const q = searchQuery.toLowerCase().trim();
+    return orderedCustomers.filter(c =>
+      c.name?.toLowerCase().includes(q) ||
+      c.code?.toLowerCase().includes(q) ||
+      c.contactName?.toLowerCase().includes(q) ||
+      c.phone?.includes(q) ||
+      c.addressReference?.toLowerCase().includes(q) ||
+      c.routeName?.toLowerCase().includes(q) ||
+      c.sellerName?.toLowerCase().includes(q)
+    );
+  }, [orderedCustomers, searchQuery]);
+
+  // Agrupar clientes según estén asignados a cada ruta y vendedor
+  const routeGroups = useMemo(() => {
+    const map = new Map<string, RouteGroup>();
+
+    searchFilteredCustomers.forEach(customer => {
+      const key = customer.routeId || 'UNASSIGNED';
+      let group = map.get(key);
+      if (!group) {
+        group = {
+          key,
+          routeId: customer.routeId,
+          routeCode: customer.routeCode,
+          routeName: customer.routeName || (customer.routeId ? 'Ruta asignada' : 'Sin ruta asignada'),
+          sellerName: customer.sellerName,
+          customers: [],
+        };
+        map.set(key, group);
+      } else {
+        if (!group.sellerName && customer.sellerName) group.sellerName = customer.sellerName;
+        if (!group.routeName && customer.routeName) group.routeName = customer.routeName;
+      }
+      group.customers.push(customer);
+    });
+
+    // Ordenar clientes alfabéticamente dentro de cada grupo
+    map.forEach(g => {
+      g.customers.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
+    });
+
+    // Ordenar grupos: Rutas asignadas primero (alfabéticamente por nombre), luego los no asignados
+    const result = Array.from(map.values());
+    result.sort((a, b) => {
+      if (a.key === 'UNASSIGNED') return 1;
+      if (b.key === 'UNASSIGNED') return -1;
+      return a.routeName.localeCompare(b.routeName, 'es', { sensitivity: 'base' });
+    });
+
+    return result;
+  }, [searchFilteredCustomers]);
+
+  // Grupos mostrados según el filtro seleccionado
+  const displayedGroups = useMemo(() => {
+    if (selectedRouteFilter === 'ALL') return routeGroups;
+    return routeGroups.filter(g => g.key === selectedRouteFilter);
+  }, [routeGroups, selectedRouteFilter]);
+
+  const renderCustomerTable = (customerList: Customer[]) => (
+    <div className="table-wrap customer-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>Código</th>
+            <th>Teléfono</th>
+            <th>Dirección o referencia</th>
+            <th>Ruta y vendedor</th>
+            <th>Estado</th>
+            <th>Opciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {customerList.map(customer => {
+            const selection = assignments[customer.id] ?? { routeId: customer.routeId ?? '', validFrom: localDate() };
+            return (
+              <tr key={customer.id}>
+                <td>
+                  <strong>{customer.name}</strong>
+                  <small>{customer.contactName || 'Sin contacto'} · Saldo Q{customer.currentBalance.toFixed(2)}</small>
+                </td>
+                <td>{customer.code}</td>
+                <td>{customer.phone || 'Sin teléfono'}</td>
+                <td>{customer.addressReference}</td>
+                <td>
+                  {customer.routeName ? (
+                    <span>
+                      <strong>{customer.routeName}</strong>
+                      <br />
+                      <small style={{ color: 'var(--muted)' }}>👤 {customer.sellerName ?? 'Sin vendedor'}</small>
+                    </span>
+                  ) : (
+                    <span className="badge" style={{ background: '#fef3c7', color: '#92400e', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem' }}>
+                      Sin ruta asignada
+                    </span>
+                  )}
+                </td>
+                <td>
+                  <span className={`status ${customer.status === 'ACTIVE' ? 'active' : 'inactive'}`}>
+                    {customer.registrationState === 'PENDING_REVIEW' ? 'Pendiente de revisión' : customer.status === 'ACTIVE' ? 'Activo' : 'Inactivo'}
+                  </span>
+                </td>
+                <td>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <div className="action-buttons" style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="primary"
+                        style={{ padding: '0.2rem 0.6rem', fontSize: '0.85rem' }}
+                        title="Iniciar venta para este cliente"
+                        onClick={() => navigate(`/sales?customerId=${customer.id}`)}
+                      >
+                        ⚡ Vender
+                      </button>
+                      {canManage && (
+                        <>
+                          <button
+                            type="button"
+                            className="secondary"
+                            style={{ padding: '0.2rem 0.6rem', fontSize: '0.85rem' }}
+                            title="Ver y registrar garrafones del cliente"
+                            onClick={() => navigate(`/jugs?customerId=${customer.id}`)}
+                          >
+                            🧴 Garrafones
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary"
+                            style={{ padding: '0.2rem 0.6rem', fontSize: '0.85rem' }}
+                            title="Ver estado de cuenta y abonar a crédito"
+                            onClick={() => navigate(`/credit?customerId=${customer.id}`)}
+                          >
+                            💳 Crédito
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary"
+                            style={{
+                              padding: '0.2rem 0.6rem',
+                              fontSize: '0.85rem',
+                              color: '#007680',
+                              borderColor: '#007680',
+                              fontWeight: 600,
+                            }}
+                            title="Modificar datos, crédito o estado del cliente"
+                            onClick={() => {
+                              setEditingCustomer(customer);
+                              setEditForm({
+                                name: customer.name,
+                                contactName: customer.contactName || '',
+                                phone: customer.phone || '',
+                                whatsapp: customer.whatsapp || '',
+                                addressReference: customer.addressReference || '',
+                                creditAllowed: customer.creditAllowed,
+                                creditLimit: customer.creditLimit || 0,
+                                status: customer.status,
+                              });
+                            }}
+                          >
+                            ✏️ Modificar
+                          </button>
+                        </>
+                      )}
+                    </div>
+                    {canManage && (
+                      <div className="inline-assignment">
+                        <select
+                          aria-label={`Ruta de ${customer.name}`}
+                          value={selection.routeId}
+                          onChange={e => setAssignments({ ...assignments, [customer.id]: { ...selection, routeId: e.target.value } })}
+                        >
+                          <option value="">Seleccionar ruta</option>
+                          {routes.data?.map(route => <option value={route.id} key={route.id}>{route.code} · {route.name}</option>)}
+                        </select>
+                        <input
+                          aria-label={`Vigencia de ruta de ${customer.name}`}
+                          type="date"
+                          min={dateBounds.min}
+                          max={dateBounds.max}
+                          {...calendarOnlyProps()}
+                          value={selection.validFrom}
+                          onChange={e => setAssignments({ ...assignments, [customer.id]: { ...selection, validFrom: e.target.value } })}
+                        />
+                        <button
+                          className="secondary"
+                          disabled={!selection.routeId || assign.isPending}
+                          onClick={() => assign.mutate({ customerId: customer.id, ...selection })}
+                        >
+                          {assign.isPending && assign.variables?.customerId === customer.id ? 'Asignando…' : 'Asignar ruta'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 
   return (
     <main>
@@ -304,130 +526,147 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
       )}
 
       {/* ── Lista de clientes ── */}
-      {view === 'list' && <section className="panel section-panel">
-        <div className="section-heading">
-          <h2>Clientes registrados</h2>
-          <span>{customers.data?.length ?? 0} clientes</span>
-        </div>
-        {customers.isLoading && <p>Cargando clientes…</p>}
-        {customers.error && <div className="alert error">{customers.error.message}</div>}
-        {orderedCustomers.length > 0 && <div className="table-wrap customer-table-wrap">
-          <table>
-            <thead><tr><th>Cliente</th><th>Código</th><th>Teléfono</th><th>Dirección o referencia</th><th>Ruta y vendedor</th><th>Estado</th><th>Opciones</th></tr></thead>
-            <tbody>{orderedCustomers.map(customer => {
-            const selection = assignments[customer.id] ?? { routeId: customer.routeId ?? '', validFrom: localDate() };
-            return (
-              <tr key={customer.id}>
-                <td><strong>{customer.name}</strong><small>{customer.contactName || 'Sin contacto'} · Saldo Q{customer.currentBalance.toFixed(2)}</small></td>
-                <td>{customer.code}</td>
-                <td>{customer.phone || 'Sin teléfono'}</td>
-                <td>{customer.addressReference}</td>
-                <td>{customer.routeName ? `${customer.routeName} · ${customer.sellerName ?? 'Sin vendedor'}` : 'Sin ruta asignada'}</td>
-                <td><span className={`status ${customer.status === 'ACTIVE' ? 'active' : 'inactive'}`}>
-                  {customer.registrationState === 'PENDING_REVIEW' ? 'Pendiente de revisión' : customer.status === 'ACTIVE' ? 'Activo' : 'Inactivo'}
-                </span></td>
-                <td>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                    <div className="action-buttons" style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        className="primary"
-                        style={{ padding: '0.2rem 0.6rem', fontSize: '0.85rem' }}
-                        title="Iniciar venta para este cliente"
-                        onClick={() => navigate(`/sales?customerId=${customer.id}`)}
-                      >
-                        ⚡ Vender
-                      </button>
-                      {canManage && (
-                        <>
-                          <button
-                            type="button"
-                            className="secondary"
-                            style={{ padding: '0.2rem 0.6rem', fontSize: '0.85rem' }}
-                            title="Ver y registrar garrafones del cliente"
-                            onClick={() => navigate(`/jugs?customerId=${customer.id}`)}
-                          >
-                            🧴 Garrafones
-                          </button>
-                          <button
-                            type="button"
-                            className="secondary"
-                            style={{ padding: '0.2rem 0.6rem', fontSize: '0.85rem' }}
-                            title="Ver estado de cuenta y abonar a crédito"
-                            onClick={() => navigate(`/credit?customerId=${customer.id}`)}
-                          >
-                            💳 Crédito
-                          </button>
-                        </>
-                      )}
-                      {canManage && (
-                        <button
-                          type="button"
-                          className="secondary"
-                          style={{
-                            padding: '0.2rem 0.6rem',
-                            fontSize: '0.85rem',
-                            color: '#007680',
-                            borderColor: '#007680',
-                            fontWeight: 600,
-                          }}
-                          title="Modificar datos, crédito o estado del cliente"
-                          onClick={() => {
-                            setEditingCustomer(customer);
-                            setEditForm({
-                              name: customer.name,
-                              contactName: customer.contactName || '',
-                              phone: customer.phone || '',
-                              whatsapp: customer.whatsapp || '',
-                              addressReference: customer.addressReference || '',
-                              creditAllowed: customer.creditAllowed,
-                              creditLimit: customer.creditLimit || 0,
-                              status: customer.status,
-                            });
-                          }}
-                        >
-                          ✏️ Modificar
-                        </button>
-                      )}
-                    </div>
-                    {canManage && (
-                      <div className="inline-assignment">
-                        <select
-                          aria-label={`Ruta de ${customer.name}`}
-                          value={selection.routeId}
-                          onChange={e => setAssignments({ ...assignments, [customer.id]: { ...selection, routeId: e.target.value } })}
-                        >
-                          <option value="">Seleccionar ruta</option>
-                          {routes.data?.map(route => <option value={route.id} key={route.id}>{route.code} · {route.name}</option>)}
-                        </select>
-                        <input
-                          aria-label={`Vigencia de ruta de ${customer.name}`}
-                          type="date"
-                          min={dateBounds.min}
-                          max={dateBounds.max}
-                          {...calendarOnlyProps()}
-                          value={selection.validFrom}
-                          onChange={e => setAssignments({ ...assignments, [customer.id]: { ...selection, validFrom: e.target.value } })}
-                        />
-                        <button
-                          className="secondary"
-                          disabled={!selection.routeId || assign.isPending}
-                          onClick={() => assign.mutate({ customerId: customer.id, ...selection })}
-                        >
-                          {assign.isPending && assign.variables?.customerId === customer.id ? 'Asignando…' : 'Asignar ruta'}
-                        </button>
+      {view === 'list' && (
+        <section className="panel section-panel">
+          <div className="section-heading">
+            <div>
+              <h2>Clientes registrados</h2>
+              <span style={{ fontSize: '0.88rem', color: 'var(--muted)' }}>
+                Agrupados según su ruta y vendedor asignado
+              </span>
+            </div>
+            <span className="badge" style={{ fontSize: '0.9rem', padding: '0.35rem 0.8rem' }}>
+              {customers.data?.length ?? 0} clientes totales
+            </span>
+          </div>
+
+          {customers.isLoading && <p>Cargando clientes…</p>}
+          {customers.error && <div className="alert error">{customers.error.message}</div>}
+
+          {/* Barra de Filtros y Búsqueda */}
+          {customers.data && customers.data.length > 0 && (
+            <div className="customer-filter-bar">
+              <div className="customer-filter-top">
+                <input
+                  type="search"
+                  className="customer-search-input"
+                  placeholder="🔍 Buscar cliente por nombre, código, teléfono o dirección..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                />
+                <div className="customer-view-toggle">
+                  <button
+                    type="button"
+                    className={`customer-view-btn ${viewMode === 'grouped' ? 'active' : ''}`}
+                    onClick={() => setViewMode('grouped')}
+                  >
+                    📑 Agrupado por Ruta
+                  </button>
+                  <button
+                    type="button"
+                    className={`customer-view-btn ${viewMode === 'flat' ? 'active' : ''}`}
+                    onClick={() => setViewMode('flat')}
+                  >
+                    📋 Lista Plana
+                  </button>
+                </div>
+              </div>
+
+              {/* Píldoras de filtro rápido por ruta */}
+              <div className="customer-filter-pills">
+                <button
+                  type="button"
+                  className={`customer-filter-pill ${selectedRouteFilter === 'ALL' ? 'active' : ''}`}
+                  onClick={() => setSelectedRouteFilter('ALL')}
+                >
+                  Todas las rutas ({searchFilteredCustomers.length})
+                </button>
+                {routeGroups.map(grp => (
+                  <button
+                    type="button"
+                    key={grp.key}
+                    className={`customer-filter-pill ${selectedRouteFilter === grp.key ? 'active' : ''}`}
+                    onClick={() => setSelectedRouteFilter(grp.key)}
+                  >
+                    {grp.key === 'UNASSIGNED' ? '⚠️' : '🚚'} {grp.routeName}
+                    {grp.sellerName ? ` (${grp.sellerName})` : ''} · <strong>{grp.customers.length}</strong>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Vista Agrupada por Ruta y Vendedor */}
+          {viewMode === 'grouped' && displayedGroups.length > 0 && (
+            <div className="customer-groups-container">
+              {displayedGroups.map(group => {
+                const isCollapsed = Boolean(collapsedGroups[group.key]);
+                const isUnassigned = group.key === 'UNASSIGNED';
+
+                return (
+                  <article className="route-group-panel" key={group.key}>
+                    <div
+                      className={`route-group-banner ${isUnassigned ? 'unassigned' : ''}`}
+                      onClick={() => toggleGroupCollapse(group.key)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') toggleGroupCollapse(group.key); }}
+                    >
+                      <div className="route-group-info">
+                        <span style={{ fontSize: '1.5rem' }}>{isUnassigned ? '⚠️' : '🚚'}</span>
+                        <div>
+                          <h3 className="route-group-title">
+                            {isUnassigned ? 'Clientes Sin Ruta Asignada' : `Ruta ${group.routeName} ${group.routeCode ? `(${group.routeCode})` : ''}`}
+                          </h3>
+                          <span className="route-group-subtitle">
+                            👤 Vendedor responsable: <strong style={{ color: group.sellerName ? '#0f766e' : '#b45309' }}>
+                              {group.sellerName || 'Sin vendedor asignado'}
+                            </strong>
+                          </span>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            );
-            })}</tbody>
-          </table>
-        </div>}
-        {customers.data?.length === 0 && <p className="muted">Aún no hay clientes registrados.</p>}
-        {assign.error && <div className="alert error">{assign.error.message}</div>}
-      </section>}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <span
+                          className="badge"
+                          style={{
+                            background: isUnassigned ? '#fef3c7' : '#e0f2fe',
+                            color: isUnassigned ? '#92400e' : '#0369a1',
+                            fontWeight: 600,
+                            padding: '0.3rem 0.75rem',
+                            borderRadius: '1rem',
+                            fontSize: '0.85rem',
+                          }}
+                        >
+                          👥 {group.customers.length} {group.customers.length === 1 ? 'cliente' : 'clientes'}
+                        </span>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--muted)', fontWeight: 600 }}>
+                          {isCollapsed ? '▼ Desplegar' : '▲ Plegar'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {!isCollapsed && renderCustomerTable(group.customers)}
+                  </article>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Vista Plana Corrida */}
+          {viewMode === 'flat' && searchFilteredCustomers.length > 0 && (
+            renderCustomerTable(searchFilteredCustomers)
+          )}
+
+          {customers.data && customers.data.length > 0 && searchFilteredCustomers.length === 0 && (
+            <p className="muted" style={{ textAlign: 'center', padding: '2rem' }}>
+              No se encontraron clientes que coincidan con la búsqueda "{searchQuery}".
+            </p>
+          )}
+
+          {customers.data?.length === 0 && <p className="muted">Aún no hay clientes registrados.</p>}
+          {assign.error && <div className="alert error">{assign.error.message}</div>}
+        </section>
+      )}
 
       {/* ── Modal de modificación de cliente ── */}
       {editingCustomer && (

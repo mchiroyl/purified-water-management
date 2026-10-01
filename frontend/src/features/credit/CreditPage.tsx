@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../../app/PageHeader';
 import { apiRequest } from '../../services/apiClient';
@@ -19,12 +19,15 @@ type CreditPageProps = {
   canRecord?: boolean;
   canVerify?: boolean;
   currentUserId?: string;
+  isAdmin?: boolean;
 };
 
-export function CreditPage({ canRecord = true, canVerify = false, currentUserId }: CreditPageProps) {
+export function CreditPage({ canRecord = true, canVerify = false, currentUserId, isAdmin = false }: CreditPageProps) {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState<'statement' | 'payment' | 'transfers' | 'routes'>('statement');
+  const [activeTab, setActiveTab] = useState<'statement' | 'payment' | 'transfers' | 'routes'>(
+    isAdmin ? 'routes' : 'statement'
+  );
 
   // Deep-link: si llegan con ?customerId=UUID, pre-seleccionar en estado de cuenta y abono
   useEffect(() => {
@@ -127,13 +130,118 @@ export function CreditPage({ canRecord = true, canVerify = false, currentUserId 
     enabled: !!statementCustomerId,
   });
 
-  // ── Cartera pendiente por ruta ──
-  const [pendingRouteId, setPendingRouteId] = useState('');
-  const routePending = useQuery({
-    queryKey: ['credit', 'route-pending', pendingRouteId],
-    queryFn: () => apiRequest<CreditRoutePendingResponse>(`/credit/routes/${pendingRouteId}/pending`),
-    enabled: !!pendingRouteId,
-  });
+  // ── Cartera pendiente por ruta y deudores agrupados ──
+  const [debtorSearch, setDebtorSearch] = useState('');
+  const [selectedDebtorRoute, setSelectedDebtorRoute] = useState<'ALL' | string>('ALL');
+  const [collapsedRouteGroups, setCollapsedRouteGroups] = useState<Record<string, boolean>>({});
+
+  const toggleRouteCollapse = (key: string) => {
+    setCollapsedRouteGroups(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // Clientes que tienen saldo deudor (currentBalance > 0)
+  const allDebtors = useMemo(() => {
+    return (customers.data ?? []).filter(c => Number(c.currentBalance || 0) > 0.009);
+  }, [customers.data]);
+
+  // Total global de la cartera adeudada
+  const grandTotalDebt = useMemo(() => {
+    return allDebtors.reduce((sum, d) => sum + Number(d.currentBalance || 0), 0);
+  }, [allDebtors]);
+
+  // Filtro de búsqueda sobre deudores
+  const filteredDebtors = useMemo(() => {
+    if (!debtorSearch.trim()) return allDebtors;
+    const q = debtorSearch.toLowerCase().trim();
+    return allDebtors.filter(d =>
+      d.name?.toLowerCase().includes(q) ||
+      d.code?.toLowerCase().includes(q) ||
+      d.contactName?.toLowerCase().includes(q) ||
+      d.phone?.includes(q) ||
+      d.routeName?.toLowerCase().includes(q) ||
+      d.sellerName?.toLowerCase().includes(q)
+    );
+  }, [allDebtors, debtorSearch]);
+
+  type DebtorRouteGroup = {
+    key: string;
+    routeId?: string;
+    routeCode: string;
+    routeName: string;
+    sellerName: string;
+    totalDebt: number;
+    debtors: Customer[];
+  };
+
+  // Agrupar deudores por rutas comerciales que tienen deuda
+  const debtorGroups = useMemo(() => {
+    const map = new Map<string, DebtorRouteGroup>();
+
+    filteredDebtors.forEach(debtor => {
+      const key = debtor.routeId || 'UNASSIGNED';
+      let group = map.get(key);
+      if (!group) {
+        const routeMeta = routes.data?.find(r => r.id === debtor.routeId);
+        group = {
+          key,
+          routeId: debtor.routeId,
+          routeCode: routeMeta?.code || debtor.routeCode || (debtor.routeId ? 'Ruta' : 'S/R'),
+          routeName: routeMeta?.name || debtor.routeName || (debtor.routeId ? 'Ruta Asignada' : 'Clientes con Deuda sin Ruta Asignada'),
+          sellerName: routeMeta?.sellerName || debtor.sellerName || 'Sin asignar',
+          totalDebt: 0,
+          debtors: [],
+        };
+        map.set(key, group);
+      } else {
+        if ((!group.sellerName || group.sellerName === 'Sin asignar') && debtor.sellerName) {
+          group.sellerName = debtor.sellerName;
+        }
+        if ((!group.routeName || group.routeName === 'Ruta Asignada') && debtor.routeName) {
+          group.routeName = debtor.routeName;
+        }
+      }
+      group.debtors.push(debtor);
+      group.totalDebt += Number(debtor.currentBalance || 0);
+    });
+
+    // Ordenar deudores dentro de cada grupo por mayor saldo adeudado primero
+    map.forEach(g => {
+      g.debtors.sort((a, b) => Number(b.currentBalance || 0) - Number(a.currentBalance || 0));
+    });
+
+    // Ordenar grupos: rutas con mayor deuda acumulada primero, luego sin ruta asignada
+    const result = Array.from(map.values());
+    result.sort((a, b) => {
+      if (a.key === 'UNASSIGNED') return 1;
+      if (b.key === 'UNASSIGNED') return -1;
+      return b.totalDebt - a.totalDebt;
+    });
+
+    return result;
+  }, [filteredDebtors, routes.data]);
+
+  // Grupos mostrados según la píldora de ruta seleccionada
+  const displayedDebtorGroups = useMemo(() => {
+    if (selectedDebtorRoute === 'ALL') return debtorGroups;
+    return debtorGroups.filter(g => g.key === selectedDebtorRoute);
+  }, [debtorGroups, selectedDebtorRoute]);
+
+  // Clientes organizados por ruta para desplegables de Estado de Cuenta y Abonos
+  const customersGroupedForSelect = useMemo(() => {
+    const map = new Map<string, { label: string; items: Customer[] }>();
+    (customers.data ?? []).forEach(c => {
+      const key = c.routeId || 'UNASSIGNED';
+      let g = map.get(key);
+      if (!g) {
+        const r = routes.data?.find(route => route.id === c.routeId);
+        const label = r ? `${r.code} · ${r.name}` : (c.routeName || 'Sin Ruta Asignada');
+        g = { label, items: [] };
+        map.set(key, g);
+      }
+      g.items.push(c);
+    });
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, 'es', { sensitivity: 'base' }));
+  }, [customers.data, routes.data]);
 
   const handleSubmitPayment = (e: FormEvent) => {
     e.preventDefault();
@@ -174,13 +282,41 @@ export function CreditPage({ canRecord = true, canVerify = false, currentUserId 
         description="Control de saldos de clientes, registro de abonos, emisión de comprobantes y verificación de transferencias."
         actions={
           <div className="filter-group">
-            <button
-              type="button"
-              className={activeTab === 'statement' ? 'primary' : 'secondary'}
-              onClick={() => setActiveTab('statement')}
-            >
-              Estados de Cuenta
-            </button>
+            {isAdmin ? (
+              <>
+                <button
+                  type="button"
+                  className={activeTab === 'routes' ? 'primary' : 'secondary'}
+                  onClick={() => setActiveTab('routes')}
+                >
+                  Cartera por Ruta {allDebtors.length > 0 ? `(${allDebtors.length})` : ''}
+                </button>
+                <button
+                  type="button"
+                  className={activeTab === 'statement' ? 'primary' : 'secondary'}
+                  onClick={() => setActiveTab('statement')}
+                >
+                  Estados de Cuenta
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className={activeTab === 'statement' ? 'primary' : 'secondary'}
+                  onClick={() => setActiveTab('statement')}
+                >
+                  Estados de Cuenta
+                </button>
+                <button
+                  type="button"
+                  className={activeTab === 'routes' ? 'primary' : 'secondary'}
+                  onClick={() => setActiveTab('routes')}
+                >
+                  Cartera por Ruta {allDebtors.length > 0 ? `(${allDebtors.length})` : ''}
+                </button>
+              </>
+            )}
             {canRecord && (
               <button
                 type="button"
@@ -199,13 +335,6 @@ export function CreditPage({ canRecord = true, canVerify = false, currentUserId 
                 Verificar Transferencias {pendingTransfers.data && pendingTransfers.data.length > 0 && `(${pendingTransfers.data.length})`}
               </button>
             )}
-            <button
-              type="button"
-              className={activeTab === 'routes' ? 'primary' : 'secondary'}
-              onClick={() => setActiveTab('routes')}
-            >
-              Cartera por Ruta
-            </button>
           </div>
         }
       />
@@ -276,10 +405,14 @@ export function CreditPage({ canRecord = true, canVerify = false, currentUserId 
                 }}
               >
                 <option value="">-- Seleccionar cliente --</option>
-                {customers.data?.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.code} · {c.name} (Saldo: Q{c.currentBalance.toFixed(2)})
-                  </option>
+                {customersGroupedForSelect.map(group => (
+                  <optgroup key={group.label} label={group.label}>
+                    {group.items.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.code} · {c.name} {Number(c.currentBalance || 0) > 0 ? `(Saldo: Q ${c.currentBalance.toFixed(2)})` : ''}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
             </label>
@@ -533,13 +666,17 @@ export function CreditPage({ canRecord = true, canVerify = false, currentUserId 
             <select
               value={statementCustomerId}
               onChange={e => setStatementCustomerId(e.target.value)}
-              style={{ maxWidth: '350px' }}
+              style={{ maxWidth: '420px' }}
             >
               <option value="">-- Seleccionar cliente para consultar --</option>
-              {customers.data?.map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.code} · {c.name}
-                </option>
+              {customersGroupedForSelect.map(group => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.items.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.code} · {c.name} {Number(c.currentBalance || 0) > 0 ? `(Deuda: Q ${c.currentBalance.toFixed(2)})` : ''}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </div>
@@ -634,112 +771,309 @@ export function CreditPage({ canRecord = true, canVerify = false, currentUserId 
         </section>
       )}
 
-      {/* ── TAB 4: CARTERA POR RUTA ── */}
+      {/* ── TAB 4: CARTERA POR RUTA (DEUDORES AGRUPADOS) ── */}
       {activeTab === 'routes' && (
         <section className="panel section-panel">
-          <div className="section-heading">
-            <h2>Cartera de Crédito Pendiente por Ruta</h2>
-            <select
-              value={pendingRouteId}
-              onChange={e => setPendingRouteId(e.target.value)}
-              style={{ maxWidth: '300px' }}
-            >
-              <option value="">-- Seleccionar ruta --</option>
-              {routes.data?.map(r => (
-                <option key={r.id} value={r.id}>
-                  {r.code} · {r.name}
-                </option>
-              ))}
-            </select>
+          <div
+            className="section-heading"
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}
+          >
+            <div>
+              <h2>Cartera de Clientes Deudores por Ruta</h2>
+              <p className="muted" style={{ margin: '0.25rem 0 0 0' }}>
+                Deudores agrupados por rutas comerciales y vendedores que presentan saldos pendientes.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <select
+                value={selectedDebtorRoute}
+                onChange={e => setSelectedDebtorRoute(e.target.value)}
+                style={{ maxWidth: '280px' }}
+                aria-label="Filtrar por ruta"
+              >
+                <option value="ALL">-- Todas las rutas con deuda ({debtorGroups.length}) --</option>
+                {debtorGroups.map(g => (
+                  <option key={g.key} value={g.key}>
+                    {g.routeCode ? `${g.routeCode} · ` : ''}{g.routeName} (Q {g.totalDebt.toFixed(2)})
+                  </option>
+                ))}
+              </select>
+
+              {displayedDebtorGroups.length > 0 && (
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    const allCollapsed = displayedDebtorGroups.every(g => collapsedRouteGroups[g.key]);
+                    const next: Record<string, boolean> = {};
+                    displayedDebtorGroups.forEach(g => {
+                      next[g.key] = !allCollapsed;
+                    });
+                    setCollapsedRouteGroups(next);
+                  }}
+                  style={{ fontSize: '0.85rem', padding: '0.45rem 0.8rem' }}
+                >
+                  {displayedDebtorGroups.every(g => collapsedRouteGroups[g.key]) ? '▼ Expandir Todas' : '▲ Colapsar Todas'}
+                </button>
+              )}
+            </div>
           </div>
 
-          {pendingRouteId && routePending.isLoading && <p>Cargando cartera de la ruta…</p>}
-          {pendingRouteId && routePending.error && (
-            <div className="alert error">{routePending.error.message}</div>
+          {/* Tarjetas KPI de Cartera */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '1rem', margin: '1.25rem 0' }}>
+            <div className="panel" style={{ background: '#fff5f5', border: '1px solid #fecaca', borderRadius: '10px', padding: '1rem' }}>
+              <small style={{ color: '#991b1b', fontWeight: 600, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em' }}>
+                Cartera Total Adeudada
+              </small>
+              <p style={{ fontSize: '1.75rem', fontWeight: 800, margin: '0.35rem 0 0.1rem 0', color: '#dc2626' }}>
+                Q {grandTotalDebt.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+              <small style={{ color: '#7f1d1d' }}>Saldo pendiente total en cartera</small>
+            </div>
+
+            <div className="panel" style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '10px', padding: '1rem' }}>
+              <small style={{ color: '#0369a1', fontWeight: 600, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em' }}>
+                Clientes con Deuda
+              </small>
+              <p style={{ fontSize: '1.75rem', fontWeight: 800, margin: '0.35rem 0 0.1rem 0', color: '#0284c7' }}>
+                {allDebtors.length}
+              </p>
+              <small style={{ color: '#075985' }}>Clientes activos con saldo &gt; Q 0.00</small>
+            </div>
+
+            <div className="panel" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '1rem' }}>
+              <small style={{ color: '#475569', fontWeight: 600, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em' }}>
+                Rutas con Cartera Pendiente
+              </small>
+              <p style={{ fontSize: '1.75rem', fontWeight: 800, margin: '0.35rem 0 0.1rem 0', color: '#334155' }}>
+                {debtorGroups.filter(g => g.key !== 'UNASSIGNED').length}
+              </p>
+              <small style={{ color: '#64748b' }}>Rutas comerciales con deudas activas</small>
+            </div>
+          </div>
+
+          {/* Búsqueda y Filtros de Ruta */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.25rem' }}>
+            <input
+              type="search"
+              placeholder="🔍 Buscar deudor por nombre, código, teléfono, ruta o vendedor..."
+              value={debtorSearch}
+              onChange={e => setDebtorSearch(e.target.value)}
+              style={{ width: '100%', maxWidth: '520px' }}
+            />
+
+            {debtorGroups.length > 1 && (
+              <div className="customer-filter-pills">
+                <button
+                  type="button"
+                  className={`customer-filter-pill ${selectedDebtorRoute === 'ALL' ? 'active' : ''}`}
+                  onClick={() => setSelectedDebtorRoute('ALL')}
+                >
+                  Todas las Rutas con Deuda ({debtorGroups.length})
+                </button>
+                {debtorGroups.map(g => (
+                  <button
+                    key={g.key}
+                    type="button"
+                    className={`customer-filter-pill ${selectedDebtorRoute === g.key ? 'active' : ''}`}
+                    onClick={() => setSelectedDebtorRoute(g.key)}
+                  >
+                    {g.routeCode ? `${g.routeCode} · ` : ''}{g.routeName}
+                    <span style={{ opacity: 0.85, fontSize: '0.78rem', marginLeft: '0.2rem' }}>
+                      (Q {g.totalDebt.toFixed(2)} · {g.debtors.length})
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Estados de carga o listas vacías */}
+          {customers.isLoading && <p>Cargando información de deudores y rutas…</p>}
+
+          {!customers.isLoading && allDebtors.length === 0 && (
+            <div className="alert success" style={{ padding: '1.5rem', textAlign: 'center' }}>
+              <strong>✓ ¡Excelente estado de cobranza!</strong>
+              <p style={{ margin: '0.5rem 0 0 0' }}>No existen clientes deudores ni saldos pendientes en las rutas registradas.</p>
+            </div>
           )}
 
-          {routePending.data && (
-            <>
-              <div style={{ display: 'flex', gap: '2rem', marginBottom: '1.5rem' }}>
-                <div className="panel" style={{ flex: 1, textAlign: 'center', background: '#fff0f0' }}>
-                  <h3 style={{ margin: 0, color: '#d9534f' }}>Deuda Total en Ruta</h3>
-                  <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: '0.5rem 0', color: '#d9534f' }}>
-                    Q {routePending.data.totalDebt.toFixed(2)}
-                  </p>
-                </div>
-                <div className="panel" style={{ flex: 1, textAlign: 'center', background: '#f5f7f8' }}>
-                  <h3 style={{ margin: 0 }}>Clientes con Saldo Pendiente</h3>
-                  <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: '0.5rem 0' }}>
-                    {routePending.data.totalDebtors}
-                  </p>
-                </div>
-              </div>
+          {!customers.isLoading && allDebtors.length > 0 && displayedDebtorGroups.length === 0 && (
+            <div className="alert muted" style={{ textAlign: 'center', padding: '1.5rem' }}>
+              No se encontraron clientes deudores que coincidan con el criterio de búsqueda "{debtorSearch}".
+            </div>
+          )}
 
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Cliente</th>
-                      <th>Código</th>
-                      <th>Límite de Crédito</th>
-                      <th>Saldo Pendiente</th>
-                      <th>Disponible</th>
-                      <th>Acción</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {routePending.data.debtors.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} style={{ textAlign: 'center' }} className="muted">
-                          No hay clientes con deuda pendiente en esta ruta.
-                        </td>
-                      </tr>
-                    ) : (
-                      routePending.data.debtors.map(d => (
-                        <tr key={d.customerId}>
-                          <td><strong>{d.customerName}</strong></td>
-                          <td>{d.customerCode}</td>
-                          <td>Q {d.creditLimit.toFixed(2)}</td>
-                          <td>
-                            <strong style={{ color: '#d9534f', fontSize: '1.1rem' }}>
-                              Q {d.currentBalance.toFixed(2)}
-                            </strong>
-                          </td>
-                          <td>Q {d.availableCredit.toFixed(2)}</td>
-                          <td>
-                            <div className="action-buttons">
-                              <button
-                                type="button"
-                                className="secondary"
-                                onClick={() => {
-                                  setStatementCustomerId(d.customerId);
-                                  setActiveTab('statement');
-                                }}
-                              >
-                                Ver Estado
-                              </button>
-                              {canRecord && (
-                                <button
-                                  type="button"
-                                  className="primary"
-                                  onClick={() => {
-                                    setPaymentCustomerId(d.customerId);
-                                    setActiveTab('payment');
-                                  }}
-                                >
-                                  Abonar
-                                </button>
-                              )}
-                            </div>
-                          </td>
+          {/* Grupos de Deudores por Ruta */}
+          {!customers.isLoading && displayedDebtorGroups.map(group => {
+            const isCollapsed = !!collapsedRouteGroups[group.key];
+            const isUnassigned = group.key === 'UNASSIGNED';
+
+            return (
+              <div
+                key={group.key}
+                className="route-group-panel"
+                style={{
+                  borderLeft: isUnassigned ? '4px solid #f59e0b' : '4px solid #dc2626',
+                  marginBottom: '1.25rem',
+                }}
+              >
+                <div
+                  className={`route-group-banner ${isUnassigned ? 'unassigned' : ''}`}
+                  onClick={() => toggleRouteCollapse(group.key)}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}
+                >
+                  <div className="route-group-info" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <span style={{ fontSize: '1.4rem' }}>{isUnassigned ? '⚠️' : '🚚'}</span>
+                    <div>
+                      <h3 className="route-group-title" style={{ margin: 0, fontSize: '1.1rem' }}>
+                        {group.routeCode ? `${group.routeCode} — ` : ''}{group.routeName}
+                      </h3>
+                      <span className="route-group-subtitle" style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                        👤 Vendedor asignado: <strong>{group.sellerName}</strong>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    <span
+                      style={{
+                        background: '#fee2e2',
+                        color: '#991b1b',
+                        padding: '0.3rem 0.75rem',
+                        borderRadius: '9999px',
+                        fontWeight: 700,
+                        fontSize: '0.9rem',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                      }}
+                    >
+                      Deuda Ruta: Q {group.totalDebt.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+
+                    <span
+                      style={{
+                        background: '#e0f2fe',
+                        color: '#0369a1',
+                        padding: '0.3rem 0.65rem',
+                        borderRadius: '9999px',
+                        fontWeight: 600,
+                        fontSize: '0.82rem',
+                      }}
+                    >
+                      {group.debtors.length} {group.debtors.length === 1 ? 'deudor' : 'deudores'}
+                    </span>
+
+                    <button
+                      type="button"
+                      className="secondary"
+                      style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem', border: 'none', background: 'transparent', cursor: 'pointer' }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleRouteCollapse(group.key);
+                      }}
+                    >
+                      {isCollapsed ? '▼ Ver deudores' : '▲ Ocultar'}
+                    </button>
+                  </div>
+                </div>
+
+                {!isCollapsed && (
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Cliente</th>
+                          <th>Código</th>
+                          <th>Contacto / Teléfono</th>
+                          <th>Límite Crédito</th>
+                          <th>Saldo Adeudado</th>
+                          <th>Disponible</th>
+                          <th>Acciones</th>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      </thead>
+                      <tbody>
+                        {group.debtors.map(debtor => {
+                          const available = Math.max(0, debtor.creditLimit - debtor.currentBalance);
+                          return (
+                            <tr key={debtor.id}>
+                              <td>
+                                <strong>{debtor.name}</strong>
+                                {debtor.customerType && (
+                                  <span
+                                    style={{
+                                      display: 'block',
+                                      fontSize: '0.75rem',
+                                      color: '#64748b',
+                                      textTransform: 'capitalize',
+                                    }}
+                                  >
+                                    {debtor.customerType.toLowerCase()}
+                                  </span>
+                                )}
+                              </td>
+                              <td>
+                                <code>{debtor.code}</code>
+                              </td>
+                              <td>
+                                <div>{debtor.phone || '—'}</div>
+                                {debtor.contactName && debtor.contactName !== debtor.name && (
+                                  <small className="muted">{debtor.contactName}</small>
+                                )}
+                              </td>
+                              <td>Q {debtor.creditLimit.toFixed(2)}</td>
+                              <td>
+                                <strong style={{ color: '#dc2626', fontSize: '1.05rem' }}>
+                                  Q {debtor.currentBalance.toFixed(2)}
+                                </strong>
+                              </td>
+                              <td>
+                                <span style={{ color: available > 0 ? '#16a34a' : '#dc2626', fontWeight: 500 }}>
+                                  Q {available.toFixed(2)}
+                                </span>
+                              </td>
+                              <td>
+                                <div className="action-buttons" style={{ display: 'flex', gap: '0.4rem' }}>
+                                  <button
+                                    type="button"
+                                    className="secondary"
+                                    style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }}
+                                    onClick={() => {
+                                      setStatementCustomerId(debtor.id);
+                                      setActiveTab('statement');
+                                    }}
+                                    title="Ver historial de cargos y abonos del cliente"
+                                  >
+                                    📄 Estado
+                                  </button>
+                                  {canRecord && (
+                                    <button
+                                      type="button"
+                                      className="primary"
+                                      style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }}
+                                      onClick={() => {
+                                        setPaymentCustomerId(debtor.id);
+                                        setActiveTab('payment');
+                                      }}
+                                      title="Registrar un abono para este cliente"
+                                    >
+                                      💵 Abonar
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-            </>
-          )}
+            );
+          })}
         </section>
       )}
     </main>

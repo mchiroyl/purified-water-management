@@ -578,6 +578,8 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
       setPostSaleJugLentSuccess(false);
       setPostSaleJugError('');
       await queryClient.invalidateQueries({ queryKey: ['sales'] });
+      await queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      await queryClient.invalidateQueries({ queryKey: ['route-loads'] });
       await queryClient.invalidateQueries({ queryKey: ['inventory'] });
       await queryClient.invalidateQueries({ queryKey: ['jugs'] });
       await queryClient.invalidateQueries({ queryKey: ['credit'] });

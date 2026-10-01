@@ -87,7 +87,7 @@ export function App() {
         <Route path="loads" element={canSeeLoads ? <RouteLoadsPage canPrepare={isAdmin || isWarehouse} canConfirmWarehouse={isAdmin || isWarehouse} canReceive={isAdmin || isSeller} canStart={isAdmin || isSeller} canCorrect={isAdmin || isWarehouse} /> : <Navigate to="/" replace />} />
         <Route path="sales" element={canSeeSales ? <SalesPage canSell={isAdmin || isSeller} canViewLocation={isAdmin || user.roles.includes('SUPERVISOR')} /> : <Navigate to="/" replace />} />
         <Route path="transfers" element={canVerifyTransfers ? <TransfersPage /> : <Navigate to="/" replace />} />
-        <Route path="credit" element={canSeeCredit ? <CreditPage canRecord={isAdmin || isCreditAdmin || isSeller} canVerify={canVerifyCredit} currentUserId={user.id} /> : <Navigate to="/" replace />} />
+        <Route path="credit" element={canSeeCredit ? <CreditPage canRecord={isAdmin || isCreditAdmin || isSeller} canVerify={canVerifyCredit} currentUserId={user.id} isAdmin={isAdmin} /> : <Navigate to="/" replace />} />
         <Route path="jugs" element={canSeeJugs ? <JugsPage canRecord={canRecordJugs} canViewSummary={isAdmin || isCreditAdmin} /> : <Navigate to="/" replace />} />
         <Route path="wastes" element={canSeeWastes ? <WastePage canReport canReview={isAdmin || isWarehouse || user.roles.includes('SUPERVISOR')} canManageCatalog={isAdmin} deviceId={user.deviceId} /> : <Navigate to="/" replace />} />
         <Route path="returns" element={canSeeReturns ? <ReturnsPage canReport canReceive={isAdmin || isWarehouse || user.roles.includes('SUPERVISOR')} deviceId={user.deviceId} /> : <Navigate to="/" replace />} />
