@@ -51,6 +51,30 @@ export function CreditPage({ canRecord = true, canVerify = false, currentUserId,
     queryFn: () => apiRequest<Route[]>('/routes'),
   });
 
+  type CreditSaleItem = {
+    id: string;
+    productName: string;
+    presentationName?: string;
+    quantityBaseUnits: number;
+    presentationQuantity?: number;
+  };
+  type CreditSalePayment = { method: string; amount: number; status: string };
+  type CreditSale = {
+    id: string;
+    customerId?: string;
+    status: string;
+    creditAmount?: number;
+    createdAt: string;
+    items: CreditSaleItem[];
+    payments?: CreditSalePayment[];
+  };
+
+  const sales = useQuery({
+    queryKey: ['sales'],
+    queryFn: () => apiRequest<CreditSale[]>('/sales'),
+    enabled: isAdmin,
+  });
+
   // ── Formulario de registro de abono ──
   const [paymentCustomerId, setPaymentCustomerId] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -149,19 +173,60 @@ export function CreditPage({ canRecord = true, canVerify = false, currentUserId,
     return allDebtors.reduce((sum, d) => sum + Number(d.currentBalance || 0), 0);
   }, [allDebtors]);
 
+  // Mapa de productos dejados a crédito por cliente
+  const debtorCreditProductsMap = useMemo(() => {
+    const map = new Map<string, Array<{ name: string; quantity: number }>>();
+    if (!sales.data) return map;
+
+    // Filtrar ventas confirmadas con crédito
+    const creditSales = sales.data.filter(s =>
+      s.customerId &&
+      s.status !== 'ANNULLED' &&
+      (Number(s.creditAmount || 0) > 0 || s.payments?.some(p => p.method === 'CREDIT'))
+    );
+
+    // Ordenar de más reciente a más antigua
+    const sortedSales = [...creditSales].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+    for (const sale of sortedSales) {
+      if (!sale.customerId) continue;
+      const currentList = map.get(sale.customerId) ?? [];
+      for (const item of (sale.items ?? [])) {
+        const prodName = item.productName || item.presentationName || 'Producto';
+        const existing = currentList.find(p => p.name.toLowerCase() === prodName.toLowerCase());
+        const qty = Number(item.presentationQuantity || item.quantityBaseUnits || 1);
+        if (existing) {
+          existing.quantity += qty;
+        } else {
+          currentList.push({ name: prodName, quantity: qty });
+        }
+      }
+      map.set(sale.customerId, currentList);
+    }
+
+    return map;
+  }, [sales.data]);
+
   // Filtro de búsqueda sobre deudores
   const filteredDebtors = useMemo(() => {
     if (!debtorSearch.trim()) return allDebtors;
     const q = debtorSearch.toLowerCase().trim();
-    return allDebtors.filter(d =>
-      d.name?.toLowerCase().includes(q) ||
-      d.code?.toLowerCase().includes(q) ||
-      d.contactName?.toLowerCase().includes(q) ||
-      d.phone?.includes(q) ||
-      d.routeName?.toLowerCase().includes(q) ||
-      d.sellerName?.toLowerCase().includes(q)
-    );
-  }, [allDebtors, debtorSearch]);
+    return allDebtors.filter(d => {
+      const prods = debtorCreditProductsMap.get(d.id);
+      const matchesProduct = prods?.some(p => p.name.toLowerCase().includes(q));
+      return (
+        d.name?.toLowerCase().includes(q) ||
+        d.code?.toLowerCase().includes(q) ||
+        d.contactName?.toLowerCase().includes(q) ||
+        d.phone?.includes(q) ||
+        d.routeName?.toLowerCase().includes(q) ||
+        d.sellerName?.toLowerCase().includes(q) ||
+        Boolean(matchesProduct)
+      );
+    });
+  }, [allDebtors, debtorSearch, debtorCreditProductsMap]);
 
   type DebtorRouteGroup = {
     key: string;
@@ -857,7 +922,7 @@ export function CreditPage({ canRecord = true, canVerify = false, currentUserId,
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.25rem' }}>
             <input
               type="search"
-              placeholder="🔍 Buscar deudor por nombre, código, teléfono, ruta o vendedor..."
+              placeholder="🔍 Buscar deudor por nombre, código, producto, teléfono, ruta o vendedor..."
               value={debtorSearch}
               onChange={e => setDebtorSearch(e.target.value)}
               style={{ width: '100%', maxWidth: '520px' }}
@@ -987,6 +1052,7 @@ export function CreditPage({ canRecord = true, canVerify = false, currentUserId,
                         <tr>
                           <th>Cliente</th>
                           <th>Código</th>
+                          <th>Productos a Crédito</th>
                           <th>Contacto / Teléfono</th>
                           <th>Límite Crédito</th>
                           <th>Saldo Adeudado</th>
@@ -1016,6 +1082,49 @@ export function CreditPage({ canRecord = true, canVerify = false, currentUserId,
                               </td>
                               <td>
                                 <code>{debtor.code}</code>
+                              </td>
+                              <td>
+                                {(() => {
+                                  const prods = debtorCreditProductsMap.get(debtor.id);
+                                  if (!prods || prods.length === 0) {
+                                    return <span className="muted" style={{ fontSize: '0.8rem' }}>—</span>;
+                                  }
+                                  return (
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', maxWidth: '280px' }}>
+                                      {prods.map((p, idx) => (
+                                        <span
+                                          key={idx}
+                                          style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '0.3rem',
+                                            padding: '0.2rem 0.5rem',
+                                            background: '#f0fdf4',
+                                            border: '1px solid #bbf7d0',
+                                            borderRadius: '0.45rem',
+                                            fontSize: '0.8rem',
+                                            fontWeight: 600,
+                                            color: '#166534',
+                                          }}
+                                        >
+                                          <span>{p.name.toLowerCase().includes('garraf') ? '💧' : p.name.toLowerCase().includes('fardo') ? '📦' : '🏷️'}</span>
+                                          <span>{p.name}</span>
+                                          <span
+                                            style={{
+                                              background: '#dcfce7',
+                                              padding: '0.05rem 0.35rem',
+                                              borderRadius: '0.25rem',
+                                              fontSize: '0.74rem',
+                                              fontWeight: 700,
+                                            }}
+                                          >
+                                            x{p.quantity}
+                                          </span>
+                                        </span>
+                                      ))}
+                                    </div>
+                                  );
+                                })()}
                               </td>
                               <td>
                                 <div>{debtor.phone || '—'}</div>

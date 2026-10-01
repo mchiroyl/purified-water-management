@@ -133,4 +133,67 @@ describe('CreditPage', () => {
     expect(await screen.findByText(/tienda la bendición/i)).toBeInTheDocument();
     expect(screen.queryByText(/abarrotes don pepe/i)).not.toBeInTheDocument();
   });
+
+  it('muestra los productos dejados a crédito para cada cliente con deuda', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('/customers')) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify([
+                {
+                  id: 'c1',
+                  code: 'CLI-001',
+                  name: 'Aby',
+                  currentBalance: 90.0,
+                  creditLimit: 200.0,
+                  creditAllowed: true,
+                  routeId: 'r1',
+                  routeCode: 'RUT-000003',
+                  routeName: 'San José y Tonquin',
+                },
+              ]),
+              { status: 200, headers: { 'Content-Type': 'application/json' } }
+            )
+          );
+        }
+        if (url.endsWith('/sales')) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify([
+                {
+                  id: 's1',
+                  customerId: 'c1',
+                  status: 'CONFIRMED',
+                  creditAmount: 90.0,
+                  createdAt: '2026-09-30T10:00:00Z',
+                  items: [
+                    { id: 'si1', productName: 'Garrafon', presentationQuantity: 2, quantityBaseUnits: 2 },
+                    { id: 'si2', productName: 'Fardo', presentationQuantity: 1, quantityBaseUnits: 1 },
+                  ],
+                  payments: [{ method: 'CREDIT', amount: 90.0, status: 'APPLIED' }],
+                },
+              ]),
+              { status: 200, headers: { 'Content-Type': 'application/json' } }
+            )
+          );
+        }
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+      })
+    );
+
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter>
+          <CreditPage canRecord={true} canVerify={true} isAdmin={true} />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    expect(await screen.findByText('Productos a Crédito')).toBeInTheDocument();
+    expect(await screen.findByText('Garrafon')).toBeInTheDocument();
+    expect(await screen.findByText('Fardo')).toBeInTheDocument();
+  });
 });
