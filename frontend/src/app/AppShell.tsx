@@ -1,9 +1,50 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import {
+  LayoutDashboard,
+  Package,
+  Tag,
+  Users,
+  MapPin,
+  Truck,
+  DollarSign,
+  Warehouse,
+  Inbox,
+  ShoppingCart,
+  ArrowRightLeft,
+  CreditCard,
+  Droplets,
+  TrendingDown,
+  Undo2,
+  Receipt,
+  CheckSquare,
+  XCircle,
+  Clock,
+  BarChart3,
+  ShieldCheck,
+  Navigation,
+  UserCheck,
+  Building2,
+  LogOut,
+  Menu,
+  X,
+} from 'lucide-react';
 import { useSession } from '../features/auth/SessionContext';
 import { ConnectionIndicator } from '../features/connectivity/ConnectionIndicator';
 import { apiRequest, resolveApiUrl } from '../services/apiClient';
+
+type NavigationItem = {
+  to: string;
+  label: string;
+  icon: ReactNode;
+  visible?: boolean;
+};
+
+type NavigationGroup = {
+  label: string;
+  items: NavigationItem[];
+};
 
 export function AppShell() {
   const { user, logout } = useSession();
@@ -40,52 +81,52 @@ export function AppShell() {
     queryKey: ['company-configuration'],
     queryFn: () => apiRequest<{ commercialName: string; logoUrl?: string; version: number }>('/company-configuration')
   });
-  const navigationGroups = [
+  const navigationGroups: NavigationGroup[] = [
     {
       label: 'Inicio',
-      items: [{ to: '/', label: 'Panel operativo', icon: '📊', visible: true }]
+      items: [{ to: '/', label: 'Panel operativo', icon: <LayoutDashboard size={17} strokeWidth={2} />, visible: true }]
     },
     {
       label: 'Catálogo y planificación',
       items: [
-        { to: '/presentations', label: 'Presentaciones', icon: '📦', visible: canCatalog },
-        { to: '/products', label: 'Productos', icon: '🏷️', visible: canCatalog },
-        { to: '/customers', label: 'Clientes', icon: '👥', visible: canSeeCustomers },
-        { to: '/routes', label: 'Rutas', icon: '🗺️', visible: canSeeRoutes },
-        { to: '/vehicles', label: 'Vehículos', icon: '🚚', visible: canSeeVehicles },
-        { to: '/pricing', label: 'Precios', icon: '💲', visible: canSeePricing }
+        { to: '/presentations', label: 'Presentaciones', icon: <Package size={17} strokeWidth={2} />, visible: canCatalog },
+        { to: '/products', label: 'Productos', icon: <Tag size={17} strokeWidth={2} />, visible: canCatalog },
+        { to: '/customers', label: 'Clientes', icon: <Users size={17} strokeWidth={2} />, visible: canSeeCustomers },
+        { to: '/routes', label: 'Rutas', icon: <MapPin size={17} strokeWidth={2} />, visible: canSeeRoutes },
+        { to: '/vehicles', label: 'Vehículos', icon: <Truck size={17} strokeWidth={2} />, visible: canSeeVehicles },
+        { to: '/pricing', label: 'Precios', icon: <DollarSign size={17} strokeWidth={2} />, visible: canSeePricing }
       ]
     },
     {
       label: 'Operación diaria',
       items: [
-        { to: '/inventory', label: 'Inventario', icon: '🏭', visible: canSeeInventory },
-        { to: '/loads', label: 'Cargas', icon: '📥', visible: canSeeLoads },
-        { to: '/sales', label: 'Ventas', icon: '💰', visible: canSeeSales },
-        { to: '/transfers', label: 'Transferencias', icon: '🔄', visible: canVerifyTransfers },
-        { to: '/credit', label: 'Créditos y abonos', icon: '💳', visible: canSeeCredit },
-        { to: '/jugs', label: 'Control de garrafones', icon: '🧴', visible: canSeeJugs },
-        { to: '/wastes', label: 'Mermas', icon: '📉', visible: canSeeWastes },
-        { to: '/returns', label: 'Devoluciones', icon: '🔙', visible: canSeeReturns },
-        { to: '/settlements', label: 'Liquidaciones', icon: '💵', visible: canSeeSettlements }
+        { to: '/inventory', label: 'Inventario', icon: <Warehouse size={17} strokeWidth={2} />, visible: canSeeInventory },
+        { to: '/loads', label: 'Cargas', icon: <Inbox size={17} strokeWidth={2} />, visible: canSeeLoads },
+        { to: '/sales', label: 'Ventas', icon: <ShoppingCart size={17} strokeWidth={2} />, visible: canSeeSales },
+        { to: '/transfers', label: 'Transferencias', icon: <ArrowRightLeft size={17} strokeWidth={2} />, visible: canVerifyTransfers },
+        { to: '/credit', label: 'Créditos y abonos', icon: <CreditCard size={17} strokeWidth={2} />, visible: canSeeCredit },
+        { to: '/jugs', label: 'Control de garrafones', icon: <Droplets size={17} strokeWidth={2} />, visible: canSeeJugs },
+        { to: '/wastes', label: 'Mermas', icon: <TrendingDown size={17} strokeWidth={2} />, visible: canSeeWastes },
+        { to: '/returns', label: 'Devoluciones', icon: <Undo2 size={17} strokeWidth={2} />, visible: canSeeReturns },
+        { to: '/settlements', label: 'Liquidaciones', icon: <Receipt size={17} strokeWidth={2} />, visible: canSeeSettlements }
       ]
     },
     {
       label: 'Control y seguimiento',
       items: [
-        { to: '/operations-control', label: 'Cierre de operaciones', icon: '🏁', visible: canSeeOperationsControl },
-        { to: '/annulments', label: 'Anulaciones', icon: '❌', visible: canSeeAnnulments },
-        { to: '/pending', label: 'Pendientes', icon: '⏳', visible: true },
-        { to: '/reports', label: 'Reportes', icon: '📈', visible: true },
-        { to: '/audit', label: 'Auditoría', icon: '📋', visible: canSeeAudit },
-        { to: '/route-history', label: 'Historial de rutas', icon: '📍', visible: isAdmin || user?.roles.includes('SUPERVISOR') }
+        { to: '/operations-control', label: 'Cierre de operaciones', icon: <CheckSquare size={17} strokeWidth={2} />, visible: canSeeOperationsControl },
+        { to: '/annulments', label: 'Anulaciones', icon: <XCircle size={17} strokeWidth={2} />, visible: canSeeAnnulments },
+        { to: '/pending', label: 'Pendientes', icon: <Clock size={17} strokeWidth={2} />, visible: true },
+        { to: '/reports', label: 'Reportes', icon: <BarChart3 size={17} strokeWidth={2} />, visible: true },
+        { to: '/audit', label: 'Auditoría', icon: <ShieldCheck size={17} strokeWidth={2} />, visible: canSeeAudit },
+        { to: '/route-history', label: 'Historial de rutas', icon: <Navigation size={17} strokeWidth={2} />, visible: isAdmin || user?.roles.includes('SUPERVISOR') }
       ]
     },
     {
       label: 'Administración',
       items: [
-        { to: '/administration', label: 'Usuarios', icon: '👤', visible: isAdmin },
-        { to: '/company', label: 'Datos de la empresa', icon: '🏢', visible: isAdmin }
+        { to: '/administration', label: 'Usuarios', icon: <UserCheck size={17} strokeWidth={2} />, visible: isAdmin },
+        { to: '/company', label: 'Datos de la empresa', icon: <Building2 size={17} strokeWidth={2} />, visible: isAdmin }
       ]
     }
   ];
@@ -111,7 +152,7 @@ export function AppShell() {
           setExpandedGroup(group.label);
           onNavigate?.();
         }}>
-          <span className="nav-icon" aria-hidden="true" style={{ marginRight: '8px', fontSize: '1.1em' }}>{item.icon}</span>
+          <span className="nav-icon" aria-hidden="true" style={{ marginRight: '8px', display: 'inline-flex', alignItems: 'center' }}>{item.icon}</span>
           {item.label}
         </NavLink>)}
       </div>}
