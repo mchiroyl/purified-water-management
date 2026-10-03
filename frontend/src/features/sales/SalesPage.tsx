@@ -2,6 +2,27 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../../app/PageHeader';
 import { useState, useEffect, useMemo, Fragment, type FormEvent } from 'react';
+import {
+  Droplets,
+  CreditCard,
+  Zap,
+  Star,
+  Tag,
+  MapPin,
+  AlertTriangle,
+  RotateCcw,
+  CheckCircle2,
+  FileText,
+  Plus,
+  Receipt,
+  UserPlus,
+  Phone,
+  Banknote,
+  ArrowRightLeft,
+  Search,
+  Filter,
+  ShieldAlert,
+} from 'lucide-react';
 import { apiBlob, apiRequest } from '../../services/apiClient';
 import { openMobileDatabase, type GeoLocationSnapshot } from '../../offline/mobileDatabase';
 import { captureCurrentLocation } from '../../services/geolocation';
@@ -104,42 +125,54 @@ function CustomerContextBanner({
   const hasDebt = creditDebt > 0;
   const creditExhausted = hasDebt && available <= 0;
   return (
-    <div className="customer-context-banner">
+    <div className="customer-context-banner" style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
       {isProvisional && (
-        <div className="context-row" style={{ background: '#fefce8', color: '#854d0e', border: '1px solid #fef08a', padding: '0.45rem 0.65rem', borderRadius: '0.45rem', fontSize: '0.84rem' }}>
-          <span>⚡</span>
+        <div className="context-row" style={{ background: '#fefce8', color: '#854d0e', border: '1px solid #fef08a', padding: '0.45rem 0.65rem', borderRadius: '0.45rem', fontSize: '0.84rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+          <Zap size={15} strokeWidth={2} style={{ color: '#ca8a04', flexShrink: 0 }} />
           <span><strong>Cliente Provisional en Ruta:</strong> Aplica tarifa estándar de lista general. Venta al contado o transferencia (crédito no disponible).</span>
         </div>
       )}
       {hasJugs ? (
-        <div className="context-row jug-warning" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem' }}>
+        <div className="context-row jug-warning" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem', background: '#fffbeb', border: '1px solid #fde68a', padding: '0.45rem 0.65rem', borderRadius: '0.45rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <span>🧴</span>
-            <span>Garrafones prestados: <strong>{jugBalance!.jugsOutstanding}</strong> — pendientes de devolver o cobrar.</span>
+            <Droplets size={15} strokeWidth={2} style={{ color: '#d97706' }} />
+            <span style={{ fontSize: '0.85rem' }}>Garrafones prestados: <strong>{jugBalance!.jugsOutstanding}</strong> — pendientes de devolver o cobrar.</span>
           </div>
-          <button type="button" className="secondary" style={{ fontSize: '0.8rem', padding: '0.2rem 0.55rem' }} onClick={onToggleJugReturn}>
-            {isJugReturnOpen ? '▲ Cerrar devolución' : '🔄 Devolver garrafones'}
+          <button type="button" className="secondary" style={{ fontSize: '0.8rem', padding: '0.2rem 0.55rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }} onClick={onToggleJugReturn}>
+            <RotateCcw size={13} strokeWidth={2} />
+            {isJugReturnOpen ? 'Cerrar devolución' : 'Devolver garrafones'}
           </button>
         </div>
       ) : (
-        <div className="context-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem', background: '#f8fafc', borderLeft: '3px solid #94a3b8', color: '#475569' }}>
+        <div className="context-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem', background: '#f8fafc', border: '1px solid #e2e8f0', color: '#475569', padding: '0.45rem 0.65rem', borderRadius: '0.45rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <span>🧴</span>
+            <Droplets size={15} strokeWidth={2} style={{ color: '#64748b' }} />
             <span style={{ fontSize: '0.85rem' }}>Garrafones prestados: <strong>0</strong> (al día, sin envases pendientes).</span>
           </div>
         </div>
       )}
       {hasDebt && (
-        <div className={`context-row ${creditExhausted ? 'credit-blocked' : 'credit-info'}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem' }}>
+        <div className={`context-row ${creditExhausted ? 'credit-blocked' : 'credit-info'}`} style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '0.4rem',
+          padding: '0.45rem 0.65rem',
+          borderRadius: '0.45rem',
+          background: creditExhausted ? '#fef2f2' : '#eff6ff',
+          border: `1px solid ${creditExhausted ? '#fecaca' : '#bfdbfe'}`
+        }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <span>{creditExhausted ? '🛑' : '💳'}</span>
-            <span>
+            {creditExhausted ? <ShieldAlert size={15} strokeWidth={2} style={{ color: '#b91c1c' }} /> : <CreditCard size={15} strokeWidth={2} style={{ color: '#1d4ed8' }} />}
+            <span style={{ fontSize: '0.85rem' }}>
               {creditExhausted ? <strong>Crédito agotado — </strong> : null}
               Saldo deudor: <strong>Q{creditDebt.toFixed(2)}</strong> · Disponible: <strong>Q{available.toFixed(2)}</strong> de Q{Number(creditBalance?.creditLimit ?? 0).toFixed(2)} límite.
             </span>
           </div>
-          <button type="button" className="secondary" style={{ fontSize: '0.8rem', padding: '0.2rem 0.55rem' }} onClick={onToggleAbono}>
-            {isAbonoOpen ? '▲ Cerrar abono' : '💳 Registrar abono'}
+          <button type="button" className="secondary" style={{ fontSize: '0.8rem', padding: '0.2rem 0.55rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }} onClick={onToggleAbono}>
+            <CreditCard size={13} strokeWidth={2} />
+            {isAbonoOpen ? 'Cerrar abono' : 'Registrar abono'}
           </button>
         </div>
       )}
@@ -187,7 +220,10 @@ function ItemPriceBadge({ customerId, presentationId, quantity }: { customerId?:
       marginTop: '0.35rem',
       width: 'fit-content'
     }}>
-      <span>{isSpecial ? '⭐ Precio Especial asignado:' : '🏷️ Precio General de lista:'}</span>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+        {isSpecial ? <Star size={13} strokeWidth={2.5} style={{ color: '#ca8a04' }} /> : <Tag size={13} strokeWidth={2} />}
+        {isSpecial ? 'Precio Especial asignado:' : 'Precio General de lista:'}
+      </span>
       <strong>Q{unitPrice.toFixed(2)} c/u</strong>
       <span>· Subtotal: <strong>Q{lineTotal.toFixed(2)}</strong></span>
     </div>
@@ -868,7 +904,18 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
         color: '#166534',
         boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)'
       }}>
-        <span style={{ fontSize: '1.4rem' }}>📍</span>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '36px',
+          height: '36px',
+          borderRadius: '0.45rem',
+          background: '#dcfce7',
+          color: '#15803d'
+        }}>
+          <MapPin size={20} strokeWidth={2.2} />
+        </div>
         <div>
           <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#15803d', fontWeight: 700, display: 'block' }}>
             Ruta asignada
@@ -881,8 +928,8 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
     )}
 
     {isSeller && !assignedRoute && !routes.isLoading && (
-      <div className="alert warning" style={{ margin: '0.75rem 0 1.25rem 0' }}>
-        <span>⚠️</span>
+      <div className="alert warning" style={{ margin: '0.75rem 0 1.25rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <AlertTriangle size={18} strokeWidth={2} style={{ color: '#b45309', flexShrink: 0 }} />
         <div>
           <strong>Sin ruta asignada:</strong> No tienes una ruta activa asignada para el día de hoy. Comunícate con administración para que te asignen tu ruta operativa.
         </div>
