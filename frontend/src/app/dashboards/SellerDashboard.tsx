@@ -192,8 +192,44 @@ export function SellerDashboard({
 
   const progressPct = totalLoadedUnits > 0 ? Math.min(100, Math.round((totalSoldUnits / totalLoadedUnits) * 100)) : 0;
 
+  // Traducción de estados de carga al español
+  const loadStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      STARTED: '🟢 En ruta',
+      RECEIVED: '📦 Recibida',
+      PREPARED: '🔧 Preparada',
+      WAREHOUSE_CONFIRMED: '✅ Confirmada',
+      SETTLED: '✔ Liquidada',
+      CANCELLED: '🚫 Cancelada',
+    };
+    return labels[status] ?? status;
+  };
+
+  // Calcular arqueo directamente desde las ventas filtradas como fuente de verdad
+  // (el dashboard.salesToday puede ser 0 si el vendedor no tiene asignación formal en route_assignment)
+  const localSalesToday = sellerSales.reduce((acc, s) => acc + Number(s.total || 0), 0);
+  const localCash = sellerSales.reduce((acc, s) => {
+    const cashPayments = (s.payments ?? []).filter(p => p.method === 'CASH' && p.status === 'CONFIRMED');
+    return acc + cashPayments.reduce((pAcc, p) => pAcc + Number(p.amount || 0), 0);
+  }, 0);
+  const localTransfers = sellerSales.reduce((acc, s) => {
+    const transferPayments = (s.payments ?? []).filter(p => p.method === 'TRANSFER' && p.status !== 'REJECTED');
+    return acc + transferPayments.reduce((pAcc, p) => pAcc + Number(p.amount || 0), 0);
+  }, 0);
+  const localCredit = sellerSales.reduce((acc, s) => {
+    const creditPayments = (s.payments ?? []).filter(p => p.method === 'CREDIT' && p.status === 'APPLIED');
+    return acc + creditPayments.reduce((pAcc, p) => pAcc + Number(p.amount || 0), 0);
+  }, 0);
+
+  // Usar el mayor valor entre el dashboard del servidor y el cálculo local
+  // para evitar mostrar Q0.00 cuando la ruta no está formalmente asignada
+  const effectiveSalesToday = Math.max(Number(dashboard.salesToday || 0), localSalesToday);
+  const effectiveCash = Math.max(Number(dashboard.expectedCash || 0), localCash);
+  const effectiveTransfers = Math.max(Number(dashboard.transfers || 0), localTransfers);
+  const effectiveCredit = Math.max(Number(dashboard.credit || 0), localCredit);
+
   // Efectivo en mano que debe entregar el vendedor
-  const cashInHand = Math.max(0, Number(dashboard.expectedCash || 0) - Number(dashboard.deliveredCash || 0));
+  const cashInHand = Math.max(0, effectiveCash - Number(dashboard.deliveredCash || 0));
 
   return (
     <div>
@@ -253,7 +289,7 @@ export function SellerDashboard({
           </div>
           {sellerLoad && (
             <span className={`route-badge ${sellerLoad.status === 'STARTED' ? 'active' : 'prepared'}`}>
-              {sellerLoad.status === 'STARTED' ? '🟢 En ruta' : sellerLoad.status}
+              {loadStatusLabel(sellerLoad.status)}
             </span>
           )}
         </div>
@@ -350,7 +386,7 @@ export function SellerDashboard({
               <span className="kpi-icon" aria-hidden="true">💰</span>
             </div>
             <strong className="kpi-value">
-              {money(dashboard.salesToday, dashboard.currencyCode)}
+              {money(effectiveSalesToday, dashboard.currencyCode)}
             </strong>
             <div className="kpi-subtext">
               Ventas acumuladas de mi ruta
@@ -363,7 +399,7 @@ export function SellerDashboard({
               <span className="kpi-icon" aria-hidden="true">📲</span>
             </div>
             <strong className="kpi-value">
-              {money(dashboard.transfers, dashboard.currencyCode)}
+              {money(effectiveTransfers, dashboard.currencyCode)}
             </strong>
             <div className="kpi-subtext">
               Verificadas o pendientes por banco
@@ -376,7 +412,7 @@ export function SellerDashboard({
               <span className="kpi-icon" aria-hidden="true">📝</span>
             </div>
             <strong className="kpi-value">
-              {money(dashboard.credit, dashboard.currencyCode)}
+              {money(effectiveCredit, dashboard.currencyCode)}
             </strong>
             <div className="kpi-subtext">
               Clientes con línea de crédito
@@ -414,7 +450,7 @@ export function SellerDashboard({
                     Doc: <strong>{sale.documentNumber}</strong> · Hora: {new Date(sale.createdAt).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })}
                   </span>
                   <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '0.2rem' }}>
-                    {sale.items.map(it => `${it.quantityBaseUnits}x ${it.productName}`).join(', ')}
+                    {sale.items.map(it => `${Number(it.presentationQuantity || it.quantityBaseUnits)}x ${it.productName}`).join(', ')}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
@@ -427,6 +463,11 @@ export function SellerDashboard({
                 </div>
               </article>
             ))}
+            {sellerSales.length > 10 && (
+              <div style={{ textAlign: 'center', padding: '0.75rem 1rem', fontSize: '0.82rem', color: 'var(--muted)' }}>
+                Mostrando las 10 ventas más recientes de {sellerSales.length} registradas. <Link to="/sales" style={{ color: 'var(--primary)' }}>Ver todas</Link>
+              </div>
+            )}
           </div>
         )}
       </section>
