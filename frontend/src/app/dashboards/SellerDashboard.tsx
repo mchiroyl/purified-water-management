@@ -33,6 +33,7 @@ type SaleItem = {
   productId?: string;
   productCode?: string;
   productName: string;
+  presentationName?: string;
   presentationQuantity: number;
   quantityBaseUnits: number;
   unitPrice: number;
@@ -41,7 +42,7 @@ type SaleItem = {
 type Payment = { id: string; method: string; amount: number; status: string };
 type Sale = {
   id: string; documentNumber: string; routeId?: string; routeCode: string; routeName: string;
-  sellerName: string; customerName: string; total: number; createdAt: string;
+  sellerName: string; customerName: string; status?: string; total: number; createdAt: string;
   items: SaleItem[]; payments?: Payment[];
 };
 
@@ -96,55 +97,95 @@ export function SellerDashboard({
   const isPendingReceipt = sellerLoad?.status === 'PREPARED' || sellerLoad?.status === 'WAREHOUSE_CONFIRMED';
   const isActiveLoad = sellerLoad?.status === 'STARTED' || sellerLoad?.status === 'RECEIVED';
 
-  // Buscar liquidación oficial del servidor para esta carga o ruta si ya fue calculada
-  const currentSettlement = settlements?.find(st =>
-    st.routeLoadId === sellerLoad?.id ||
-    (sellerLoad?.loadNumber && String(st.loadNumber) === String(sellerLoad.loadNumber).replace(/\D/g, '')) ||
-    (sellerLoad?.routeCode && st.routeCode === sellerLoad.routeCode)
-  );
+  // Buscar liquidación oficial del servidor únicamente si esta carga ya fue liquidada
+  const currentSettlement = (isSettled && settlements) ? settlements.find(st =>
+    st.routeLoadId === sellerLoad?.id
+  ) : null;
 
   // Momento de inicio o despacho de la carga activa
   const loadStartTime = sellerLoad?.startedAt || sellerLoad?.sellerReceivedAt || sellerLoad?.createdAt;
 
-  // Extraer fecha local YYYY-MM-DD
-  const getLocalDate = (isoStr?: string) => {
+  // Fecha actual en zona horaria de Guatemala (YYYY-MM-DD)
+  const todayGuatemala = useMemo(() => {
+    try {
+      return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Guatemala',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date());
+    } catch {
+      return new Date().toISOString().slice(0, 10);
+    }
+  }, []);
+
+  const getSaleDate = (isoStr?: string) => {
     if (!isoStr) return '';
     try {
       const d = new Date(isoStr);
-      const offset = d.getTimezoneOffset() * 60_000;
-      return new Date(d.getTime() - offset).toISOString().slice(0, 10);
+      if (isNaN(d.getTime())) return '';
+      return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Guatemala',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(d);
     } catch {
       return isoStr.slice(0, 10);
     }
   };
 
-  // Ventas de la ruta correspondientes a esta carga activa
-  const sellerSales = sales.filter(s => {
-    // Si la carga tiene ruta asignada, la venta debe pertenecer a la misma ruta
-    if (sellerLoad?.routeId && s.routeId && s.routeId !== sellerLoad.routeId) {
-      return false;
-    }
-    if (sellerLoad?.routeCode && s.routeCode && s.routeCode !== sellerLoad.routeCode) {
-      return false;
-    }
+  function normalizeText(str?: string) {
+    if (!str) return '';
+    return str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  }
 
-    // Filtro de temporalidad: ventas de la jornada o de la carga
-    if (sellerLoad?.plannedDate) {
-      const saleDate = getLocalDate(s.createdAt);
-      if (saleDate === sellerLoad.plannedDate || s.createdAt.startsWith(sellerLoad.plannedDate)) {
-        return true;
+  // Ventas de la ruta correspondientes a esta jornada activa del vendedor
+  const sellerSales = useMemo(() => {
+    return sales.filter(s => {
+      // 1. Solo ventas confirmadas
+      if (s.status && s.status !== 'CONFIRMED') {
+        return false;
       }
-    }
-    if (loadStartTime) {
-      const saleTime = new Date(s.createdAt).getTime();
-      const startTime = new Date(loadStartTime).getTime() - 120_000; // 2 min de margen por sincronización
-      if (saleTime >= startTime) {
-        return true;
-      }
-    }
 
-    return true;
-  });
+      // 2. Ruta asignada (si la carga tiene ruta definida)
+      if (sellerLoad?.routeId && s.routeId && s.routeId !== sellerLoad.routeId) {
+        return false;
+      }
+      if (sellerLoad?.routeCode && s.routeCode && s.routeCode !== sellerLoad.routeCode) {
+        return false;
+      }
+
+      // 3. Vendedor (verificar que corresponda al usuario actual si viene identificado)
+      if (s.sellerName) {
+        const sNorm = normalizeText(s.sellerName);
+        const uNorm = normalizeText(user.username);
+        const dNorm = normalizeText(user.displayName);
+        const matchesUser = sNorm.includes(uNorm) || (dNorm && (sNorm.includes(dNorm) || dNorm.includes(sNorm)));
+        if (!matchesUser && (dNorm || uNorm)) {
+          return false;
+        }
+      }
+
+      // 4. Temporalidad: fecha de la jornada (hoy o plannedDate de la carga)
+      const saleDate = getSaleDate(s.createdAt);
+      const targetDate = sellerLoad?.plannedDate || todayGuatemala;
+      if (saleDate && targetDate && saleDate !== targetDate) {
+        return false;
+      }
+
+      // 5. Si la carga tiene hora de inicio/recepción, descartar ventas anteriores al despacho
+      if (loadStartTime) {
+        const saleTimestamp = new Date(s.createdAt).getTime();
+        const startTimestamp = new Date(loadStartTime).getTime() - 300_000; // 5 min de margen
+        if (saleTimestamp < startTimestamp) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [sales, sellerLoad, user, loadStartTime, todayGuatemala]);
 
   // Recargas adicionales aprobadas/recibidas para esta misma ruta durante el recorrido
   const routeReplenishments = loads.filter(l => 
@@ -160,36 +201,58 @@ export function SellerDashboard({
     const replenishmentUnits = routeReplenishments.reduce((acc, rep) => {
       const match = rep.items?.find(it => 
         (it.productId && item.productId && it.productId === item.productId) ||
-        (it.productName && item.productName && it.productName.trim().toLowerCase() === item.productName.trim().toLowerCase()) ||
-        (it.productCode && item.productCode && it.productCode.trim().toLowerCase() === item.productCode.trim().toLowerCase())
+        (it.productName && item.productName && normalizeText(it.productName) === normalizeText(item.productName)) ||
+        (it.productCode && item.productCode && normalizeText(it.productCode) === normalizeText(item.productCode))
       );
       return acc + Number(match?.quantityBaseUnits || 0);
     }, 0);
 
     const totalItemLoaded = Number(item.quantityBaseUnits || 0) + replenishmentUnits;
 
-    // Ventas acumuladas en vivo
+    // Ventas acumuladas en vivo realizadas por el vendedor en esta jornada
     const rawSoldQty = sellerSales.reduce((acc, s) => {
-      const matches = s.items?.filter(it => 
-        (it.productId && item.productId && it.productId === item.productId) ||
-        (it.productName && item.productName && it.productName.trim().toLowerCase() === item.productName.trim().toLowerCase()) ||
-        (it.productCode && item.productCode && it.productCode.trim().toLowerCase() === item.productCode.trim().toLowerCase())
-      );
-      const lineSum = matches?.reduce((iAcc, it) => iAcc + Number(it.quantityBaseUnits || 0), 0) || 0;
+      const matches = s.items?.filter(it => {
+        if (it.productId && item.productId && it.productId === item.productId) {
+          return true;
+        }
+        const itemNorm = normalizeText(item.productName);
+        const codeNorm = normalizeText(item.productCode);
+        const itProdNorm = normalizeText(it.productName);
+        const itCodeNorm = normalizeText(it.productCode);
+        const itPresNorm = normalizeText(it.presentationName);
+
+        if (itemNorm && itProdNorm && (itemNorm === itProdNorm || itProdNorm.includes(itemNorm) || itemNorm.includes(itProdNorm))) {
+          return true;
+        }
+        if (codeNorm && itCodeNorm && codeNorm === itCodeNorm) {
+          return true;
+        }
+        if (itemNorm && itPresNorm && itPresNorm.includes(itemNorm)) {
+          return true;
+        }
+        if (codeNorm && itPresNorm && itPresNorm.includes(codeNorm)) {
+          return true;
+        }
+        return false;
+      });
+      const lineSum = matches?.reduce((iAcc, it) => iAcc + Number(it.quantityBaseUnits || it.presentationQuantity || 0), 0) || 0;
       return acc + lineSum;
     }, 0);
 
-    // Unidades vendidas según liquidación oficial del servidor
-    const settlementItem = currentSettlement?.items?.find(it =>
-      (it.productName && item.productName && it.productName.trim().toLowerCase() === item.productName.trim().toLowerCase())
-    );
-    const settlementSold = Number(settlementItem?.soldUnits || 0);
+    // Si la carga ya fue liquidada oficialmente, todo el producto restante fue devuelto a bodega (stock en camión = 0)
+    if (isSettled) {
+      return {
+        ...item,
+        quantityBaseUnits: totalItemLoaded,
+        soldQty: Math.min(totalItemLoaded, rawSoldQty || totalItemLoaded),
+        remainingOnTruck: 0
+      };
+    }
 
-    // Usar la mayor cantidad de ventas verificadas
-    const effectiveSold = Math.max(rawSoldQty, settlementSold);
-    const soldQty = Math.min(totalItemLoaded, effectiveSold);
-    // Si la carga ya fue liquidada oficialmente, a bordo ya no hay producto activo (existencias en camión = 0)
-    const remainingOnTruck = isSettled ? 0 : Math.max(0, totalItemLoaded - soldQty);
+    // Carga activa (STARTED o RECEIVED):
+    // Lo vendido sale de las ventas del día, y en camión es estrictamente: Cargado - Vendido
+    const soldQty = Math.min(totalItemLoaded, rawSoldQty);
+    const remainingOnTruck = Math.max(0, totalItemLoaded - soldQty);
 
     return {
       ...item,
@@ -223,31 +286,35 @@ export function SellerDashboard({
     return labels[status] ?? status;
   };
 
-  // Calcular arqueo directamente desde las ventas filtradas como fuente de verdad
-  // (el dashboard.salesToday puede ser 0 si el vendedor no tiene asignación formal en route_assignment)
+  // Calcular arqueo directamente desde las ventas filtradas del vendedor como única fuente de verdad
   const localSalesToday = sellerSales.reduce((acc, s) => acc + Number(s.total || 0), 0);
+
   const localCash = sellerSales.reduce((acc, s) => {
-    const cashPayments = (s.payments ?? []).filter(p => p.method === 'CASH' && p.status === 'CONFIRMED');
+    if (!s.payments || s.payments.length === 0) {
+      return acc + Number(s.total || 0);
+    }
+    const cashPayments = s.payments.filter(p => p.method === 'CASH' && (p.status === 'CONFIRMED' || p.status === 'APPLIED'));
     return acc + cashPayments.reduce((pAcc, p) => pAcc + Number(p.amount || 0), 0);
   }, 0);
+
   const localTransfers = sellerSales.reduce((acc, s) => {
     const transferPayments = (s.payments ?? []).filter(p => p.method === 'TRANSFER' && p.status !== 'REJECTED');
     return acc + transferPayments.reduce((pAcc, p) => pAcc + Number(p.amount || 0), 0);
   }, 0);
+
   const localCredit = sellerSales.reduce((acc, s) => {
-    const creditPayments = (s.payments ?? []).filter(p => p.method === 'CREDIT' && p.status === 'APPLIED');
+    const creditPayments = (s.payments ?? []).filter(p => p.method === 'CREDIT' && (p.status === 'APPLIED' || p.status === 'CONFIRMED'));
     return acc + creditPayments.reduce((pAcc, p) => pAcc + Number(p.amount || 0), 0);
   }, 0);
 
-  // Usar el mayor valor entre el dashboard del servidor y el cálculo local
-  // para evitar mostrar Q0.00 cuando la ruta no está formalmente asignada
-  const effectiveSalesToday = Math.max(Number(dashboard.salesToday || 0), localSalesToday);
-  const effectiveCash = Math.max(Number(dashboard.expectedCash || 0), localCash);
-  const effectiveTransfers = Math.max(Number(dashboard.transfers || 0), localTransfers);
-  const effectiveCredit = Math.max(Number(dashboard.credit || 0), localCredit);
+  // Arqueo exclusivo del vendedor para su jornada activa (no mezclar con totales globales de la empresa)
+  const effectiveSalesToday = localSalesToday;
+  const effectiveCash = localCash;
+  const effectiveTransfers = localTransfers;
+  const effectiveCredit = localCredit;
 
-  // Efectivo en mano que debe entregar el vendedor (0 si la jornada ya fue liquidada oficialmente)
-  const cashInHand = isSettled ? 0 : Math.max(0, effectiveCash - Number(dashboard.deliveredCash || 0));
+  // Efectivo en mano que debe entregar el vendedor en liquidación (0 si la jornada ya fue liquidada oficialmente)
+  const cashInHand = isSettled ? 0 : Math.max(0, effectiveCash);
 
   return (
     <div>
