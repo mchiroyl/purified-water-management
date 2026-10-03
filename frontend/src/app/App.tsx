@@ -85,7 +85,8 @@ export function App() {
         <Route path="pricing/list" element={canSeePricing ? <PricingPage view="list" canManage={isAdmin} canApprove={isAdmin || user.roles.includes('SUPERVISOR')} canRequestDiscount={user.roles.includes('VENDEDOR')} /> : <Navigate to="/" replace />} />
         <Route path="inventory" element={canSeeInventory ? <InventoryPage canManage={canManageInventory} /> : <Navigate to="/" replace />} />
         <Route path="loads" element={canSeeLoads ? <RouteLoadsPage canPrepare={isAdmin || isWarehouse} canConfirmWarehouse={isAdmin || isWarehouse} canReceive={isAdmin || isSeller} canStart={isAdmin || isSeller} canCorrect={isAdmin || isWarehouse} /> : <Navigate to="/" replace />} />
-        <Route path="sales" element={canSeeSales ? <SalesPage canSell={isAdmin || isSeller} canViewLocation={isAdmin || user.roles.includes('SUPERVISOR')} /> : <Navigate to="/" replace />} />
+        <Route path="sales" element={canSeeSales ? <SalesPage canSell={isAdmin || isSeller} canViewLocation={isAdmin || user.roles.includes('SUPERVISOR')} view="create" /> : <Navigate to="/" replace />} />
+        <Route path="sales/list" element={canSeeSales ? <SalesPage canSell={isAdmin || isSeller} canViewLocation={isAdmin || user.roles.includes('SUPERVISOR')} view="list" /> : <Navigate to="/" replace />} />
         <Route path="transfers" element={canVerifyTransfers ? <TransfersPage /> : <Navigate to="/" replace />} />
         <Route path="credit" element={canSeeCredit ? <CreditPage canRecord={isAdmin || isCreditAdmin || isSeller} canVerify={canVerifyCredit} currentUserId={user.id} isAdmin={isAdmin} /> : <Navigate to="/" replace />} />
         <Route path="jugs" element={canSeeJugs ? <JugsPage canRecord={canRecordJugs} canViewSummary={isAdmin || isCreditAdmin} /> : <Navigate to="/" replace />} />

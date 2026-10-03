@@ -168,10 +168,12 @@ export function SellerDashboard({
     );
     const settlementSold = Number(settlementItem?.soldUnits || 0);
 
+    const isSettled = sellerLoad?.status === 'SETTLED';
     // Usar la mayor cantidad de ventas verificadas
     const effectiveSold = Math.max(rawSoldQty, settlementSold);
     const soldQty = Math.min(totalItemLoaded, effectiveSold);
-    const remainingOnTruck = Math.max(0, totalItemLoaded - soldQty);
+    // Si la carga ya fue liquidada oficialmente, a bordo ya no hay producto activo (existencias en camión = 0)
+    const remainingOnTruck = isSettled ? 0 : Math.max(0, totalItemLoaded - soldQty);
 
     return {
       ...item,
@@ -181,14 +183,16 @@ export function SellerDashboard({
     };
   });
 
+  const isSettled = sellerLoad?.status === 'SETTLED';
+
   // Unidades vendidas en total del camión
   const totalSoldUnits = truckItems.reduce((acc, it) => acc + it.soldQty, 0);
 
   // Carga total en unidades (incluyendo recargas de ruta)
   const totalLoadedUnits = truckItems.reduce((acc, it) => acc + Number(it.quantityBaseUnits || 0), 0);
 
-  // Total restante a bordo: suma exacta del stock en camión de cada producto
-  const remainingTotalUnits = truckItems.reduce((acc, it) => acc + it.remainingOnTruck, 0);
+  // Total restante a bordo: suma exacta del stock en camión de cada producto (0 si ya liquidó)
+  const remainingTotalUnits = isSettled ? 0 : truckItems.reduce((acc, it) => acc + it.remainingOnTruck, 0);
 
   const progressPct = totalLoadedUnits > 0 ? Math.min(100, Math.round((totalSoldUnits / totalLoadedUnits) * 100)) : 0;
 
@@ -228,8 +232,8 @@ export function SellerDashboard({
   const effectiveTransfers = Math.max(Number(dashboard.transfers || 0), localTransfers);
   const effectiveCredit = Math.max(Number(dashboard.credit || 0), localCredit);
 
-  // Efectivo en mano que debe entregar el vendedor
-  const cashInHand = Math.max(0, effectiveCash - Number(dashboard.deliveredCash || 0));
+  // Efectivo en mano que debe entregar el vendedor (0 si la jornada ya fue liquidada oficialmente)
+  const cashInHand = isSettled ? 0 : Math.max(0, effectiveCash - Number(dashboard.deliveredCash || 0));
 
   return (
     <div>
@@ -296,6 +300,11 @@ export function SellerDashboard({
 
         {sellerLoad ? (
           <div style={{ marginTop: '1rem' }}>
+            {isSettled && (
+              <div style={{ marginBottom: '1.25rem', padding: '0.75rem 1rem', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '0.5rem', color: '#166534', fontSize: '0.9rem' }}>
+                ✔ <strong>Carga liquidada oficialmente:</strong> La jornada de esta carga fue cerrada. Las existencias del camión fueron descargadas/conciliadas en bodega (0 unidades a bordo para venta).
+              </div>
+            )}
             {/* Barra de progreso de ventas */}
             <div style={{ marginBottom: '1.25rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '0.35rem' }}>
