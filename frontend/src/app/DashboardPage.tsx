@@ -30,11 +30,11 @@ type Location = {
   active: boolean; balances: Balance[];
 };
 
-type SaleItem = { id: string; productName: string; presentationQuantity: number; quantityBaseUnits: number; unitPrice: number; lineTotal: number };
+type SaleItem = { id: string; productId?: string; productCode?: string; productName: string; presentationName?: string; presentationQuantity: number; quantityBaseUnits: number; unitPrice: number; lineTotal: number };
 type Payment = { id: string; method: string; amount: number; status: string };
 type Sale = {
   id: string; documentNumber: string; routeId?: string; routeCode: string; routeName: string;
-  sellerName: string; customerName: string; total: number; createdAt: string;
+  sellerName: string; customerName: string; status?: string; total: number; createdAt: string;
   items: SaleItem[]; payments?: Payment[];
 };
 
@@ -72,31 +72,31 @@ export function DashboardPage() {
   const dashboard = useQuery({
     queryKey: ['dashboard'],
     queryFn: () => apiRequest<Dashboard>('/dashboard'),
-    refetchInterval: 30_000
+    refetchInterval: 15_000
   });
 
   const loads = useQuery({
     queryKey: ['route-loads'],
     queryFn: () => apiRequest<RouteLoad[]>('/loads'),
-    refetchInterval: 30_000
+    refetchInterval: 15_000
   });
 
   const locations = useQuery({
     queryKey: ['inventory', 'locations'],
     queryFn: () => apiRequest<Location[]>('/inventory/locations'),
-    refetchInterval: 30_000
+    refetchInterval: 15_000
   });
 
   const sales = useQuery({
     queryKey: ['sales'],
     queryFn: () => apiRequest<Sale[]>('/sales'),
-    refetchInterval: 30_000
+    refetchInterval: 15_000
   });
 
   const settlements = useQuery({
     queryKey: ['settlements'],
     queryFn: () => apiRequest<Settlement[]>('/settlements'),
-    refetchInterval: 30_000
+    refetchInterval: 15_000
   });
 
   const isRefreshing = dashboard.isFetching || loads.isFetching || sales.isFetching || locations.isFetching || settlements.isFetching;
