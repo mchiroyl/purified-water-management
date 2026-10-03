@@ -147,6 +147,8 @@ h2 { margin-top: 0; }
 .customer-table-wrap table { min-width: 1180px; }
 .customer-table-wrap td { vertical-align: top; }
 .customer-table-wrap td small { display: block; color: var(--muted); margin-top: .25rem; }
+.sales-table-wrap table { min-width: 980px; }
+.sales-table-wrap td { vertical-align: top; }
 .pricing-table-wrap { overflow-x: auto; }
 .pricing-table-wrap table { width: 100%; min-width: 0; table-layout: fixed; }
 .pricing-table-wrap small, .pricing-table-wrap .table-line { display: block; color: var(--muted); margin-top: .25rem; }
