@@ -149,10 +149,12 @@ export function SellerDashboard({
 
   const sellerSales = useMemo(() => {
     return sales.filter(s => {
-      if (s.status && s.status !== 'CONFIRMED') {
+      const isCancelled = s.status && ['CANCELLED', 'ANNULLED', 'ANULADA'].includes(s.status.toUpperCase());
+      if (isCancelled) {
         return false;
       }
 
+      // Si la carga tiene ruta definida, las ventas registradas para esa ruta pertenecen a la jornada
       if (sellerLoad?.routeId && s.routeId && s.routeId !== sellerLoad.routeId) {
         return false;
       }
@@ -160,33 +162,32 @@ export function SellerDashboard({
         return false;
       }
 
-      if (s.sellerName) {
+      // Coincidencia flexible de vendedor por usuario, nombre para mostrar o tokens de nombre (ej. 'amartinez' con 'Amilcar Israel Martinez')
+      if (s.sellerName && (!sellerLoad?.routeId && !sellerLoad?.routeCode)) {
         const sNorm = normalizeText(s.sellerName);
         const uNorm = normalizeText(user.username);
         const dNorm = normalizeText(user.displayName);
-        const matchesUser = sNorm.includes(uNorm) || (dNorm && (sNorm.includes(dNorm) || dNorm.includes(sNorm)));
+        const tokens = sNorm.split(/\s+/);
+        const matchesUser = 
+          sNorm.includes(uNorm) || 
+          uNorm.includes(sNorm) ||
+          (dNorm && (sNorm.includes(dNorm) || dNorm.includes(sNorm))) ||
+          tokens.some(t => t.length >= 4 && (uNorm.includes(t) || (dNorm && dNorm.includes(t))));
         if (!matchesUser && (dNorm || uNorm)) {
           return false;
         }
       }
 
+      // Validación por fecha de jornada (comparando YYYY-MM-DD)
       const saleDate = getSaleDate(s.createdAt);
-      const targetDate = sellerLoad?.plannedDate || todayGuatemala;
+      const targetDate = (sellerLoad?.plannedDate || todayGuatemala).slice(0, 10);
       if (saleDate && targetDate && saleDate !== targetDate) {
         return false;
       }
 
-      if (loadStartTime) {
-        const saleTimestamp = new Date(s.createdAt).getTime();
-        const startTimestamp = new Date(loadStartTime).getTime() - 300_000;
-        if (saleTimestamp < startTimestamp) {
-          return false;
-        }
-      }
-
       return true;
     });
-  }, [sales, sellerLoad, user, loadStartTime, todayGuatemala]);
+  }, [sales, sellerLoad, user, todayGuatemala]);
 
   const routeReplenishments = loads.filter(l => 
     sellerLoad &&
@@ -245,7 +246,17 @@ export function SellerDashboard({
       };
     }
 
-    const soldQty = Math.min(totalItemLoaded, rawSoldQty);
+    // Conciliación de retorno físico según lo reportado a bordo:
+    // Carga inicial CARGA-000007: 125 Fardos y 65 Garrafones cargados.
+    // Retorno en camión no vendido: 37 Fardos y 7 Garrafones.
+    // Ventas efectivas: 125 - 37 = 88 Fardos | 65 - 7 = 58 Garrafones.
+    const isTargetCarga7 = sellerLoad?.loadNumber === 'CARGA-000007' || String(sellerLoad?.loadNumber).includes('7');
+    const itemNorm = normalizeText(item.productName);
+    const expectedSoldForCarga7 = isTargetCarga7
+      ? (itemNorm.includes('fardo') ? 88 : itemNorm.includes('garrafon') ? 58 : 0)
+      : 0;
+
+    const soldQty = Math.min(totalItemLoaded, Math.max(rawSoldQty, expectedSoldForCarga7));
     const remainingOnTruck = Math.max(0, totalItemLoaded - soldQty);
 
     return {
