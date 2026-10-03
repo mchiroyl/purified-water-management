@@ -93,7 +93,7 @@ export function AppShell() {
     .map(group => ({ ...group, items: group.items.filter(item => item.visible) }))
     .filter(group => group.items.length > 0);
   useEffect(() => {
-    const activeGroup = navigationGroups.find(group => group.items.some(item => item.to === location.pathname));
+    const activeGroup = navigationGroups.find(group => group.items.some(item => item.to === location.pathname || (item.to !== '/' && location.pathname.startsWith(`${item.to}/`))));
     if (activeGroup) setExpandedGroup(activeGroup.label);
   }, [location.pathname]);
 

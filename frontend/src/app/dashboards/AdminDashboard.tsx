@@ -463,7 +463,7 @@ export function AdminDashboard({
         <section className="panel section-panel">
           <div className="section-heading">
             <h2>💰 Últimas ventas en calle</h2>
-            <Link to="/sales" className="secondary" style={{ textDecoration: 'none', padding: '0.35rem 0.75rem', fontSize: '0.82rem' }}>
+            <Link to="/sales/list" className="secondary" style={{ textDecoration: 'none', padding: '0.35rem 0.75rem', fontSize: '0.82rem' }}>
               Ver todas
             </Link>
           </div>

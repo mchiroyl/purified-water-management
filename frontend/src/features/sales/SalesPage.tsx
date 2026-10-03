@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../../app/PageHeader';
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import { apiBlob, apiRequest } from '../../services/apiClient';
 import { openMobileDatabase, type GeoLocationSnapshot } from '../../offline/mobileDatabase';
 import { captureCurrentLocation } from '../../services/geolocation';
@@ -325,7 +325,8 @@ function InlineJugReturnForm({
 }
 
 
-export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canViewLocation: boolean }) {
+export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean; canViewLocation: boolean; view?: 'create' | 'list' }) {
+  const currentView = view ?? (canSell ? 'create' : 'list');
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const sales = useQuery({ queryKey: ['sales'], queryFn: () => apiRequest<Sale[]>('/sales') });
@@ -349,6 +350,19 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
   const [locationError, setLocationError] = useState('');
   const [isCapturingLocation, setIsCapturingLocation] = useState(false);
   const [locationPanelSaleId, setLocationPanelSaleId] = useState<string | null>(null);
+
+  // ── Filtros para Monitoreo de Ventas (Vista de Lista) ────────────────────────
+  const [dateFilter, setDateFilter] = useState<'TODAY' | 'ALL' | 'CUSTOM'>('TODAY');
+  const [customDate, setCustomDate] = useState(() => {
+    try {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guatemala' }).format(new Date());
+    } catch {
+      return new Date().toISOString().slice(0, 10);
+    }
+  });
+  const [routeFilter, setRouteFilter] = useState<string>('ALL');
+  const [sellerFilter, setSellerFilter] = useState<string>('ALL');
+  const [searchFilter, setSearchFilter] = useState<string>('');
 
   // ── Modal de Venta Confirmada y Préstamo de Garrafón ───────────────────────
   const [confirmedSaleModal, setConfirmedSaleModal] = useState<{
@@ -412,6 +426,109 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
       }
     }
   }, [assignedRoute, routeId, visitRouteId]);
+
+  // ── Helpers y Cálculos de Monitoreo para Vista Lista ────────────────────────
+  const todayDateStr = useMemo(() => {
+    try {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guatemala' }).format(new Date());
+    } catch {
+      return new Date().toISOString().slice(0, 10);
+    }
+  }, []);
+
+  const getSaleLocalDate = (isoStr: string) => {
+    if (!isoStr) return '';
+    try {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guatemala' }).format(new Date(isoStr));
+    } catch {
+      return isoStr.slice(0, 10);
+    }
+  };
+
+  const filteredSales = useMemo(() => {
+    const list = sales.data ?? [];
+    return list.filter(sale => {
+      // 1. Filtro por fecha
+      const saleDate = getSaleLocalDate(sale.createdAt);
+      if (dateFilter === 'TODAY') {
+        if (saleDate !== todayDateStr) return false;
+      } else if (dateFilter === 'CUSTOM') {
+        if (saleDate !== customDate) return false;
+      }
+
+      // 2. Filtro por ruta
+      if (routeFilter !== 'ALL') {
+        if (sale.routeId !== routeFilter && sale.routeCode !== routeFilter) return false;
+      }
+
+      // 3. Filtro por vendedor
+      if (sellerFilter !== 'ALL') {
+        if (sale.sellerName !== sellerFilter) return false;
+      }
+
+      // 4. Búsqueda de texto
+      if (searchFilter.trim()) {
+        const q = searchFilter.toLowerCase().trim();
+        const doc = sale.documentNumber?.toLowerCase() ?? '';
+        const custName = sale.customerName?.toLowerCase() ?? '';
+        const custCode = sale.customerCode?.toLowerCase() ?? '';
+        const routeName = sale.routeName?.toLowerCase() ?? '';
+        const seller = sale.sellerName?.toLowerCase() ?? '';
+        if (!doc.includes(q) && !custName.includes(q) && !custCode.includes(q) && !routeName.includes(q) && !seller.includes(q)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [sales.data, dateFilter, todayDateStr, customDate, routeFilter, sellerFilter, searchFilter]);
+
+  const uniqueRoutes = useMemo(() => {
+    const map = new Map<string, string>();
+    (sales.data ?? []).forEach(s => {
+      if (s.routeId && s.routeCode) {
+        map.set(s.routeId, `${s.routeCode} · ${s.routeName || ''}`);
+      } else if (s.routeCode) {
+        map.set(s.routeCode, `${s.routeCode} · ${s.routeName || ''}`);
+      }
+    });
+    (routes.data ?? []).forEach(r => {
+      if (!map.has(r.id)) {
+        map.set(r.id, `${r.code} · ${r.name}`);
+      }
+    });
+    return Array.from(map.entries()).map(([id, label]) => ({ id, label }));
+  }, [sales.data, routes.data]);
+
+  const uniqueSellers = useMemo(() => {
+    const set = new Set<string>();
+    (sales.data ?? []).forEach(s => {
+      if (s.sellerName) set.add(s.sellerName);
+    });
+    return Array.from(set).sort();
+  }, [sales.data]);
+
+  const summaryTotals = useMemo(() => {
+    let totalSales = 0;
+    let cash = 0;
+    let transfers = 0;
+    let credit = 0;
+    filteredSales.forEach(s => {
+      totalSales += Number(s.total || 0);
+      (s.payments ?? []).forEach(p => {
+        if (p.method === 'CASH') cash += Number(p.amount || 0);
+        else if (p.method === 'TRANSFER' && p.status !== 'REJECTED') transfers += Number(p.amount || 0);
+        else if (p.method === 'CREDIT') credit += Number(p.amount || 0);
+      });
+    });
+    return {
+      count: filteredSales.length,
+      totalSales,
+      cash,
+      transfers,
+      credit,
+    };
+  }, [filteredSales]);
 
   // ── Alta rápida de cliente provisional en ruta ─────────────────────────────
   const [showProvisionalModal, setShowProvisionalModal] = useState(false);
@@ -713,7 +830,29 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
   };
 
   return <main>
-    <PageHeader eyebrow="Operación en ruta" title="Ventas" description="Los precios, conversiones, totales, correlativos e inventario se calculan y confirman en el servidor." />
+    <PageHeader 
+      eyebrow="Operación en ruta" 
+      title={currentView === 'create' ? 'Ventas' : 'Monitoreo de ventas'} 
+      description={
+        currentView === 'create' 
+          ? 'Los precios, conversiones, totales, correlativos e inventario se calculan y confirman en el servidor.'
+          : 'Monitoreo en vivo de ventas confirmadas, cobros y comprobantes.'
+      }
+      actions={
+        canSell ? (
+          <button 
+            type="button" 
+            className="secondary" 
+            onClick={() => navigate(currentView === 'create' ? '/sales/list' : '/sales')}
+          >
+            {currentView === 'create' ? '📋 Ver ventas registradas' : '➕ Nueva venta'}
+          </button>
+        ) : undefined
+      }
+    />
+
+    {currentView === 'create' && (
+      <>
 
     {isSeller && assignedRoute && (
       <div className="assigned-route-card" style={{
@@ -1023,57 +1162,212 @@ export function SalesPage({ canSell, canViewLocation }: { canSell: boolean; canV
         )}
       </section>
     )}
+    </>
+    )}
 
-    <section className="section-panel"><div className="section-heading"><h2>Ventas confirmadas</h2><span>{sales.data?.length ?? 0} ventas</span></div>
-      {receiptError && <div className="alert error">{receiptError}</div>}
-      {receiptMessage && <div className="alert success">{receiptMessage}</div>}
-      {sales.isLoading && <p>Cargando ventas…</p>}
-      {sales.error && <div className="alert error">{sales.error.message}</div>}
-      <div className="sales-grid">{sales.data?.map(sale => <article className="panel sale-card" key={sale.id}>
-        <div className="section-heading"><div><strong className="document-number">{sale.documentNumber}</strong><span>{sale.customerCode} · {sale.customerName}</span></div><strong>{money(sale.total)}</strong></div>
-        <p className="audit-line">{sale.routeCode} · {sale.routeName} · {sale.sellerName} · {new Date(sale.createdAt).toLocaleString('es-GT')}</p>
-        <div className="data-list">{sale.items.map(item => <div className="data-row sale-line" key={item.id}><span>{item.presentationName} · {Number(item.presentationQuantity)} × {money(item.unitPrice)}</span><strong>{money(item.lineTotal)}</strong></div>)}</div>
-        <div className="payment-summary">{sale.payments?.map(payment => <span key={payment.id}>{payment.method === 'CASH' ? 'Efectivo' : payment.method === 'TRANSFER' ? 'Transferencia' : 'Crédito'}: {money(payment.amount)} · {payment.status}</span>)}</div>
-        {Number(sale.pendingTransferAmount) > 0 && <p className="status-note">Transferencia pendiente: {money(Number(sale.pendingTransferAmount))}</p>}
-        {Number(sale.rejectedTransferAmount) > 0 && <p className="alert error">Transferencia rechazada: {money(Number(sale.rejectedTransferAmount))}</p>}
-        <div className="sale-total"><span>Total {sale.currencyCode}</span><strong>{money(sale.total)}</strong></div>
-        <div className="form-actions">
-          <button type="button" className="secondary" onClick={() => void downloadReceipt(sale)}>Descargar PDF</button>
-          <button type="button" className="primary" onClick={() => void shareReceipt(sale)}>Compartir / WhatsApp</button>
+    {/* ── Vista de Lista / Monitoreo de Ventas ── */}
+    {currentView === 'list' && (
+      <section className="panel section-panel">
+        <div className="section-heading" style={{ flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.25rem' }}>
+          <div>
+            <h2 style={{ margin: 0 }}>Ventas confirmadas</h2>
+            <span style={{ fontSize: '0.9rem', color: 'var(--muted)' }}>
+              {filteredSales.length} de {sales.data?.length ?? 0} ventas registradas
+            </span>
+          </div>
+          <button 
+            type="button" 
+            className="secondary" 
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['sales'] })}
+            disabled={sales.isFetching}
+            style={{ fontSize: '0.85rem', padding: '0.4rem 0.85rem' }}
+          >
+            {sales.isFetching ? 'Actualizando…' : '🔄 Actualizar en vivo'}
+          </button>
         </div>
-        {canViewLocation && (
-          <div className="form-actions">
-            <button type="button" className="secondary" onClick={() => setLocationPanelSaleId(prev => prev === sale.id ? null : sale.id)}>
-              {locationPanelSaleId === sale.id ? 'Ocultar ubicación' : 'Ver ubicación'}
-            </button>
+
+        {/* Barra de Filtros de Monitoreo */}
+        <div className="form-grid compact-grid" style={{ marginBottom: '1.25rem', background: '#f8fafc', padding: '1rem', borderRadius: '0.65rem', border: '1px solid var(--line)' }}>
+          <label>
+            Periodo de fecha
+            <select value={dateFilter} onChange={e => setDateFilter(e.target.value as any)}>
+              <option value="TODAY">📅 Ventas de hoy ({todayDateStr})</option>
+              <option value="ALL">🌐 Todas las fechas (Historial)</option>
+              <option value="CUSTOM">🗓️ Fecha específica…</option>
+            </select>
+          </label>
+
+          {dateFilter === 'CUSTOM' && (
+            <label>
+              Fecha a consultar
+              <input type="date" value={customDate} onChange={e => setCustomDate(e.target.value)} />
+            </label>
+          )}
+
+          <label>
+            Ruta
+            <select value={routeFilter} onChange={e => setRouteFilter(e.target.value)}>
+              <option value="ALL">Todas las rutas</option>
+              {uniqueRoutes.map(r => (
+                <option key={r.id} value={r.id}>{r.label}</option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            Vendedor
+            <select value={sellerFilter} onChange={e => setSellerFilter(e.target.value)}>
+              <option value="ALL">Todos los vendedores</option>
+              {uniqueSellers.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className={dateFilter === 'CUSTOM' ? '' : 'wide'}>
+            Buscar venta o cliente
+            <input 
+              type="text" 
+              placeholder="No. documento, cliente, correlativo…" 
+              value={searchFilter} 
+              onChange={e => setSearchFilter(e.target.value)} 
+            />
+          </label>
+        </div>
+
+        {/* Tarjetas KPI de Resumen del Filtro */}
+        <div className="dashboard-kpis" style={{ marginBottom: '1.5rem' }}>
+          <article className="kpi-card">
+            <div className="kpi-header">
+              <span>Total Facturado</span>
+              <span className="kpi-icon">💰</span>
+            </div>
+            <strong className="kpi-value">{money(summaryTotals.totalSales)}</strong>
+            <div className="kpi-subtext">{summaryTotals.count} comprobante(s)</div>
+          </article>
+
+          <article className="kpi-card">
+            <div className="kpi-header">
+              <span>Efectivo Cobrado</span>
+              <span className="kpi-icon">💵</span>
+            </div>
+            <strong className="kpi-value" style={{ color: '#047857' }}>{money(summaryTotals.cash)}</strong>
+            <div className="kpi-subtext">Cobrado en mano</div>
+          </article>
+
+          <article className="kpi-card">
+            <div className="kpi-header">
+              <span>Transferencias</span>
+              <span className="kpi-icon">🏦</span>
+            </div>
+            <strong className="kpi-value" style={{ color: '#1d4ed8' }}>{money(summaryTotals.transfers)}</strong>
+            <div className="kpi-subtext">Bancarias válidas</div>
+          </article>
+
+          <article className="kpi-card">
+            <div className="kpi-header">
+              <span>Crédito Otorgado</span>
+              <span className="kpi-icon">💳</span>
+            </div>
+            <strong className="kpi-value" style={{ color: '#b45309' }}>{money(summaryTotals.credit)}</strong>
+            <div className="kpi-subtext">Cuentas por cobrar</div>
+          </article>
+        </div>
+
+        {receiptError && <div className="alert error">{receiptError}</div>}
+        {receiptMessage && <div className="alert success">{receiptMessage}</div>}
+        {sales.isLoading && <p>Cargando ventas…</p>}
+        {sales.error && <div className="alert error">{sales.error.message}</div>}
+
+        {filteredSales.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--muted)', background: '#f8fafc', borderRadius: '0.65rem' }}>
+            <p style={{ fontSize: '1.05rem', margin: '0 0 0.5rem' }}>
+              {dateFilter === 'TODAY' 
+                ? 'No hay ventas registradas el día de hoy con los filtros aplicados.' 
+                : 'No se encontraron ventas para los criterios seleccionados.'}
+            </p>
+            <small>Intenta cambiando el filtro de fecha o limpiando el buscador.</small>
           </div>
-        )}
-        {canViewLocation && locationPanelSaleId === sale.id && (
-          <div className="location-panel">
-            {locationQuery.isLoading && <p className="muted">Cargando coordenadas…</p>}
-            {locationQuery.error && <p className="alert error">{locationQuery.error.message}</p>}
-            {locationQuery.data && (
-              <>
-                <p className="muted" style={{ fontSize: '0.82rem', margin: '0.5rem 0 0.25rem' }}>
-                  <strong>Lat:</strong> {Number(locationQuery.data.latitude).toFixed(8)} &nbsp;
-                  <strong>Lon:</strong> {Number(locationQuery.data.longitude).toFixed(8)}
-                  {locationQuery.data.accuracyMeters != null && <> &nbsp; <strong>Precisión:</strong> ±{Number(locationQuery.data.accuracyMeters).toFixed(1)} m</>}
+        ) : (
+          <div className="sales-grid">
+            {filteredSales.map(sale => (
+              <article className="panel sale-card" key={sale.id}>
+                <div className="section-heading">
+                  <div>
+                    <strong className="document-number">{sale.documentNumber}</strong>
+                    <span>{sale.customerCode} · {sale.customerName}</span>
+                  </div>
+                  <strong>{money(sale.total)}</strong>
+                </div>
+                <p className="audit-line">
+                  {sale.routeCode} · {sale.routeName} · {sale.sellerName} · {new Date(sale.createdAt).toLocaleString('es-GT')}
                 </p>
-                <a
-                  href={`https://www.google.com/maps?q=${Number(locationQuery.data.latitude).toFixed(8)},${Number(locationQuery.data.longitude).toFixed(8)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="secondary"
-                  style={{ fontSize: '0.82rem' }}
-                >
-                  Abrir en Google Maps
-                </a>
-              </>
-            )}
+                <div className="data-list">
+                  {sale.items.map(item => (
+                    <div className="data-row sale-line" key={item.id}>
+                      <span>{item.presentationName} · {Number(item.presentationQuantity)} × {money(item.unitPrice)}</span>
+                      <strong>{money(item.lineTotal)}</strong>
+                    </div>
+                  ))}
+                </div>
+                <div className="payment-summary">
+                  {sale.payments?.map(payment => (
+                    <span key={payment.id}>
+                      {payment.method === 'CASH' ? 'Efectivo' : payment.method === 'TRANSFER' ? 'Transferencia' : 'Crédito'}: {money(payment.amount)} · {payment.status}
+                    </span>
+                  ))}
+                </div>
+                {Number(sale.pendingTransferAmount) > 0 && (
+                  <p className="status-note">Transferencia pendiente: {money(Number(sale.pendingTransferAmount))}</p>
+                )}
+                {Number(sale.rejectedTransferAmount) > 0 && (
+                  <p className="alert error">Transferencia rechazada: {money(Number(sale.rejectedTransferAmount))}</p>
+                )}
+                <div className="sale-total">
+                  <span>Total {sale.currencyCode}</span>
+                  <strong>{money(sale.total)}</strong>
+                </div>
+                <div className="form-actions">
+                  <button type="button" className="secondary" onClick={() => void downloadReceipt(sale)}>Descargar PDF</button>
+                  <button type="button" className="primary" onClick={() => void shareReceipt(sale)}>Compartir / WhatsApp</button>
+                </div>
+                {canViewLocation && (
+                  <div className="form-actions">
+                    <button type="button" className="secondary" onClick={() => setLocationPanelSaleId(prev => prev === sale.id ? null : sale.id)}>
+                      {locationPanelSaleId === sale.id ? 'Ocultar ubicación' : 'Ver ubicación'}
+                    </button>
+                  </div>
+                )}
+                {canViewLocation && locationPanelSaleId === sale.id && (
+                  <div className="location-panel">
+                    {locationQuery.isLoading && <p className="muted">Cargando coordenadas…</p>}
+                    {locationQuery.error && <p className="alert error">{locationQuery.error.message}</p>}
+                    {locationQuery.data && (
+                      <>
+                        <p className="muted" style={{ fontSize: '0.82rem', margin: '0.5rem 0 0.25rem' }}>
+                          <strong>Lat:</strong> {Number(locationQuery.data.latitude).toFixed(8)} &nbsp;
+                          <strong>Lon:</strong> {Number(locationQuery.data.longitude).toFixed(8)}
+                          {locationQuery.data.accuracyMeters != null && <> &nbsp; <strong>Precisión:</strong> ±{Number(locationQuery.data.accuracyMeters).toFixed(1)} m</>}
+                        </p>
+                        <a
+                          href={`https://www.google.com/maps?q=${Number(locationQuery.data.latitude).toFixed(8)},${Number(locationQuery.data.longitude).toFixed(8)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="secondary"
+                          style={{ fontSize: '0.82rem' }}
+                        >
+                          Abrir en Google Maps
+                        </a>
+                      </>
+                    )}
+                  </div>
+                )}
+              </article>
+            ))}
           </div>
         )}
-      </article>)}</div>
-    </section>
+      </section>
+    )}
 
     {/* ── Modal de Alta Rápida de Cliente Provisional en Ruta ── */}
     {showProvisionalModal && (
