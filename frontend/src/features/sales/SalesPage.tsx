@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../../app/PageHeader';
-import { useState, useEffect, useMemo, type FormEvent } from 'react';
+import { useState, useEffect, useMemo, Fragment, type FormEvent } from 'react';
 import { apiBlob, apiRequest } from '../../services/apiClient';
 import { openMobileDatabase, type GeoLocationSnapshot } from '../../offline/mobileDatabase';
 import { captureCurrentLocation } from '../../services/geolocation';
@@ -21,6 +21,43 @@ type Payment = { id: string; method: string; amount: number; status: string; ref
 type Sale = { id: string; documentNumber: string; routeCode: string; routeName: string; sellerName: string; customerCode: string; customerName: string; status: string; subtotal: number; total: number; currencyCode: string; createdAt: string; items: SaleItem[]; payments?: Payment[]; pendingTransferAmount?: number; rejectedTransferAmount?: number; creditAmount?: number; routeId?: string; customerId?: string };
 type ItemForm = { presentationId: string; quantity: number };
 type PaymentForm = { method: string; amount: string; reference: string; bank: string; evidenceReference: string };
+
+type SaleGroup = {
+  key: string;
+  routeCode?: string;
+  routeName: string;
+  sellerName: string;
+  dateKey: string;
+  dateFormatted: string;
+  totalAmount: number;
+  sales: Sale[];
+};
+
+function getSaleDateInfo(isoDateStr: string) {
+  try {
+    const d = new Date(isoDateStr);
+    if (isNaN(d.getTime())) {
+      return { dateKey: '0000-00-00', dateFormatted: 'Fecha no registrada' };
+    }
+    const dateKey = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Guatemala',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(d);
+
+    const dateFormatted = new Intl.DateTimeFormat('es-GT', {
+      timeZone: 'America/Guatemala',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }).format(d);
+
+    return { dateKey, dateFormatted };
+  } catch {
+    return { dateKey: '0000-00-00', dateFormatted: 'Fecha no registrada' };
+  }
+}
 
 const money = (value: number) => `Q${Number(value).toFixed(2)}`;
 const newPayment = (method = 'CASH'): PaymentForm => ({ method, amount: '', reference: '', bank: '', evidenceReference: '' });
@@ -350,6 +387,86 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
   const [locationError, setLocationError] = useState('');
   const [isCapturingLocation, setIsCapturingLocation] = useState(false);
   const [locationPanelSaleId, setLocationPanelSaleId] = useState<string | null>(null);
+
+  // ── Agrupación y visualización de lista de ventas (Ruta + Vendedor + Fecha) ──
+  const [salesSearch, setSalesSearch] = useState('');
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+
+  const toggleGroupCollapse = (key: string) => {
+    setCollapsedGroups(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const collapseAllGroups = () => {
+    const next: Record<string, boolean> = {};
+    for (const g of groupedSales) {
+      next[g.key] = true;
+    }
+    setCollapsedGroups(next);
+  };
+
+  const expandAllGroups = () => {
+    setCollapsedGroups({});
+  };
+
+  const groupedSales = useMemo<SaleGroup[]>(() => {
+    if (!sales.data || sales.data.length === 0) return [];
+
+    const query = salesSearch.trim().toLowerCase();
+    const filtered = query
+      ? sales.data.filter(s =>
+          (s.documentNumber && s.documentNumber.toLowerCase().includes(query)) ||
+          (s.customerName && s.customerName.toLowerCase().includes(query)) ||
+          (s.customerCode && s.customerCode.toLowerCase().includes(query)) ||
+          (s.routeName && s.routeName.toLowerCase().includes(query)) ||
+          (s.routeCode && s.routeCode.toLowerCase().includes(query)) ||
+          (s.sellerName && s.sellerName.toLowerCase().includes(query))
+        )
+      : sales.data;
+
+    const map = new Map<string, SaleGroup>();
+
+    for (const sale of filtered) {
+      const routeCode = sale.routeCode || '';
+      const routeName = sale.routeName || 'Sin Ruta Asignada';
+      const sellerName = sale.sellerName || 'Sin Vendedor';
+      const { dateKey, dateFormatted } = getSaleDateInfo(sale.createdAt);
+
+      const groupKey = `${routeCode || routeName}___${sellerName}___${dateKey}`;
+
+      if (!map.has(groupKey)) {
+        map.set(groupKey, {
+          key: groupKey,
+          routeCode,
+          routeName,
+          sellerName,
+          dateKey,
+          dateFormatted,
+          totalAmount: 0,
+          sales: []
+        });
+      }
+
+      const group = map.get(groupKey)!;
+      group.totalAmount += Number(sale.total) || 0;
+      group.sales.push(sale);
+    }
+
+    const list = Array.from(map.values()).sort((a, b) => {
+      if (b.dateKey !== a.dateKey) {
+        return b.dateKey.localeCompare(a.dateKey);
+      }
+      if (a.routeName !== b.routeName) {
+        return a.routeName.localeCompare(b.routeName);
+      }
+      return a.sellerName.localeCompare(b.sellerName);
+    });
+
+    for (const group of list) {
+      group.sales.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+
+    return list;
+  }, [sales.data, salesSearch]);
 
   // ── Modal de Venta Confirmada y Préstamo de Garrafón ───────────────────────
   const [confirmedSaleModal, setConfirmedSaleModal] = useState<{
@@ -1049,93 +1166,315 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
     </>
     )}
 
-    {/* ── Vista de Lista de Ventas ── */}
+    {/* ── Vista de Lista de Ventas (Agrupada por Ruta, Vendedor y Fecha) ── */}
     {currentView === 'list' && (
       <section className="panel section-panel">
         <div className="section-heading">
-          <h2>Ventas confirmadas</h2>
-          <span>{sales.data?.length ?? 0} ventas</span>
+          <div>
+            <h2>Ventas confirmadas</h2>
+            <p className="muted" style={{ margin: '0.2rem 0 0 0', fontSize: '0.88rem' }}>
+              Listado estructurado y agrupado por ruta, vendedor responsable y fecha de emisión.
+            </p>
+          </div>
+          <span className="badge" style={{ background: '#e0f2fe', color: '#0369a1', fontWeight: 700, padding: '0.35rem 0.8rem', borderRadius: '1rem', fontSize: '0.9rem' }}>
+            {sales.data?.length ?? 0} ventas registradas
+          </span>
         </div>
+
         {receiptError && <div className="alert error">{receiptError}</div>}
         {receiptMessage && <div className="alert success">{receiptMessage}</div>}
         {sales.isLoading && <p>Cargando ventas…</p>}
         {sales.error && <div className="alert error">{sales.error.message}</div>}
-        <div className="sales-grid">
-          {sales.data?.map(sale => (
-            <article className="panel sale-card" key={sale.id}>
-              <div className="section-heading">
-                <div>
-                  <strong className="document-number">{sale.documentNumber}</strong>
-                  <span>{sale.customerCode} · {sale.customerName}</span>
-                </div>
-                <strong>{money(sale.total)}</strong>
-              </div>
-              <p className="audit-line">
-                {sale.routeCode} · {sale.routeName} · {sale.sellerName} · {new Date(sale.createdAt).toLocaleString('es-GT')}
-              </p>
-              <div className="data-list">
-                {sale.items.map(item => (
-                  <div className="data-row sale-line" key={item.id}>
-                    <span>{item.presentationName} · {Number(item.presentationQuantity)} × {money(item.unitPrice)}</span>
-                    <strong>{money(item.lineTotal)}</strong>
-                  </div>
-                ))}
-              </div>
-              <div className="payment-summary">
-                {sale.payments?.map(payment => (
-                  <span key={payment.id}>
-                    {payment.method === 'CASH' ? 'Efectivo' : payment.method === 'TRANSFER' ? 'Transferencia' : 'Crédito'}: {money(payment.amount)} · {payment.status}
-                  </span>
-                ))}
-              </div>
-              {Number(sale.pendingTransferAmount) > 0 && (
-                <p className="status-note">Transferencia pendiente: {money(Number(sale.pendingTransferAmount))}</p>
-              )}
-              {Number(sale.rejectedTransferAmount) > 0 && (
-                <p className="alert error">Transferencia rechazada: {money(Number(sale.rejectedTransferAmount))}</p>
-              )}
-              <div className="sale-total">
-                <span>Total {sale.currencyCode}</span>
-                <strong>{money(sale.total)}</strong>
-              </div>
-              <div className="form-actions">
-                <button type="button" className="secondary" onClick={() => void downloadReceipt(sale)}>Descargar PDF</button>
-                <button type="button" className="primary" onClick={() => void shareReceipt(sale)}>Compartir / WhatsApp</button>
-              </div>
-              {canViewLocation && (
-                <div className="form-actions">
-                  <button type="button" className="secondary" onClick={() => setLocationPanelSaleId(prev => prev === sale.id ? null : sale.id)}>
-                    {locationPanelSaleId === sale.id ? 'Ocultar ubicación' : 'Ver ubicación'}
-                  </button>
-                </div>
-              )}
-              {canViewLocation && locationPanelSaleId === sale.id && (
-                <div className="location-panel">
-                  {locationQuery.isLoading && <p className="muted">Cargando coordenadas…</p>}
-                  {locationQuery.error && <p className="alert error">{locationQuery.error.message}</p>}
-                  {locationQuery.data && (
-                    <>
-                      <p className="muted" style={{ fontSize: '0.82rem', margin: '0.5rem 0 0.25rem' }}>
-                        <strong>Lat:</strong> {Number(locationQuery.data.latitude).toFixed(8)} &nbsp;
-                        <strong>Lon:</strong> {Number(locationQuery.data.longitude).toFixed(8)}
-                        {locationQuery.data.accuracyMeters != null && <> &nbsp; <strong>Precisión:</strong> ±{Number(locationQuery.data.accuracyMeters).toFixed(1)} m</>}
-                      </p>
-                      <a
-                        href={`https://www.google.com/maps?q=${Number(locationQuery.data.latitude).toFixed(8)},${Number(locationQuery.data.longitude).toFixed(8)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="secondary"
-                        style={{ fontSize: '0.82rem' }}
-                      >
-                        Abrir en Google Maps
-                      </a>
-                    </>
-                  )}
-                </div>
-              )}
-            </article>
-          ))}
+
+        {/* Barra de búsqueda y controles de plegado */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', margin: '1rem 0 1.25rem 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', flex: 1, maxWidth: '460px' }}>
+            <input
+              type="search"
+              placeholder="🔍 Buscar por cliente, código, documento, ruta o vendedor…"
+              value={salesSearch}
+              onChange={e => setSalesSearch(e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {salesSearch && (
+              <button 
+                type="button" 
+                className="secondary" 
+                style={{ fontSize: '0.8rem', padding: '0.35rem 0.65rem' }} 
+                onClick={() => setSalesSearch('')}
+              >
+                Limpiar filtro
+              </button>
+            )}
+            <button 
+              type="button" 
+              className="secondary" 
+              style={{ fontSize: '0.8rem', padding: '0.35rem 0.65rem' }} 
+              onClick={expandAllGroups}
+            >
+              ▲ Desplegar todas
+            </button>
+            <button 
+              type="button" 
+              className="secondary" 
+              style={{ fontSize: '0.8rem', padding: '0.35rem 0.65rem' }} 
+              onClick={collapseAllGroups}
+            >
+              ▼ Plegar todas
+            </button>
+          </div>
         </div>
+
+        {/* Listado agrupado por Ruta, Vendedor y Fecha */}
+        {groupedSales.length > 0 ? (
+          <div className="customer-groups-container">
+            {groupedSales.map(group => {
+              const isCollapsed = Boolean(collapsedGroups[group.key]);
+
+              return (
+                <article className="route-group-panel" key={group.key} style={{ marginBottom: '1.25rem' }}>
+                  <div
+                    className="route-group-banner"
+                    onClick={() => toggleGroupCollapse(group.key)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') toggleGroupCollapse(group.key); }}
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', cursor: 'pointer' }}
+                  >
+                    <div className="route-group-info" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <span style={{ fontSize: '1.4rem' }}>🚚</span>
+                      <div>
+                        <h3 className="route-group-title" style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>
+                          {group.routeCode ? `${group.routeCode} — ` : ''}{group.routeName}
+                        </h3>
+                        <div className="route-group-subtitle" style={{ fontSize: '0.84rem', color: 'var(--muted)', marginTop: '0.2rem', display: 'flex', gap: '0.85rem', flexWrap: 'wrap' }}>
+                          <span>👤 Vendedor: <strong style={{ color: '#0f766e' }}>{group.sellerName}</strong></span>
+                          <span>📅 Fecha: <strong style={{ color: '#334155' }}>{group.dateFormatted}</strong></span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+                      <span
+                        style={{
+                          background: '#dcfce7',
+                          color: '#15803d',
+                          fontWeight: 700,
+                          padding: '0.25rem 0.65rem',
+                          borderRadius: '9999px',
+                          fontSize: '0.88rem',
+                          border: '1px solid #bbf7d0',
+                        }}
+                      >
+                        Total: {money(group.totalAmount)}
+                      </span>
+                      <span
+                        className="badge"
+                        style={{
+                          background: '#e0f2fe',
+                          color: '#0369a1',
+                          fontWeight: 600,
+                          padding: '0.25rem 0.65rem',
+                          borderRadius: '9999px',
+                          fontSize: '0.82rem',
+                          border: '1px solid #bae6fd',
+                        }}
+                      >
+                        🧾 {group.sales.length} {group.sales.length === 1 ? 'venta' : 'ventas'}
+                      </span>
+                      <span style={{ fontSize: '0.82rem', color: 'var(--muted)', fontWeight: 600, marginLeft: '0.25rem' }}>
+                        {isCollapsed ? '▼ Desplegar' : '▲ Plegar'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {!isCollapsed && (
+                    <div className="table-wrap sales-table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th style={{ width: '135px' }}>Documento / Hora</th>
+                            <th>Cliente</th>
+                            <th>Productos Vendidos</th>
+                            <th>Forma de Pago</th>
+                            <th style={{ width: '95px' }}>Total</th>
+                            <th style={{ textAlign: 'right', minWidth: '220px' }}>Opciones</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {group.sales.map(sale => {
+                            const saleTime = (() => {
+                              try {
+                                const d = new Date(sale.createdAt);
+                                return isNaN(d.getTime()) ? '' : d.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', hour12: true });
+                              } catch {
+                                return '';
+                              }
+                            })();
+
+                            return (
+                              <Fragment key={sale.id}>
+                                <tr>
+                                  <td>
+                                    <strong className="document-number" style={{ color: '#0f766e', fontSize: '0.92rem', display: 'block' }}>
+                                      {sale.documentNumber}
+                                    </strong>
+                                    {saleTime && (
+                                      <small style={{ color: 'var(--muted)', fontSize: '0.78rem' }}>
+                                        🕒 {saleTime}
+                                      </small>
+                                    )}
+                                  </td>
+
+                                  <td>
+                                    <strong>{sale.customerName}</strong>
+                                    <small style={{ display: 'block', color: 'var(--muted)', fontSize: '0.78rem' }}>
+                                      <code>{sale.customerCode}</code>
+                                    </small>
+                                  </td>
+
+                                  <td>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                                      {sale.items.map(item => (
+                                        <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', fontSize: '0.82rem' }}>
+                                          <span>{item.presentationName} <span style={{ color: 'var(--muted)' }}>({Number(item.presentationQuantity)} × {money(item.unitPrice)})</span></span>
+                                          <strong>{money(item.lineTotal)}</strong>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </td>
+
+                                  <td>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                      {sale.payments?.map(payment => (
+                                        <span
+                                          key={payment.id}
+                                          style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '0.25rem',
+                                            background: payment.method === 'CASH' ? '#f0fdf4' : payment.method === 'TRANSFER' ? '#eff6ff' : '#fef3c7',
+                                            color: payment.method === 'CASH' ? '#166534' : payment.method === 'TRANSFER' ? '#1e40af' : '#92400e',
+                                            padding: '0.15rem 0.45rem',
+                                            borderRadius: '0.35rem',
+                                            fontSize: '0.78rem',
+                                            fontWeight: 600,
+                                            width: 'fit-content',
+                                          }}
+                                        >
+                                          {payment.method === 'CASH' ? '💵 Efectivo' : payment.method === 'TRANSFER' ? '🏦 Transferencia' : '💳 Crédito'}: {money(payment.amount)}
+                                        </span>
+                                      ))}
+                                      {Number(sale.pendingTransferAmount) > 0 && (
+                                        <span style={{ color: '#b45309', fontSize: '0.75rem', fontWeight: 600 }}>
+                                          ⚠️ Transf. pend: {money(Number(sale.pendingTransferAmount))}
+                                        </span>
+                                      )}
+                                      {Number(sale.rejectedTransferAmount) > 0 && (
+                                        <span style={{ color: '#dc2626', fontSize: '0.75rem', fontWeight: 600 }}>
+                                          ❌ Rechazada: {money(Number(sale.rejectedTransferAmount))}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+
+                                  <td>
+                                    <strong style={{ fontSize: '1rem', color: '#0f766e' }}>
+                                      {money(sale.total)}
+                                    </strong>
+                                    <small style={{ display: 'block', color: 'var(--muted)', fontSize: '0.75rem' }}>
+                                      {sale.currencyCode || 'GTQ'}
+                                    </small>
+                                  </td>
+
+                                  <td>
+                                    <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end', flexWrap: 'wrap', alignItems: 'center' }}>
+                                      <button
+                                        type="button"
+                                        className="secondary"
+                                        style={{ fontSize: '0.78rem', padding: '0.3rem 0.55rem', whiteSpace: 'nowrap' }}
+                                        title="Descargar comprobante en PDF"
+                                        onClick={() => void downloadReceipt(sale)}
+                                      >
+                                        📄 Descargar PDF
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="primary"
+                                        style={{ fontSize: '0.78rem', padding: '0.3rem 0.55rem', background: '#059669', borderColor: '#059669', whiteSpace: 'nowrap' }}
+                                        title="Compartir comprobante por WhatsApp"
+                                        onClick={() => void shareReceipt(sale)}
+                                      >
+                                        📲 WhatsApp
+                                      </button>
+                                      {canViewLocation && (
+                                        <button
+                                          type="button"
+                                          className="secondary"
+                                          style={{ fontSize: '0.78rem', padding: '0.3rem 0.55rem', whiteSpace: 'nowrap' }}
+                                          title="Ver coordenadas GPS de la venta"
+                                          onClick={() => setLocationPanelSaleId(prev => prev === sale.id ? null : sale.id)}
+                                        >
+                                          {locationPanelSaleId === sale.id ? '📍 Ocultar GPS' : '📍 Ver ubicación'}
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+
+                                {canViewLocation && locationPanelSaleId === sale.id && (
+                                  <tr key={`${sale.id}-loc`} style={{ background: '#f8fafc' }}>
+                                    <td colSpan={6} style={{ padding: '0.6rem 1rem' }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '0.5rem', padding: '0.5rem 0.75rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap', fontSize: '0.84rem' }}>
+                                          <span>📍 <strong>Ubicación registrada:</strong></span>
+                                          {locationQuery.isLoading && <span className="muted">Cargando coordenadas…</span>}
+                                          {locationQuery.error && <span className="alert error" style={{ padding: '0.2rem 0.5rem', margin: 0 }}>{(locationQuery.error as Error).message}</span>}
+                                          {locationQuery.data && (
+                                            <span>
+                                              Lat: <strong>{Number(locationQuery.data.latitude).toFixed(7)}</strong>, Lon: <strong>{Number(locationQuery.data.longitude).toFixed(7)}</strong>
+                                              {locationQuery.data.accuracyMeters != null && <> · Precisión: ±{Number(locationQuery.data.accuracyMeters).toFixed(1)}m</>}
+                                              {locationQuery.data.capturedAt && <> · {new Date(locationQuery.data.capturedAt).toLocaleTimeString('es-GT')}</>}
+                                            </span>
+                                          )}
+                                        </div>
+                                        {locationQuery.data && (
+                                          <a
+                                            href={`https://www.google.com/maps?q=${Number(locationQuery.data.latitude).toFixed(8)},${Number(locationQuery.data.longitude).toFixed(8)}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="secondary"
+                                            style={{ fontSize: '0.8rem', padding: '0.25rem 0.65rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                                          >
+                                            🗺️ Abrir en Google Maps
+                                          </a>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          !sales.isLoading && (
+            <div style={{ textAlign: 'center', padding: '2.5rem 1rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1px dashed #cbd5e1' }}>
+              <p style={{ fontSize: '1.05rem', margin: 0, color: '#64748b' }}>
+                {salesSearch ? `No se encontraron ventas que coincidan con "${salesSearch}".` : 'No hay ventas confirmadas registradas en el sistema.'}
+              </p>
+            </div>
+          )
+        )}
       </section>
     )}
 
