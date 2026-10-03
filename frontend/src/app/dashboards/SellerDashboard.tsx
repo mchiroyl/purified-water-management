@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import type { SessionUser } from '../../features/auth/types';
 
@@ -72,12 +73,28 @@ export function SellerDashboard({
   isRefreshing,
   onRefresh,
 }: SellerDashboardProps) {
-  // Buscar la carga activa del vendedor hoy
-  const sellerLoad = loads.find(l => 
+  // 1. Buscar si el vendedor tiene una carga activa hoy (en recorrido o recibida)
+  const activeSellerLoad = loads.find(l => 
+    (l.sellerReceivedByUsername === user.username || l.startedByUsername === user.username || l.createdByUsername === user.username) &&
+    (l.status === 'STARTED' || l.status === 'RECEIVED')
+  );
+
+  // 2. Si no hay activa, buscar si hay una carga preparada por bodega pendiente de recepción física
+  const pendingSellerLoad = !activeSellerLoad ? loads.find(l =>
     (l.sellerReceivedByUsername === user.username || l.createdByUsername === user.username) &&
-    (l.status === 'STARTED' || l.status === 'RECEIVED' || l.status === 'PREPARED' || l.status === 'WAREHOUSE_CONFIRMED')
-  ) ?? loads.find(l => l.sellerReceivedByUsername === user.username || l.createdByUsername === user.username)
-    ?? loads.find(l => l.status === 'STARTED' || l.status === 'RECEIVED');
+    (l.status === 'PREPARED' || l.status === 'WAREHOUSE_CONFIRMED')
+  ) : null;
+
+  // 3. Si no hay activa ni pendiente, buscar si la última carga asignada ya fue liquidada
+  const settledSellerLoad = !activeSellerLoad && !pendingSellerLoad ? loads.find(l =>
+    (l.sellerReceivedByUsername === user.username || l.startedByUsername === user.username || l.createdByUsername === user.username) &&
+    l.status === 'SETTLED'
+  ) : null;
+
+  const sellerLoad = activeSellerLoad ?? pendingSellerLoad ?? settledSellerLoad ?? null;
+  const isSettled = sellerLoad?.status === 'SETTLED';
+  const isPendingReceipt = sellerLoad?.status === 'PREPARED' || sellerLoad?.status === 'WAREHOUSE_CONFIRMED';
+  const isActiveLoad = sellerLoad?.status === 'STARTED' || sellerLoad?.status === 'RECEIVED';
 
   // Buscar liquidación oficial del servidor para esta carga o ruta si ya fue calculada
   const currentSettlement = settlements?.find(st =>
@@ -168,7 +185,6 @@ export function SellerDashboard({
     );
     const settlementSold = Number(settlementItem?.soldUnits || 0);
 
-    const isSettled = sellerLoad?.status === 'SETTLED';
     // Usar la mayor cantidad de ventas verificadas
     const effectiveSold = Math.max(rawSoldQty, settlementSold);
     const soldQty = Math.min(totalItemLoaded, effectiveSold);
@@ -182,8 +198,6 @@ export function SellerDashboard({
       remainingOnTruck
     };
   });
-
-  const isSettled = sellerLoad?.status === 'SETTLED';
 
   // Unidades vendidas en total del camión
   const totalSoldUnits = truckItems.reduce((acc, it) => acc + it.soldQty, 0);
@@ -298,13 +312,35 @@ export function SellerDashboard({
           )}
         </div>
 
-        {sellerLoad ? (
+        {isSettled ? (
+          <div style={{ textAlign: 'center', padding: '2.5rem 1.5rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0', marginTop: '1rem' }}>
+            <div style={{ fontSize: '2.6rem', marginBottom: '0.5rem' }}>✅</div>
+            <h3 style={{ margin: '0 0 0.5rem', color: '#166534', fontSize: '1.25rem' }}>Jornada del día liquidada y cerrada</h3>
+            <p style={{ color: 'var(--muted)', fontSize: '0.95rem', maxWidth: '500px', margin: '0 auto 1.25rem' }}>
+              La carga <strong>{sellerLoad ? `Carga ${sellerLoad.loadNumber}` : ''} ({sellerLoad?.routeName || sellerLoad?.routeCode})</strong> ya fue liquidada oficialmente ante administración. Las existencias del camión fueron descargadas/conciliadas en bodega (<strong>0 unidades a bordo</strong>).
+            </p>
+            <div style={{ display: 'inline-flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+              <Link to="/settlements" className="secondary" style={{ textDecoration: 'none', padding: '0.5rem 1.1rem' }}>
+                Ver liquidaciones
+              </Link>
+              <Link to="/loads" className="secondary" style={{ textDecoration: 'none', padding: '0.5rem 1.1rem' }}>
+                Consultar cargas
+              </Link>
+            </div>
+          </div>
+        ) : isPendingReceipt ? (
+          <div style={{ textAlign: 'center', padding: '2.5rem 1.5rem', background: '#fffbeb', borderRadius: '0.75rem', border: '1px solid #fef08a', marginTop: '1rem' }}>
+            <div style={{ fontSize: '2.6rem', marginBottom: '0.5rem' }}>📦</div>
+            <h3 style={{ margin: '0 0 0.5rem', color: '#854d0e', fontSize: '1.25rem' }}>Carga preparada en bodega</h3>
+            <p style={{ color: '#713f12', fontSize: '0.95rem', maxWidth: '500px', margin: '0 auto 1.25rem' }}>
+              Bodega ha preparado tu carga <strong>{sellerLoad ? `Carga ${sellerLoad.loadNumber}` : ''} ({sellerLoad?.routeName || sellerLoad?.routeCode})</strong>. Las existencias aún están en bodega (0 en camión). Para subirlas a tu camión e iniciar recorrido, confirma la recepción física.
+            </p>
+            <Link to="/loads" className="primary" style={{ textDecoration: 'none', display: 'inline-block', padding: '0.55rem 1.3rem' }}>
+              Confirmar recepción en Cargas
+            </Link>
+          </div>
+        ) : sellerLoad && isActiveLoad ? (
           <div style={{ marginTop: '1rem' }}>
-            {isSettled && (
-              <div style={{ marginBottom: '1.25rem', padding: '0.75rem 1rem', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '0.5rem', color: '#166534', fontSize: '0.9rem' }}>
-                ✔ <strong>Carga liquidada oficialmente:</strong> La jornada de esta carga fue cerrada. Las existencias del camión fueron descargadas/conciliadas en bodega (0 unidades a bordo para venta).
-              </div>
-            )}
             {/* Barra de progreso de ventas */}
             <div style={{ marginBottom: '1.25rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '0.35rem' }}>
@@ -358,7 +394,7 @@ export function SellerDashboard({
           </div>
         ) : (
           <div style={{ textAlign: 'center', padding: '2.5rem 1rem', color: 'var(--muted)' }}>
-            <p style={{ fontSize: '1.05rem', margin: '0 0 0.75rem' }}>No tienes una carga iniciada hoy en tu usuario.</p>
+            <p style={{ fontSize: '1.05rem', margin: '0 0 0.75rem' }}>No tienes una carga activa hoy en tu usuario.</p>
             <Link to="/loads" className="primary" style={{ textDecoration: 'none', display: 'inline-block', padding: '0.55rem 1.3rem' }}>
               Ir a Cargas de Ruta
             </Link>
@@ -385,7 +421,7 @@ export function SellerDashboard({
               {money(cashInHand, dashboard.currencyCode)}
             </strong>
             <div className="kpi-subtext">
-              Total físico a rendir en caja central
+              {isSettled ? 'Liquidado y entregado en caja' : 'Total físico a rendir en caja central'}
             </div>
           </article>
 
