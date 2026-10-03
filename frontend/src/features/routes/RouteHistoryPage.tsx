@@ -4,7 +4,7 @@ import { PageHeader } from '../../app/PageHeader';
 import { apiRequest } from '../../services/apiClient';
 import { RouteMapPanel, type RouteMapData } from './RouteMapPanel';
 
-type Route = { id: string; code: string; name: string };
+type Route = { id: string; code: string; name: string; sellerName?: string };
 type SellerOption = { id: string; code: string; displayName: string };
 type RouteHistoryDay = {
   loadId: string;
@@ -116,9 +116,18 @@ export function RouteHistoryPage() {
     }
   };
 
-  const filteredData = (history.data || []).filter(day =>
-    !sellerFilter || day.sellerName.toLowerCase().includes(sellerFilter.toLowerCase())
-  );
+  const selectedRoute = routes.data?.find(r => r.id === routeId);
+  const filteredData = (history.data || []).filter(day => {
+    if (!sellerFilter) return true;
+    const filter = sellerFilter.toLowerCase().trim();
+    const daySeller = (day.sellerName || '').toLowerCase().trim();
+    const routeSeller = (selectedRoute?.sellerName || '').toLowerCase().trim();
+    return (
+      daySeller.includes(filter) ||
+      filter.includes(daySeller) ||
+      (routeSeller && (routeSeller.includes(filter) || filter.includes(routeSeller)))
+    );
+  });
 
   return (
     <main>

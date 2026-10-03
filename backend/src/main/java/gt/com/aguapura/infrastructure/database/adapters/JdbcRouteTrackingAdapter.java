@@ -92,8 +92,13 @@ public class JdbcRouteTrackingAdapter implements RouteTrackingPort {
                            FIRST_VALUE(p.longitude) OVER (PARTITION BY p.route_load_id ORDER BY p.captured_at DESC) as last_lon
                     FROM route_tracking_point p
                     JOIN route_load rl ON p.route_load_id = rl.id
-                    WHERE rl.route_id = :routeId AND rl.status IN ('STARTED', 'SETTLED')
-                      AND rl.created_at >= :from AND rl.created_at < :to
+                    WHERE rl.route_id = :routeId AND rl.status IN ('RECEIVED', 'STARTED', 'SETTLED')
+                      AND (
+                          (p.captured_at >= :from AND p.captured_at <= :to)
+                          OR (rl.planned_date >= (:from AT TIME ZONE (SELECT timezone FROM config))::date 
+                              AND rl.planned_date <= (:to AT TIME ZONE (SELECT timezone FROM config))::date)
+                          OR (rl.created_at >= :from AND rl.created_at <= :to)
+                      )
                 ),
                 distances AS (
                     SELECT route_load_id, captured_at, first_lat, first_lon, last_lat, last_lon,
@@ -118,8 +123,8 @@ public class JdbcRouteTrackingAdapter implements RouteTrackingPort {
                     GROUP BY d.route_load_id
                 )
                 SELECT a.route_load_id as load_id,
-                       (rl.created_at AT TIME ZONE (SELECT timezone FROM config))::date as load_date,
-                       COALESCE(s.display_name, u.username, 'Vendedor') as seller_name,
+                       COALESCE((a.start_time AT TIME ZONE (SELECT timezone FROM config))::date, rl.planned_date, (rl.created_at AT TIME ZONE (SELECT timezone FROM config))::date) as load_date,
+                       COALESCE(s.display_name, route_s.display_name, u.username, 'Vendedor') as seller_name,
                        a.start_time, a.end_time,
                        EXTRACT(EPOCH FROM (a.end_time - a.start_time))/60 as duration_minutes,
                        a.point_count, a.estimated_distance_km,
@@ -128,6 +133,8 @@ public class JdbcRouteTrackingAdapter implements RouteTrackingPort {
                 JOIN route_load rl ON a.route_load_id = rl.id
                 LEFT JOIN app_user u ON u.id = COALESCE(rl.started_by, rl.seller_received_by, rl.created_by)
                 LEFT JOIN seller s ON s.user_id = u.id
+                LEFT JOIN route_assignment ra ON ra.route_id = rl.route_id AND ra.valid_to IS NULL
+                LEFT JOIN seller route_s ON route_s.id = ra.seller_id
                 ORDER BY load_date ASC, a.start_time ASC
                 """)
                 .param("routeId", routeId)
