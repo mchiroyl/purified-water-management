@@ -4,17 +4,18 @@ import {
   Truck,
   Package,
   Wallet,
-  Banknote,
   Users,
   CreditCard,
   ArrowRightLeft,
   Receipt,
-  Plus,
+  ShoppingCart,
+  TrendingUp,
   RefreshCw,
   CheckCircle2,
   FileText,
   BadgeAlert,
 } from 'lucide-react';
+import { PageHeader } from '../PageHeader';
 import type { SessionUser } from '../../features/auth/types';
 
 type DashboardAlert = { code: string; severity: string; title: string; count: number };
@@ -312,254 +313,210 @@ export function SellerDashboard({
   const cashInHand = isSettled ? 0 : Math.max(0, effectiveCash);
 
   return (
-    <div style={{ width: '100%', maxWidth: '980px', margin: '0 auto', paddingBottom: '2.5rem', minWidth: 0, boxSizing: 'border-box' }}>
-      {/* ── Encabezado B2B Limpio ────────────────────────────────────────── */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        flexWrap: 'wrap',
-        gap: '0.85rem',
-        padding: '1.25rem 0 1rem',
-        borderBottom: '1px solid #e2e8f0',
-        marginBottom: '1.25rem',
-        minWidth: 0,
-        width: '100%',
-        boxSizing: 'border-box'
-      }}>
-        <div style={{ minWidth: 0, flex: '1 1 240px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.25rem' }}>
-            <span style={{
+    <div style={{ width: '100%', maxWidth: '1180px', margin: '0 auto', paddingBottom: '2.5rem', minWidth: 0, boxSizing: 'border-box' }}>
+      {/* ── Encabezado B2B Idéntico al Admin (Screenshot 4) ──────────────── */}
+      <div className="section-heading" style={{ marginBottom: '1rem', flexWrap: 'wrap' }}>
+        <PageHeader 
+          eyebrow="VENDEDOR EN RUTA"
+          title="Panel Operativo" 
+          description={`¡Hola, ${user.displayName || user.username}! ${sellerLoad ? `· ${sellerLoad.routeCode} (${sellerLoad.routeName || 'Ruta del día'})` : '· Monitoreo de ruta en vivo'}`} 
+        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+          <span className="live-indicator" style={{
+            background: sellerLoad?.status === 'STARTED' ? '#ecfdf5' : '#f8fafc',
+            borderColor: sellerLoad?.status === 'STARTED' ? '#a7f3d0' : '#e2e8f0',
+            color: sellerLoad?.status === 'STARTED' ? '#047857' : '#64748b'
+          }}>
+            <span className="live-dot" style={{
+              background: sellerLoad?.status === 'STARTED' ? '#10b981' : '#94a3b8'
+            }} aria-hidden="true" />
+            {sellerLoad ? loadStatusLabel(sellerLoad.status) : 'En vivo'}
+          </span>
+          <button 
+            type="button"
+            className="secondary" 
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '0.35rem',
-              background: '#f1f5f9',
-              color: '#334155',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              padding: '0.2rem 0.55rem',
-              borderRadius: '0.375rem',
-              letterSpacing: '0.025em',
-              whiteSpace: 'nowrap'
-            }}>
-              <Truck size={13} strokeWidth={2} />
-              VENDEDOR EN RUTA
-            </span>
-            {sellerLoad && (
-              <span style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.3rem',
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                padding: '0.2rem 0.55rem',
-                borderRadius: '0.375rem',
-                background: sellerLoad.status === 'STARTED' ? '#ecfdf5' : '#f8fafc',
-                color: sellerLoad.status === 'STARTED' ? '#047857' : '#64748b',
-                border: `1px solid ${sellerLoad.status === 'STARTED' ? '#a7f3d0' : '#e2e8f0'}`,
-                whiteSpace: 'nowrap'
-              }}>
-                <span style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
-                  background: sellerLoad.status === 'STARTED' ? '#10b981' : '#94a3b8'
-                }} />
-                {loadStatusLabel(sellerLoad.status)}
-              </span>
-            )}
-          </div>
-          <h1 style={{
-            margin: '0.25rem 0',
-            fontSize: '1.45rem',
-            fontWeight: 700,
-            color: '#0f172a',
-            letterSpacing: '-0.02em',
-            wordBreak: 'break-word'
-          }}>
-            ¡Hola, {user.displayName || user.username}!
-          </h1>
-          <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b', wordBreak: 'break-word' }}>
-            {sellerLoad ? `${sellerLoad.routeCode} · ${sellerLoad.routeName || 'Ruta del día'} (Carga #${sellerLoad.loadNumber})` : 'Monitoreo de jornada operativa'}
-          </p>
+              gap: '0.4rem',
+              fontSize: '0.82rem',
+              fontWeight: 500,
+              padding: '0.45rem 0.85rem'
+            }}
+          >
+            <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} strokeWidth={2} />
+            {isRefreshing ? 'Actualizando…' : 'Sincronizar'}
+          </button>
         </div>
-
-        <button 
-          type="button"
-          onClick={onRefresh} 
-          disabled={isRefreshing}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.45rem',
-            fontSize: '0.82rem',
-            fontWeight: 500,
-            padding: '0.45rem 0.85rem',
-            background: '#ffffff',
-            color: '#334155',
-            border: '1px solid #cbd5e1',
-            borderRadius: '0.45rem',
-            cursor: isRefreshing ? 'wait' : 'pointer',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-            flexShrink: 0
-          }}
-        >
-          <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} strokeWidth={2} />
-          {isRefreshing ? 'Actualizando…' : 'Sincronizar'}
-        </button>
       </div>
 
-      {/* ── Acciones Rápidas B2B (Barra Táctica Compacta) ──────────────────── */}
-      <div style={{
+      {/* ── Barra de Accesos Rápidos B2B (Estilo Admin, 2 cols en móvil) ─── */}
+      <div className="quick-actions-bar" style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
         gap: '0.65rem',
-        marginBottom: '1.25rem',
-        minWidth: 0,
-        width: '100%'
+        marginBottom: '1.25rem'
       }}>
-        <Link to="/sales" style={{
+        <Link to="/sales" className="quick-action-btn" style={{
           display: 'flex',
           alignItems: 'center',
           gap: '0.55rem',
-          padding: '0.65rem 0.75rem',
+          padding: '0.65rem 0.85rem',
           background: '#0f172a',
           color: '#ffffff',
           borderRadius: '0.5rem',
           textDecoration: 'none',
-          boxShadow: '0 1px 3px rgba(15,23,42,0.12)',
-          minWidth: 0,
-          boxSizing: 'border-box'
+          fontSize: '0.85rem',
+          fontWeight: 600,
+          boxShadow: '0 1px 3px rgba(15,23,42,0.1)'
         }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '28px',
-            height: '28px',
-            borderRadius: '0.375rem',
-            background: 'rgba(255,255,255,0.15)',
-            flexShrink: 0
-          }}>
-            <Plus size={16} strokeWidth={2.5} />
-          </div>
-          <div style={{ minWidth: 0, overflow: 'hidden' }}>
-            <div style={{ fontSize: '0.85rem', fontWeight: 600, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Nueva Venta</div>
-            <div style={{ fontSize: '0.7rem', color: '#94a3b8', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Cobrar / Recibo</div>
-          </div>
+          <ShoppingCart size={15} strokeWidth={2} /> Nueva Venta
         </Link>
-
-        <Link to="/customers" style={{
+        <Link to="/customers" className="quick-action-btn" style={{
           display: 'flex',
           alignItems: 'center',
           gap: '0.55rem',
-          padding: '0.65rem 0.75rem',
+          padding: '0.65rem 0.85rem',
           background: '#ffffff',
           color: '#0f172a',
           border: '1px solid #e2e8f0',
           borderRadius: '0.5rem',
           textDecoration: 'none',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-          minWidth: 0,
-          boxSizing: 'border-box'
+          fontSize: '0.85rem',
+          fontWeight: 600
         }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '28px',
-            height: '28px',
-            borderRadius: '0.375rem',
-            background: '#f1f5f9',
-            color: '#475569',
-            flexShrink: 0
-          }}>
-            <Users size={15} strokeWidth={2} />
-          </div>
-          <div style={{ minWidth: 0, overflow: 'hidden' }}>
-            <div style={{ fontSize: '0.85rem', fontWeight: 600, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Clientes</div>
-            <div style={{ fontSize: '0.7rem', color: '#64748b', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Directorio en ruta</div>
-          </div>
+          <Users size={15} strokeWidth={2} /> Clientes
         </Link>
-
-        <Link to="/loads" style={{
+        <Link to="/loads" className="quick-action-btn" style={{
           display: 'flex',
           alignItems: 'center',
           gap: '0.55rem',
-          padding: '0.65rem 0.75rem',
+          padding: '0.65rem 0.85rem',
           background: '#ffffff',
           color: '#0f172a',
           border: '1px solid #e2e8f0',
           borderRadius: '0.5rem',
           textDecoration: 'none',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-          minWidth: 0,
-          boxSizing: 'border-box'
+          fontSize: '0.85rem',
+          fontWeight: 600
         }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '28px',
-            height: '28px',
-            borderRadius: '0.375rem',
-            background: '#f1f5f9',
-            color: '#475569',
-            flexShrink: 0
-          }}>
-            <Package size={15} strokeWidth={2} />
-          </div>
-          <div style={{ minWidth: 0, overflow: 'hidden' }}>
-            <div style={{ fontSize: '0.85rem', fontWeight: 600, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Mi Carga</div>
-            <div style={{ fontSize: '0.7rem', color: '#64748b', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Recargas y bodega</div>
-          </div>
+          <Package size={15} strokeWidth={2} /> Mi Carga
         </Link>
-
-        <Link to="/settlements" style={{
+        <Link to="/settlements" className="quick-action-btn" style={{
           display: 'flex',
           alignItems: 'center',
           gap: '0.55rem',
-          padding: '0.65rem 0.75rem',
+          padding: '0.65rem 0.85rem',
           background: '#ffffff',
           color: '#0f172a',
           border: '1px solid #e2e8f0',
           borderRadius: '0.5rem',
           textDecoration: 'none',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-          minWidth: 0,
-          boxSizing: 'border-box'
+          fontSize: '0.85rem',
+          fontWeight: 600
         }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '28px',
-            height: '28px',
-            borderRadius: '0.375rem',
-            background: '#f1f5f9',
-            color: '#475569',
-            flexShrink: 0
-          }}>
-            <Receipt size={15} strokeWidth={2} />
-          </div>
-          <div style={{ minWidth: 0, overflow: 'hidden' }}>
-            <div style={{ fontSize: '0.85rem', fontWeight: 600, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Liquidación</div>
-            <div style={{ fontSize: '0.7rem', color: '#64748b', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Cierre y rendición</div>
-          </div>
+          <Receipt size={15} strokeWidth={2} /> Liquidación
         </Link>
       </div>
 
-      {/* ── 1. Existencias en Camión (Tabla de Alta Densidad B2B) ─────────── */}
+      {/* ── Indicadores Clave (KPIs) en Rejilla 2x2 (Idéntico a Admin) ──── */}
+      <div className="dashboard-kpis" style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+        gap: '0.85rem',
+        marginBottom: '1.5rem'
+      }}>
+        {/* 1. Ventas de Hoy */}
+        <article className="kpi-card" style={{
+          background: '#ffffff',
+          border: '1px solid #e2e8f0',
+          borderRadius: '0.65rem',
+          padding: '1rem',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+        }}>
+          <div className="kpi-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#64748b', fontSize: '0.82rem', fontWeight: 600 }}>
+            <span>Ventas de hoy</span>
+            <TrendingUp size={16} strokeWidth={2} style={{ color: '#0284c7' }} />
+          </div>
+          <strong className="kpi-value" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#0f172a', fontFeatureSettings: '"tnum"', display: 'block', margin: '0.35rem 0 0.2rem' }}>
+            {money(effectiveSalesToday, dashboard.currencyCode)}
+          </strong>
+          <div className="kpi-subtext" style={{ fontSize: '0.74rem', color: '#64748b' }}>
+            Efec: {money(effectiveCash)} · Transf: {money(effectiveTransfers)} · Créd: {money(effectiveCredit)}
+          </div>
+        </article>
+
+        {/* 2. Efectivo en mano */}
+        <article className="kpi-card" style={{
+          background: '#ffffff',
+          border: '1px solid #e2e8f0',
+          borderRadius: '0.65rem',
+          padding: '1rem',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+        }}>
+          <div className="kpi-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#64748b', fontSize: '0.82rem', fontWeight: 600 }}>
+            <span>Efectivo en mano (A entregar)</span>
+            <Wallet size={16} strokeWidth={2} style={{ color: '#047857' }} />
+          </div>
+          <strong className="kpi-value" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#047857', fontFeatureSettings: '"tnum"', display: 'block', margin: '0.35rem 0 0.2rem' }}>
+            {money(cashInHand, dashboard.currencyCode)}
+          </strong>
+          <div className="kpi-subtext" style={{ fontSize: '0.74rem', color: '#64748b' }}>
+            {isSettled ? 'Liquidado y depositado en caja' : 'Total físico a rendir en caja central'}
+          </div>
+        </article>
+
+        {/* 3. Existencias en Camión */}
+        <article className="kpi-card" style={{
+          background: '#ffffff',
+          border: '1px solid #e2e8f0',
+          borderRadius: '0.65rem',
+          padding: '1rem',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+        }}>
+          <div className="kpi-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#64748b', fontSize: '0.82rem', fontWeight: 600 }}>
+            <span>Existencias a bordo</span>
+            <Truck size={16} strokeWidth={2} style={{ color: '#475569' }} />
+          </div>
+          <strong className="kpi-value" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#0f172a', fontFeatureSettings: '"tnum"', display: 'block', margin: '0.35rem 0 0.2rem' }}>
+            {remainingTotalUnits} <span style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: 500 }}>unidades</span>
+          </strong>
+          <div className="kpi-subtext" style={{ fontSize: '0.74rem', color: '#64748b' }}>
+            {totalSoldUnits} vendidas de {totalLoadedUnits} cargadas ({progressPct}%)
+          </div>
+        </article>
+
+        {/* 4. Cobros y transferencias */}
+        <article className="kpi-card" style={{
+          background: '#ffffff',
+          border: '1px solid #e2e8f0',
+          borderRadius: '0.65rem',
+          padding: '1rem',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+        }}>
+          <div className="kpi-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#64748b', fontSize: '0.82rem', fontWeight: 600 }}>
+            <span>Transferencias y crédito</span>
+            <ArrowRightLeft size={16} strokeWidth={2} style={{ color: '#0284c7' }} />
+          </div>
+          <strong className="kpi-value" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#0284c7', fontFeatureSettings: '"tnum"', display: 'block', margin: '0.35rem 0 0.2rem' }}>
+            {money(effectiveTransfers, dashboard.currencyCode)}
+          </strong>
+          <div className="kpi-subtext" style={{ fontSize: '0.74rem', color: '#64748b' }}>
+            Crédito: {money(effectiveCredit, dashboard.currencyCode)}
+          </div>
+        </article>
+      </div>
+
+      {/* ── 1. Existencias a Bordo del Camión (Tarjetas Responsivas) ──────── */}
       <section style={{
         background: '#ffffff',
         border: '1px solid #e2e8f0',
         borderRadius: '0.65rem',
-        marginBottom: '1.25rem',
+        marginBottom: '1.5rem',
         overflow: 'hidden',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-        minWidth: 0,
-        width: '100%',
-        boxSizing: 'border-box'
+        boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
       }}>
         <div style={{
           display: 'flex',
@@ -567,21 +524,26 @@ export function SellerDashboard({
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: '0.5rem',
-          padding: '0.85rem 1rem',
+          padding: '0.85rem 1.15rem',
           borderBottom: '1px solid #f1f5f9',
           background: '#f8fafc'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <Package size={17} strokeWidth={2} style={{ color: '#475569' }} />
-            <h2 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
+            <h2 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: '#0f172a' }}>
               Existencias a Bordo del Camión
             </h2>
           </div>
-          {sellerLoad && (
-            <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 500 }}>
-              Carga #{sellerLoad.loadNumber}
-            </span>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {sellerLoad && (
+              <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 500 }}>
+                Carga #{sellerLoad.loadNumber}
+              </span>
+            )}
+            <Link to="/loads" className="secondary" style={{ textDecoration: 'none', padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}>
+              Ver cargas
+            </Link>
+          </div>
         </div>
 
         {isSettled ? (
@@ -636,109 +598,98 @@ export function SellerDashboard({
           </div>
         ) : sellerLoad && isActiveLoad ? (
           <div>
-            {/* Tabla de existencias compacta con scroll horizontal seguro en móviles */}
-            <div style={{ overflowX: 'auto', width: '100%', minWidth: 0, WebkitOverflowScrolling: 'touch' }}>
-              <table style={{
-                width: '100%',
-                borderCollapse: 'collapse',
-                textAlign: 'left',
-                fontSize: '0.86rem'
-              }}>
-                <thead>
-                  <tr style={{ background: '#ffffff', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: '0.74rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    <th style={{ padding: '0.65rem 0.85rem', fontWeight: 600 }}>Producto</th>
-                    <th style={{ padding: '0.65rem 0.5rem', fontWeight: 600, textAlign: 'center', whiteSpace: 'nowrap' }}>Cargado</th>
-                    <th style={{ padding: '0.65rem 0.5rem', fontWeight: 600, textAlign: 'center', whiteSpace: 'nowrap' }}>Vendido</th>
-                    <th style={{ padding: '0.65rem 0.85rem', fontWeight: 600, textAlign: 'right', whiteSpace: 'nowrap' }}>En Camión</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {truckItems.map((item, idx) => {
-                    const isLow = item.remainingOnTruck <= 10 && item.remainingOnTruck > 0;
-                    const itemPct = item.quantityBaseUnits > 0 ? Math.round((item.soldQty / item.quantityBaseUnits) * 100) : 0;
-                    return (
-                      <tr 
-                        key={item.id || idx}
-                        style={{
-                          borderBottom: idx === truckItems.length - 1 ? 'none' : '1px solid #f1f5f9',
-                          transition: 'background 0.15s ease'
-                        }}
-                      >
-                        <td style={{ padding: '0.75rem 0.85rem' }}>
-                          <div style={{ fontWeight: 600, color: '#0f172a', wordBreak: 'break-word' }}>{item.productName}</div>
-                          <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.45rem',
-                            marginTop: '0.2rem',
-                            fontSize: '0.72rem',
-                            color: '#64748b'
-                          }}>
-                            <div style={{ width: '48px', height: '4px', background: '#e2e8f0', borderRadius: '2px', overflow: 'hidden', flexShrink: 0 }}>
-                              <div style={{ width: `${itemPct}%`, height: '100%', background: '#0284c7' }} />
-                            </div>
-                            <span style={{ whiteSpace: 'nowrap' }}>{itemPct}% entregado</span>
-                          </div>
-                        </td>
-                        <td style={{
-                          padding: '0.75rem 0.5rem',
-                          textAlign: 'center',
-                          fontWeight: 600,
-                          color: '#334155',
-                          fontFeatureSettings: '"tnum"',
-                          whiteSpace: 'nowrap'
-                        }}>
-                          {item.quantityBaseUnits}
-                        </td>
-                        <td style={{
-                          padding: '0.75rem 0.5rem',
-                          textAlign: 'center',
-                          fontWeight: 600,
-                          color: '#0284c7',
-                          fontFeatureSettings: '"tnum"',
-                          whiteSpace: 'nowrap'
-                        }}>
-                          {item.soldQty}
-                        </td>
-                        <td style={{ padding: '0.75rem 0.85rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                          <span style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.25rem',
-                            padding: '0.2rem 0.55rem',
-                            borderRadius: '0.375rem',
-                            fontSize: '0.92rem',
-                            fontWeight: 700,
-                            fontFeatureSettings: '"tnum"',
-                            background: isLow ? '#fef3f2' : item.remainingOnTruck === 0 ? '#f1f5f9' : '#ecfdf5',
-                            color: isLow ? '#b91c1c' : item.remainingOnTruck === 0 ? '#64748b' : '#047857',
-                            border: `1px solid ${isLow ? '#fecaca' : item.remainingOnTruck === 0 ? '#e2e8f0' : '#a7f3d0'}`
-                          }}>
-                            {isLow && <BadgeAlert size={13} strokeWidth={2.5} />}
-                            {item.remainingOnTruck}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            {/* Rejilla de productos en camión: 1 col en móvil, 2 cols en tablet, 3 cols en desktop */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+              gap: '0.85rem',
+              padding: '1rem'
+            }}>
+              {truckItems.map((item, idx) => {
+                const isLow = item.remainingOnTruck <= 10 && item.remainingOnTruck > 0;
+                const itemPct = item.quantityBaseUnits > 0 ? Math.round((item.soldQty / item.quantityBaseUnits) * 100) : 0;
+                return (
+                  <article key={item.id || idx} style={{
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '0.55rem',
+                    padding: '0.85rem',
+                    background: '#ffffff',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.65rem'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <strong style={{ fontSize: '0.98rem', color: '#0f172a' }}>
+                        {item.productName}
+                      </strong>
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.25rem',
+                        padding: '0.15rem 0.5rem',
+                        borderRadius: '0.375rem',
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        background: isLow ? '#fef3f2' : item.remainingOnTruck === 0 ? '#f1f5f9' : '#ecfdf5',
+                        color: isLow ? '#b91c1c' : item.remainingOnTruck === 0 ? '#64748b' : '#047857',
+                        border: `1px solid ${isLow ? '#fecaca' : item.remainingOnTruck === 0 ? '#e2e8f0' : '#a7f3d0'}`
+                      }}>
+                        {isLow && <BadgeAlert size={12} strokeWidth={2.5} />}
+                        {item.remainingOnTruck} en camión
+                      </span>
+                    </div>
+
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.76rem', color: '#64748b', marginBottom: '0.25rem' }}>
+                        <span>Progreso de entrega</span>
+                        <strong>{itemPct}% ({item.soldQty} de {item.quantityBaseUnits} {item.baseUnitCode || 'u.'})</strong>
+                      </div>
+                      <div style={{ width: '100%', height: '5px', background: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
+                        <div style={{ width: `${itemPct}%`, height: '100%', background: '#0284c7' }} />
+                      </div>
+                    </div>
+
+                    {/* Franja de 3 estadísticas (Idéntico al panel de Administrador) */}
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(3, 1fr)',
+                      gap: '0.4rem',
+                      background: '#f8fafc',
+                      padding: '0.55rem 0.65rem',
+                      borderRadius: '0.45rem',
+                      textAlign: 'center'
+                    }}>
+                      <div>
+                        <span style={{ display: 'block', fontSize: '0.7rem', color: '#64748b' }}>Cargado</span>
+                        <strong style={{ fontSize: '0.95rem', color: '#334155', fontFeatureSettings: '"tnum"' }}>{item.quantityBaseUnits}</strong>
+                      </div>
+                      <div>
+                        <span style={{ display: 'block', fontSize: '0.7rem', color: '#64748b' }}>Vendido</span>
+                        <strong style={{ fontSize: '0.95rem', color: '#0284c7', fontFeatureSettings: '"tnum"' }}>{item.soldQty}</strong>
+                      </div>
+                      <div>
+                        <span style={{ display: 'block', fontSize: '0.7rem', color: '#64748b' }}>En Camión</span>
+                        <strong style={{ fontSize: '0.95rem', color: isLow ? '#b91c1c' : '#047857', fontFeatureSettings: '"tnum"' }}>
+                          {item.remainingOnTruck}
+                        </strong>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
 
-            {/* Barra de resumen inferior con wrap seguro para no desbordar en móvil */}
+            {/* Barra de resumen inferior con wrap seguro */}
             <div style={{
               display: 'flex',
               flexWrap: 'wrap',
               justifyContent: 'space-between',
               alignItems: 'center',
               gap: '0.5rem',
-              padding: '0.75rem 1rem',
+              padding: '0.75rem 1.15rem',
               background: '#f8fafc',
               borderTop: '1px solid #e2e8f0',
-              fontSize: '0.82rem',
-              minWidth: 0,
-              width: '100%',
-              boxSizing: 'border-box'
+              fontSize: '0.82rem'
             }}>
               <span style={{ color: '#64748b' }}>
                 Progreso del camión: <strong>{progressPct}%</strong> ({totalSoldUnits} de {totalLoadedUnits} u.)
@@ -758,17 +709,14 @@ export function SellerDashboard({
         )}
       </section>
 
-      {/* ── 2. Corte y Arqueo de Dinero de Hoy (Diseño Financiero B2B) ───── */}
+      {/* ── 2. Ventas de la Jornada (Idéntico a Últimas Ventas en Admin) ─── */}
       <section style={{
         background: '#ffffff',
         border: '1px solid #e2e8f0',
         borderRadius: '0.65rem',
-        marginBottom: '1.25rem',
+        marginBottom: '1.5rem',
         overflow: 'hidden',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-        minWidth: 0,
-        width: '100%',
-        boxSizing: 'border-box'
+        boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
       }}>
         <div style={{
           display: 'flex',
@@ -776,190 +724,18 @@ export function SellerDashboard({
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: '0.5rem',
-          padding: '0.85rem 1rem',
-          borderBottom: '1px solid #f1f5f9',
-          background: '#f8fafc'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Wallet size={17} strokeWidth={2} style={{ color: '#475569' }} />
-            <h2 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
-              Corte de Caja en Ruta
-            </h2>
-          </div>
-          <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>
-            {sellerSales.length} transacciones hoy
-          </span>
-        </div>
-
-        <div style={{ padding: '1rem', minWidth: 0 }}>
-          {/* Tarjeta destacada: Efectivo en mano */}
-          <div style={{
-            background: '#f8fafc',
-            border: '1px solid #e2e8f0',
-            borderRadius: '0.5rem',
-            padding: '1rem',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '0.75rem',
-            marginBottom: '1rem',
-            minWidth: 0,
-            boxSizing: 'border-box'
-          }}>
-            <div style={{ minWidth: 0, flex: '1 1 200px' }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: '0.35rem',
-                fontSize: '0.78rem',
-                fontWeight: 600,
-                color: '#475569',
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em'
-              }}>
-                <Banknote size={15} strokeWidth={2} style={{ color: '#059669', flexShrink: 0 }} />
-                <span>Efectivo en mano (A entregar)</span>
-              </div>
-              <div style={{
-                fontSize: '1.75rem',
-                fontWeight: 800,
-                color: '#0f172a',
-                fontFeatureSettings: '"tnum"',
-                letterSpacing: '-0.02em',
-                marginTop: '0.2rem',
-                wordBreak: 'break-word'
-              }}>
-                {money(cashInHand, dashboard.currencyCode)}
-              </div>
-              <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '0.15rem', wordBreak: 'break-word' }}>
-                {isSettled ? 'Liquidado oficialmente y depositado en caja' : 'Monto físico recaudado a rendir en liquidación'}
-              </div>
-            </div>
-
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '44px',
-              height: '44px',
-              borderRadius: '0.5rem',
-              background: '#ecfdf5',
-              color: '#059669',
-              flexShrink: 0
-            }}>
-              <Wallet size={22} strokeWidth={2} />
-            </div>
-          </div>
-
-          {/* Desglose de cobros en fila */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))',
-            gap: '0.65rem',
-            minWidth: 0
-          }}>
-            {/* Total Vendido */}
-            <div style={{
-              padding: '0.75rem 0.85rem',
-              background: '#ffffff',
-              border: '1px solid #f1f5f9',
-              borderRadius: '0.45rem',
-              minWidth: 0,
-              boxSizing: 'border-box'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.74rem', color: '#64748b', marginBottom: '0.25rem' }}>
-                <Receipt size={13} strokeWidth={2} style={{ flexShrink: 0 }} />
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Total Facturado Hoy</span>
-              </div>
-              <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', fontFeatureSettings: '"tnum"', wordBreak: 'break-word' }}>
-                {money(effectiveSalesToday, dashboard.currencyCode)}
-              </div>
-              <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '0.1rem' }}>
-                Efectivo + Crédito + Transf.
-              </div>
-            </div>
-
-            {/* Transferencias */}
-            <div style={{
-              padding: '0.75rem 0.85rem',
-              background: '#ffffff',
-              border: '1px solid #f1f5f9',
-              borderRadius: '0.45rem',
-              minWidth: 0,
-              boxSizing: 'border-box'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.74rem', color: '#64748b', marginBottom: '0.25rem' }}>
-                <ArrowRightLeft size={13} strokeWidth={2} style={{ flexShrink: 0 }} />
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Transferencias Bancarias</span>
-              </div>
-              <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0284c7', fontFeatureSettings: '"tnum"', wordBreak: 'break-word' }}>
-                {money(effectiveTransfers, dashboard.currencyCode)}
-              </div>
-              <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '0.1rem' }}>
-                Acredita directo a cuenta
-              </div>
-            </div>
-
-            {/* Crédito */}
-            <div style={{
-              padding: '0.75rem 0.85rem',
-              background: '#ffffff',
-              border: '1px solid #f1f5f9',
-              borderRadius: '0.45rem',
-              minWidth: 0,
-              boxSizing: 'border-box'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.74rem', color: '#64748b', marginBottom: '0.25rem' }}>
-                <CreditCard size={13} strokeWidth={2} style={{ flexShrink: 0 }} />
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Ventas al Crédito</span>
-              </div>
-              <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#b45309', fontFeatureSettings: '"tnum"', wordBreak: 'break-word' }}>
-                {money(effectiveCredit, dashboard.currencyCode)}
-              </div>
-              <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '0.1rem' }}>
-                Cuentas por cobrar
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── 3. Ventas de Hoy (Lista Compacta con Recibos) ────────────────── */}
-      <section style={{
-        background: '#ffffff',
-        border: '1px solid #e2e8f0',
-        borderRadius: '0.65rem',
-        overflow: 'hidden',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-        minWidth: 0,
-        width: '100%',
-        boxSizing: 'border-box'
-      }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '0.5rem',
-          padding: '0.85rem 1rem',
+          padding: '0.85rem 1.15rem',
           borderBottom: '1px solid #f1f5f9',
           background: '#f8fafc'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <FileText size={17} strokeWidth={2} style={{ color: '#475569' }} />
-            <h2 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
+            <h2 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: '#0f172a' }}>
               Ventas de la Jornada
             </h2>
           </div>
-          <Link to="/sales/list" style={{
-            fontSize: '0.8rem',
-            color: '#0284c7',
-            textDecoration: 'none',
-            fontWeight: 600
-          }}>
-            Ver todas ({sellerSales.length}) →
+          <Link to="/sales/list" className="secondary" style={{ textDecoration: 'none', padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}>
+            Ver todas ({sellerSales.length})
           </Link>
         </div>
 
@@ -971,58 +747,60 @@ export function SellerDashboard({
             </Link>
           </div>
         ) : (
-          <div style={{ minWidth: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', padding: '1rem' }}>
             {sellerSales.slice(0, 8).map((sale, index) => {
               const saleTime = new Date(sale.createdAt).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' });
               return (
-                <div 
+                <article 
                   key={sale.id || index}
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     gap: '0.75rem',
-                    padding: '0.75rem 1rem',
-                    borderBottom: index === Math.min(sellerSales.length, 8) - 1 ? 'none' : '1px solid #f1f5f9',
-                    minWidth: 0,
-                    boxSizing: 'border-box'
+                    padding: '0.75rem 0.85rem',
+                    borderRadius: '0.45rem',
+                    border: '1px solid #f1f5f9',
+                    background: '#ffffff'
                   }}
                 >
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: '0.88rem', color: '#0f172a', wordBreak: 'break-word' }}>
+                    <strong style={{ fontSize: '0.88rem', color: '#0f172a', display: 'block', wordBreak: 'break-word' }}>
                       {sale.customerName}
-                    </div>
-                    <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '0.15rem', lineHeight: 1.35 }}>
-                      <span style={{ fontWeight: 500, color: '#334155' }}>{sale.documentNumber}</span>
-                      <span> · {saleTime}</span>
-                      <div style={{ color: '#475569', marginTop: '0.1rem', wordBreak: 'break-word' }}>
-                        {sale.items.map(it => `${Number(it.presentationQuantity || it.quantityBaseUnits)}x ${it.productName}`).join(', ')}
-                      </div>
+                    </strong>
+                    <span style={{ fontSize: '0.76rem', color: '#64748b', display: 'block', marginTop: '0.15rem' }}>
+                      Doc: {sale.documentNumber} · {saleTime}
+                    </span>
+                    <div style={{ fontSize: '0.74rem', color: '#475569', marginTop: '0.15rem', wordBreak: 'break-word' }}>
+                      {sale.items.map(it => `${Number(it.presentationQuantity || it.quantityBaseUnits)}x ${it.productName}`).join(', ')}
                     </div>
                   </div>
 
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <div style={{
+                    <strong style={{
                       fontWeight: 700,
-                      fontSize: '0.98rem',
-                      color: '#0f172a',
-                      fontFeatureSettings: '"tnum"'
+                      fontSize: '1rem',
+                      color: '#047857',
+                      fontFeatureSettings: '"tnum"',
+                      display: 'block'
                     }}>
                       {money(sale.total)}
-                    </div>
+                    </strong>
                     <Link 
-                      to={`/sales/list`}
+                      to="/sales/list"
                       style={{
                         fontSize: '0.72rem',
                         color: '#0284c7',
                         textDecoration: 'none',
-                        fontWeight: 500
+                        fontWeight: 500,
+                        display: 'inline-block',
+                        marginTop: '0.2rem'
                       }}
                     >
                       Recibo
                     </Link>
                   </div>
-                </div>
+                </article>
               );
             })}
           </div>
