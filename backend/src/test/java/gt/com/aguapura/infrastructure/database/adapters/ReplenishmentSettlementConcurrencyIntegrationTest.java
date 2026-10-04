@@ -36,6 +36,7 @@ class ReplenishmentSettlementConcurrencyIntegrationTest {
     private static final long TIMEOUT_SECONDS = 10;
 
     @Container
+    @SuppressWarnings({"deprecation", "resource"})
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:18.4-alpine");
 
     private JdbcClient jdbc;

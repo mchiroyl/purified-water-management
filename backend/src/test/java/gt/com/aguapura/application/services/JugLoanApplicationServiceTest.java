@@ -8,7 +8,6 @@ import gt.com.aguapura.application.dto.jugs.JugRouteSummaryResponse;
 import gt.com.aguapura.application.ports.JugLoanPort;
 import org.junit.jupiter.api.Test;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;

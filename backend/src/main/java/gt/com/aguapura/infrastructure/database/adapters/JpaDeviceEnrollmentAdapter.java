@@ -2,7 +2,6 @@ package gt.com.aguapura.infrastructure.database.adapters;
 
 import gt.com.aguapura.application.ports.AuthenticationPersistencePort;
 import gt.com.aguapura.application.ports.DeviceEnrollmentPort;
-import gt.com.aguapura.domain.enums.UserStatus;
 import gt.com.aguapura.infrastructure.database.entities.DeviceEnrollmentInvitationJpaEntity;
 import gt.com.aguapura.infrastructure.database.entities.DeviceJpaEntity;
 import gt.com.aguapura.infrastructure.repositories.DeviceEnrollmentInvitationJpaRepository;
