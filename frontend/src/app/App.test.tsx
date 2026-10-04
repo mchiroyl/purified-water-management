@@ -20,4 +20,17 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: /sistema purificadora/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /ingresar/i })).toBeInTheDocument();
   });
+
+  it('redirige al inicio (/) cuando un usuario no autenticado intenta acceder a /customers', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Sin cookie refresh')));
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter initialEntries={['/customers']}>
+          <SessionProvider><App /></SessionProvider>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+    expect(await screen.findByRole('heading', { name: /sistema purificadora/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /ingresar/i })).toBeInTheDocument();
+  });
 });

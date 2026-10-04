@@ -34,6 +34,9 @@ export function App() {
   const location = useLocation();
   if (initializing) return <main className="auth-page"><section className="auth-card"><p>Restaurando sesión…</p></section></main>;
   if (!user && location.pathname === '/enroll') return <EnrollmentPage />;
+  if (!user && location.pathname !== '/' && !location.search.includes('device-reenrollment-token')) {
+    return <Navigate to="/" replace />;
+  }
   if (!user) return <LoginPage />;
   if (user.mustChangePassword) return <PasswordChangePage />;
   const isAdmin = user.roles.includes('ADMINISTRADOR');
