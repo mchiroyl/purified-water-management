@@ -30,11 +30,27 @@ import { cacheReceipt, findCachedReceipt, markReceiptPending } from './receiptOf
 import { downloadReceiptFile, shareReceiptFile } from './receiptSharing';
 import { useOptionalSession } from '../auth/SessionContext';
 import { queueProvisionalCustomer } from '../routes/provisionalCustomerOffline';
+import { CustomerCombobox } from './CustomerCombobox';
 import type { JugBalanceResponse } from '../jugs/types';
 import type { CreditBalanceResponse, CreditPaymentMethod } from '../credit/types';
 
 type Route = { id: string; code: string; name: string; status: string };
-type Customer = { id: string; code: string; name: string; status: string; routeId?: string; customerType: string; creditAllowed: boolean; creditLimit: number; currentBalance: number; registrationState?: string };
+type Customer = {
+  id: string;
+  code: string;
+  name: string;
+  status: string;
+  routeId?: string;
+  customerType: string;
+  creditAllowed: boolean;
+  creditLimit: number;
+  currentBalance: number;
+  registrationState?: string;
+  addressReference?: string;
+  contactName?: string;
+  phone?: string;
+  whatsapp?: string;
+};
 type Presentation = { id: string; code: string; name: string; active: boolean };
 type Product = { id: string; code: string; name: string; active: boolean; controlsInventory: boolean; presentations: Presentation[] };
 type SaleItem = { id: string; productName: string; presentationName: string; presentationQuantity: number; quantityBaseUnits: number; unitPrice: number; lineTotal: number; priceSource: string };
@@ -627,6 +643,9 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
           currentBalance: 0,
           routeId,
           registrationState: 'PROVISIONAL',
+          addressReference: queued.addressReference,
+          phone: queued.normalizedPhone || undefined,
+          whatsapp: queued.whatsapp ?? undefined
         };
 
         setLocalProvisionalCustomers(prev => [localCustomer, ...prev]);
@@ -945,13 +964,20 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
           </select></label>
         )}
         <div style={isSeller ? { gridColumn: '1 / -1' } : undefined}>
-          <label>Cliente<select id="sale-customer-select" required value={customerId} disabled={!routeId} onChange={event => { setCustomerId(event.target.value); setPayments([newPayment()]); setShowSaleJugReturn(false); setShowSaleAbono(false); }}>
-            <option value="">Seleccionar</option>{availableCustomers.map(customer => (
-              <option key={customer.id} value={customer.id}>
-                {customer.customerType === 'OCCASIONAL' ? '⚡ ' : ''}{customer.code} · {customer.name} {customer.customerType === 'OCCASIONAL' ? '(Provisional)' : ''}
-              </option>
-            ))}
-          </select></label>
+          <CustomerCombobox
+            id="sale-customer-select"
+            label="Cliente"
+            required
+            disabled={!routeId}
+            customers={availableCustomers}
+            selectedId={customerId}
+            onSelect={selected => {
+              setCustomerId(selected);
+              setPayments([newPayment()]);
+              setShowSaleJugReturn(false);
+              setShowSaleAbono(false);
+            }}
+          />
           {routeId && (
             <button
               type="button"
@@ -1086,14 +1112,22 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
                 </select>
               </label>
             )}
-            <label style={isSeller ? { gridColumn: '1 / -1' } : undefined}>Cliente
-              <select required value={visitCustomerId} disabled={!visitRouteId} onChange={e => { setVisitCustomerId(e.target.value); setShowVisitAbono(false); setShowVisitJugReturn(false); }}>
-                <option value="">Seleccionar</option>
-                {visitAvailableCustomers.map(c => (
-                  <option key={c.id} value={c.id}>{c.code} · {c.name}</option>
-                ))}
-              </select>
-            </label>
+            <div style={isSeller ? { gridColumn: '1 / -1' } : undefined}>
+              <CustomerCombobox
+                id="visit-customer-select"
+                label="Cliente"
+                required
+                disabled={!visitRouteId}
+                customers={visitAvailableCustomers}
+                selectedId={visitCustomerId}
+                placeholder="Buscar cliente visitado por nombre, dirección o código..."
+                onSelect={selected => {
+                  setVisitCustomerId(selected);
+                  setShowVisitAbono(false);
+                  setShowVisitJugReturn(false);
+                }}
+              />
+            </div>
 
             {/* ── Banner contextual en visita ───────────────────────────────── */}
             {visitCustomerId && (
