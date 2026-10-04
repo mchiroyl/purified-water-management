@@ -59,7 +59,7 @@ export function LoginPage() {
 
   const qrValue = reenrollment?.token ? `${window.location.origin}/administration?device-reenrollment-token=${encodeURIComponent(reenrollment.token)}` : '';
   return <main className="auth-page"><section className="auth-card" aria-labelledby="login-title">
-    <div className="brand-mark" aria-hidden="true">💧</div><p className="eyebrow">Control operativo</p><h1 id="login-title">Sistema Agua Pura</h1>
+    <div className="brand-mark" aria-hidden="true">💧</div><p className="eyebrow">Control operativo</p><h1 id="login-title">Sistema Purificadora</h1>
     <p className="muted">{reEnrollmentMode ? 'Solicite autorización para reinscribir este dispositivo.' : 'Inicia sesión para continuar.'}</p>
     <form onSubmit={reEnrollmentMode ? requestReenrollment : submit} noValidate>
       <label>Usuario<input autoComplete="username" {...register('username')} /></label>{errors.username && <span className="field-error">{errors.username.message}</span>}

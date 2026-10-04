@@ -17,7 +17,7 @@ describe('App', () => {
         </MemoryRouter>
       </QueryClientProvider>
     );
-    expect(await screen.findByRole('heading', { name: /sistema agua pura/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /sistema purificadora/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /ingresar/i })).toBeInTheDocument();
   });
 });
