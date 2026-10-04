@@ -10,8 +10,8 @@ export default defineConfig({
       includeAssets: ['icons/icon.svg', 'sync-listener.js'],
       manifest: {
         id: '/',
-        name: 'Sistema Agua Pura',
-        short_name: 'Agua Pura',
+        name: 'Sistema Purificadora',
+        short_name: 'Purificadora',
         description: 'Control digital de ventas, rutas, inventario y liquidaciones',
         theme_color: '#087e8b',
         background_color: '#f4fbfc',
