@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Package,
@@ -49,6 +49,7 @@ type NavigationGroup = {
 export function AppShell() {
   const { user, logout } = useSession();
   const location = useLocation();
+  const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedGroup, setExpandedGroup] = useState('Inicio');
   const mobileMenuTriggerRef = useRef<HTMLButtonElement>(null);
@@ -56,6 +57,7 @@ export function AppShell() {
   const mobileMenuWasOpen = useRef(false);
   const handleLogout = () => {
     setMobileMenuOpen(false);
+    navigate('/', { replace: true });
     void logout();
   };
   const isAdmin = user?.roles.includes('ADMINISTRADOR');

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { QRCodeSVG } from 'qrcode.react';
 import { z } from 'zod';
+import { useNavigate } from 'react-router-dom';
 import { apiRequest } from '../../services/apiClient';
 import { getDeviceName, saveKnownDeviceId } from './deviceIdentity';
 import { useSession } from './SessionContext';
@@ -18,6 +19,7 @@ const statusText: Record<string, string> = { PENDING: 'pendiente de aprobación'
 
 export function LoginPage() {
   const { login, busy } = useSession();
+  const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [reenrollment, setReenrollment] = useState<Reenrollment | null>(null);
@@ -28,7 +30,10 @@ export function LoginPage() {
 
   const submit = handleSubmit(async (values) => {
     setError(null);
-    try { await login(values.username, values.password, deviceName); }
+    try {
+      await login(values.username, values.password, deviceName);
+      navigate('/', { replace: true });
+    }
     catch (cause) { setError(cause instanceof Error ? cause.message : 'No fue posible iniciar sesión.'); }
   });
   const requestReenrollment = handleSubmit(async (values) => {
@@ -51,11 +56,12 @@ export function LoginPage() {
           if (!complete.deviceId) throw new Error('No fue posible registrar el nuevo dispositivo.');
           saveKnownDeviceId(complete.deviceId);
           await login(getValues('username'), getValues('password'), deviceName);
+          navigate('/', { replace: true });
         }
       } catch (cause) { completeInProgress.current = false; setError(cause instanceof Error ? cause.message : 'No fue posible consultar la solicitud.'); }
     }, 3000);
     return () => window.clearInterval(poll);
-  }, [deviceName, getValues, login, reenrollment?.status, reenrollment?.token]);
+  }, [deviceName, getValues, login, navigate, reenrollment?.status, reenrollment?.token]);
 
   const qrValue = reenrollment?.token ? `${window.location.origin}/administration?device-reenrollment-token=${encodeURIComponent(reenrollment.token)}` : '';
   return <main className="auth-page"><section className="auth-card" aria-labelledby="login-title">
