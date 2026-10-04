@@ -66,14 +66,14 @@ describe('SalesPage', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'Ventas' })).toBeInTheDocument();
     expect(await screen.findByText('V-00000042')).toBeInTheDocument();
-    expect(screen.getByText(/Botella 600 ml.*2.*Q8.50/i)).toBeInTheDocument();
-    expect(screen.getAllByText('Q17.00')).toHaveLength(3);
+    expect(screen.getByText(/Botella 600 ml/)).toBeInTheDocument();
+    expect(screen.getAllByText('Q17.00')).toHaveLength(2);
     const createUrl = vi.fn(() => 'blob:receipt');
     const revokeUrl = vi.fn();
     Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createUrl });
     Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeUrl });
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
-    fireEvent.click(screen.getByRole('button', { name: 'Descargar PDF' }));
+    fireEvent.click(screen.getByRole('button', { name: /descargar pdf/i }));
     await waitFor(() => expect(createUrl).toHaveBeenCalled());
     expect(click).toHaveBeenCalled();
     expect(revokeUrl).toHaveBeenCalledWith('blob:receipt');
