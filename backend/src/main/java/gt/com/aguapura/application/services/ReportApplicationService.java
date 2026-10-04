@@ -106,6 +106,7 @@ public class ReportApplicationService {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private DocumentData documentData(ReportType type, ReportPageResponse<?> page) {
         return switch (type) {
             case SALES -> new DocumentData("Ventas", List.of("Documento", "Fecha", "Vendedor", "Ruta", "Cliente", "Producto", "Presentación", "Cantidad", "Unidades base", "Precio unitario", "Total línea", "Total venta", "Pagos", "Efectivo", "Transferencia", "Crédito", "Estado"),

@@ -11,18 +11,13 @@ import gt.com.aguapura.application.ports.CreditPaymentPort;
 import gt.com.aguapura.application.ports.CreditPaymentVoucherPdfPort;
 import gt.com.aguapura.domain.exceptions.BusinessException;
 import gt.com.aguapura.domain.exceptions.ErrorCategory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.IOException;
 import java.math.BigDecimal;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -31,11 +26,9 @@ import java.util.UUID;
 public class JdbcCreditPaymentAdapter implements CreditPaymentPort {
     private static final Set<String> VALID_METHODS = Set.of("CASH", "TRANSFER");
     private final JdbcClient jdbc;
-    private final Path storageRoot;
 
-    public JdbcCreditPaymentAdapter(JdbcClient jdbc, @Value("${app.storage.path}") String storagePath) {
+    public JdbcCreditPaymentAdapter(JdbcClient jdbc) {
         this.jdbc = jdbc;
-        this.storageRoot = Path.of(storagePath).toAbsolutePath().normalize();
     }
 
     @Override

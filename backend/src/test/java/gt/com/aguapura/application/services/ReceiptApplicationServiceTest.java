@@ -17,6 +17,7 @@ import static org.mockito.Mockito.when;
 class ReceiptApplicationServiceTest {
 
     @Test
+    @SuppressWarnings("unchecked")
     void rechecksAfterLockAndReturnsTheDocumentCreatedByAConcurrentRequest() {
         var documents = mock(ReceiptDocumentPort.class);
         var pdf = mock(ReceiptPdfPort.class);

@@ -85,7 +85,7 @@ public class PdfBoxReceiptGenerator implements ReceiptPdfPort {
 
     private void drawSaleData(Writer writer, ReceiptData receipt) throws IOException {
         writer.sectionTitle("Datos de la venta");
-        String date = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm", new Locale("es", "GT"))
+        String date = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm", Locale.forLanguageTag("es-GT"))
                 .format(receipt.saleDate().atZone(ZoneId.of(receipt.timezone())));
         writer.twoColumns("Número", receipt.documentNumber(), "Fecha", date);
         writer.twoColumns("Cliente", receipt.customerName(), "Vendedor", receipt.sellerName());
