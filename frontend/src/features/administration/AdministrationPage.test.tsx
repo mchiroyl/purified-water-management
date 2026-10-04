@@ -15,7 +15,7 @@ describe('AdministrationPage', () => {
         sellerDisplayName: 'Juan Pérez', createdAt: '2026-08-10T00:00:00Z'
       }] : url.endsWith('/device-reenrollment') ? [{
         id: 'r1', username: 'vendedor1', status: 'PENDING', deviceName: 'Teléfono de Juan',
-        createdAt: '2026-08-10T00:00:00Z', expiresAt: '2026-08-10T00:10:00Z'
+        createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 600000).toISOString()
       }] : [{
         id: 'd1', userId: 'u1', username: 'vendedor1', friendlyName: 'Teléfono de Juan',
         status: 'ACTIVE', appVersion: '1.0', firstSeenAt: '2026-08-10T00:00:00Z',
