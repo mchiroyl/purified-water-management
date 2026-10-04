@@ -3,7 +3,7 @@ package gt.com.aguapura.application.services;
 import gt.com.aguapura.application.dto.auth.DeviceEnrollmentRequest;
 import gt.com.aguapura.application.dto.identity.CreateDeviceEnrollmentRequest;
 import gt.com.aguapura.application.ports.*;
-import gt.com.aguapura.domain.enums.DeviceStatus;
+import gt.com.aguapura.domain.enums.UserStatus;
 import gt.com.aguapura.domain.exceptions.BusinessException;
 import org.junit.jupiter.api.Test;
 
