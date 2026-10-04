@@ -133,7 +133,8 @@ export function SellerDashboard({
     loads.find(l => l.status === 'STARTED') ||
     loads[0];
 
-  const currentSettlement = settlements.find(st => {
+  const settlementsList = Array.isArray(settlements) ? settlements : [];
+  const currentSettlement = settlementsList.find(st => {
     if (!sellerLoad) return false;
     return st.routeLoadId && sellerLoad.id && st.routeLoadId === sellerLoad.id;
   });
@@ -311,20 +312,23 @@ export function SellerDashboard({
   const cashInHand = isSettled ? 0 : Math.max(0, effectiveCash);
 
   return (
-    <div style={{ maxWidth: '980px', margin: '0 auto', paddingBottom: '2.5rem' }}>
+    <div style={{ width: '100%', maxWidth: '980px', margin: '0 auto', paddingBottom: '2.5rem', minWidth: 0, boxSizing: 'border-box' }}>
       {/* ── Encabezado B2B Limpio ────────────────────────────────────────── */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
         flexWrap: 'wrap',
-        gap: '1rem',
+        gap: '0.85rem',
         padding: '1.25rem 0 1rem',
         borderBottom: '1px solid #e2e8f0',
-        marginBottom: '1.25rem'
+        marginBottom: '1.25rem',
+        minWidth: 0,
+        width: '100%',
+        boxSizing: 'border-box'
       }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+        <div style={{ minWidth: 0, flex: '1 1 240px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.25rem' }}>
             <span style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -335,7 +339,8 @@ export function SellerDashboard({
               fontWeight: 600,
               padding: '0.2rem 0.55rem',
               borderRadius: '0.375rem',
-              letterSpacing: '0.025em'
+              letterSpacing: '0.025em',
+              whiteSpace: 'nowrap'
             }}>
               <Truck size={13} strokeWidth={2} />
               VENDEDOR EN RUTA
@@ -351,7 +356,8 @@ export function SellerDashboard({
                 borderRadius: '0.375rem',
                 background: sellerLoad.status === 'STARTED' ? '#ecfdf5' : '#f8fafc',
                 color: sellerLoad.status === 'STARTED' ? '#047857' : '#64748b',
-                border: `1px solid ${sellerLoad.status === 'STARTED' ? '#a7f3d0' : '#e2e8f0'}`
+                border: `1px solid ${sellerLoad.status === 'STARTED' ? '#a7f3d0' : '#e2e8f0'}`,
+                whiteSpace: 'nowrap'
               }}>
                 <span style={{
                   width: '6px',
@@ -368,11 +374,12 @@ export function SellerDashboard({
             fontSize: '1.45rem',
             fontWeight: 700,
             color: '#0f172a',
-            letterSpacing: '-0.02em'
+            letterSpacing: '-0.02em',
+            wordBreak: 'break-word'
           }}>
-            {user.displayName || user.username}
+            ¡Hola, {user.displayName || user.username}!
           </h1>
-          <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>
+          <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b', wordBreak: 'break-word' }}>
             {sellerLoad ? `${sellerLoad.routeCode} · ${sellerLoad.routeName || 'Ruta del día'} (Carga #${sellerLoad.loadNumber})` : 'Monitoreo de jornada operativa'}
           </p>
         </div>
@@ -393,7 +400,8 @@ export function SellerDashboard({
             border: '1px solid #cbd5e1',
             borderRadius: '0.45rem',
             cursor: isRefreshing ? 'wait' : 'pointer',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+            flexShrink: 0
           }}
         >
           <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} strokeWidth={2} />
@@ -406,19 +414,22 @@ export function SellerDashboard({
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
         gap: '0.65rem',
-        marginBottom: '1.25rem'
+        marginBottom: '1.25rem',
+        minWidth: 0,
+        width: '100%'
       }}>
         <Link to="/sales" style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '0.6rem',
-          padding: '0.65rem 0.85rem',
+          gap: '0.55rem',
+          padding: '0.65rem 0.75rem',
           background: '#0f172a',
           color: '#ffffff',
           borderRadius: '0.5rem',
           textDecoration: 'none',
           boxShadow: '0 1px 3px rgba(15,23,42,0.12)',
-          transition: 'transform 0.1s ease'
+          minWidth: 0,
+          boxSizing: 'border-box'
         }}>
           <div style={{
             display: 'flex',
@@ -427,27 +438,30 @@ export function SellerDashboard({
             width: '28px',
             height: '28px',
             borderRadius: '0.375rem',
-            background: 'rgba(255,255,255,0.15)'
+            background: 'rgba(255,255,255,0.15)',
+            flexShrink: 0
           }}>
             <Plus size={16} strokeWidth={2.5} />
           </div>
-          <div>
-            <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>Nueva Venta</div>
-            <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Cobrar / Recibo</div>
+          <div style={{ minWidth: 0, overflow: 'hidden' }}>
+            <div style={{ fontSize: '0.85rem', fontWeight: 600, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Nueva Venta</div>
+            <div style={{ fontSize: '0.7rem', color: '#94a3b8', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Cobrar / Recibo</div>
           </div>
         </Link>
 
         <Link to="/customers" style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '0.6rem',
-          padding: '0.65rem 0.85rem',
+          gap: '0.55rem',
+          padding: '0.65rem 0.75rem',
           background: '#ffffff',
           color: '#0f172a',
           border: '1px solid #e2e8f0',
           borderRadius: '0.5rem',
           textDecoration: 'none',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+          minWidth: 0,
+          boxSizing: 'border-box'
         }}>
           <div style={{
             display: 'flex',
@@ -457,27 +471,30 @@ export function SellerDashboard({
             height: '28px',
             borderRadius: '0.375rem',
             background: '#f1f5f9',
-            color: '#475569'
+            color: '#475569',
+            flexShrink: 0
           }}>
             <Users size={15} strokeWidth={2} />
           </div>
-          <div>
-            <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>Clientes</div>
-            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Directorio en ruta</div>
+          <div style={{ minWidth: 0, overflow: 'hidden' }}>
+            <div style={{ fontSize: '0.85rem', fontWeight: 600, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Clientes</div>
+            <div style={{ fontSize: '0.7rem', color: '#64748b', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Directorio en ruta</div>
           </div>
         </Link>
 
         <Link to="/loads" style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '0.6rem',
-          padding: '0.65rem 0.85rem',
+          gap: '0.55rem',
+          padding: '0.65rem 0.75rem',
           background: '#ffffff',
           color: '#0f172a',
           border: '1px solid #e2e8f0',
           borderRadius: '0.5rem',
           textDecoration: 'none',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+          minWidth: 0,
+          boxSizing: 'border-box'
         }}>
           <div style={{
             display: 'flex',
@@ -487,27 +504,30 @@ export function SellerDashboard({
             height: '28px',
             borderRadius: '0.375rem',
             background: '#f1f5f9',
-            color: '#475569'
+            color: '#475569',
+            flexShrink: 0
           }}>
             <Package size={15} strokeWidth={2} />
           </div>
-          <div>
-            <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>Mi Carga</div>
-            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Recargas y bodega</div>
+          <div style={{ minWidth: 0, overflow: 'hidden' }}>
+            <div style={{ fontSize: '0.85rem', fontWeight: 600, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Mi Carga</div>
+            <div style={{ fontSize: '0.7rem', color: '#64748b', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Recargas y bodega</div>
           </div>
         </Link>
 
         <Link to="/settlements" style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '0.6rem',
-          padding: '0.65rem 0.85rem',
+          gap: '0.55rem',
+          padding: '0.65rem 0.75rem',
           background: '#ffffff',
           color: '#0f172a',
           border: '1px solid #e2e8f0',
           borderRadius: '0.5rem',
           textDecoration: 'none',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+          minWidth: 0,
+          boxSizing: 'border-box'
         }}>
           <div style={{
             display: 'flex',
@@ -517,13 +537,14 @@ export function SellerDashboard({
             height: '28px',
             borderRadius: '0.375rem',
             background: '#f1f5f9',
-            color: '#475569'
+            color: '#475569',
+            flexShrink: 0
           }}>
             <Receipt size={15} strokeWidth={2} />
           </div>
-          <div>
-            <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>Liquidación</div>
-            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Cierre y rendición</div>
+          <div style={{ minWidth: 0, overflow: 'hidden' }}>
+            <div style={{ fontSize: '0.85rem', fontWeight: 600, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Liquidación</div>
+            <div style={{ fontSize: '0.7rem', color: '#64748b', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Cierre y rendición</div>
           </div>
         </Link>
       </div>
@@ -535,13 +556,18 @@ export function SellerDashboard({
         borderRadius: '0.65rem',
         marginBottom: '1.25rem',
         overflow: 'hidden',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
+        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+        minWidth: 0,
+        width: '100%',
+        boxSizing: 'border-box'
       }}>
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          padding: '0.85rem 1.15rem',
+          flexWrap: 'wrap',
+          gap: '0.5rem',
+          padding: '0.85rem 1rem',
           borderBottom: '1px solid #f1f5f9',
           background: '#f8fafc'
         }}>
@@ -559,7 +585,7 @@ export function SellerDashboard({
         </div>
 
         {isSettled ? (
-          <div style={{ textAlign: 'center', padding: '2rem 1.5rem', background: '#f8fafc' }}>
+          <div style={{ textAlign: 'center', padding: '2rem 1.25rem', background: '#f8fafc' }}>
             <div style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -584,7 +610,7 @@ export function SellerDashboard({
             </Link>
           </div>
         ) : isPendingReceipt ? (
-          <div style={{ textAlign: 'center', padding: '2rem 1.5rem', background: '#fffbeb' }}>
+          <div style={{ textAlign: 'center', padding: '2rem 1.25rem', background: '#fffbeb' }}>
             <div style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -610,20 +636,20 @@ export function SellerDashboard({
           </div>
         ) : sellerLoad && isActiveLoad ? (
           <div>
-            {/* Tabla de existencias compacta */}
-            <div style={{ overflowX: 'auto' }}>
+            {/* Tabla de existencias compacta con scroll horizontal seguro en móviles */}
+            <div style={{ overflowX: 'auto', width: '100%', minWidth: 0, WebkitOverflowScrolling: 'touch' }}>
               <table style={{
                 width: '100%',
                 borderCollapse: 'collapse',
                 textAlign: 'left',
-                fontSize: '0.88rem'
+                fontSize: '0.86rem'
               }}>
                 <thead>
-                  <tr style={{ background: '#ffffff', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: '0.76rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    <th style={{ padding: '0.65rem 1.15rem', fontWeight: 600 }}>Producto</th>
-                    <th style={{ padding: '0.65rem 0.75rem', fontWeight: 600, textAlign: 'center' }}>Cargado</th>
-                    <th style={{ padding: '0.65rem 0.75rem', fontWeight: 600, textAlign: 'center' }}>Vendido</th>
-                    <th style={{ padding: '0.65rem 1.15rem', fontWeight: 600, textAlign: 'right' }}>En Camión</th>
+                  <tr style={{ background: '#ffffff', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: '0.74rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    <th style={{ padding: '0.65rem 0.85rem', fontWeight: 600 }}>Producto</th>
+                    <th style={{ padding: '0.65rem 0.5rem', fontWeight: 600, textAlign: 'center', whiteSpace: 'nowrap' }}>Cargado</th>
+                    <th style={{ padding: '0.65rem 0.5rem', fontWeight: 600, textAlign: 'center', whiteSpace: 'nowrap' }}>Vendido</th>
+                    <th style={{ padding: '0.65rem 0.85rem', fontWeight: 600, textAlign: 'right', whiteSpace: 'nowrap' }}>En Camión</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -638,55 +664,57 @@ export function SellerDashboard({
                           transition: 'background 0.15s ease'
                         }}
                       >
-                        <td style={{ padding: '0.85rem 1.15rem' }}>
-                          <div style={{ fontWeight: 600, color: '#0f172a' }}>{item.productName}</div>
+                        <td style={{ padding: '0.75rem 0.85rem' }}>
+                          <div style={{ fontWeight: 600, color: '#0f172a', wordBreak: 'break-word' }}>{item.productName}</div>
                           <div style={{
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '0.5rem',
-                            marginTop: '0.25rem',
-                            fontSize: '0.74rem',
+                            gap: '0.45rem',
+                            marginTop: '0.2rem',
+                            fontSize: '0.72rem',
                             color: '#64748b'
                           }}>
-                            <div style={{ width: '60px', height: '4px', background: '#e2e8f0', borderRadius: '2px', overflow: 'hidden' }}>
+                            <div style={{ width: '48px', height: '4px', background: '#e2e8f0', borderRadius: '2px', overflow: 'hidden', flexShrink: 0 }}>
                               <div style={{ width: `${itemPct}%`, height: '100%', background: '#0284c7' }} />
                             </div>
-                            <span>{itemPct}% entregado</span>
+                            <span style={{ whiteSpace: 'nowrap' }}>{itemPct}% entregado</span>
                           </div>
                         </td>
                         <td style={{
-                          padding: '0.85rem 0.75rem',
+                          padding: '0.75rem 0.5rem',
                           textAlign: 'center',
                           fontWeight: 600,
                           color: '#334155',
-                          fontFeatureSettings: '"tnum"'
+                          fontFeatureSettings: '"tnum"',
+                          whiteSpace: 'nowrap'
                         }}>
                           {item.quantityBaseUnits}
                         </td>
                         <td style={{
-                          padding: '0.85rem 0.75rem',
+                          padding: '0.75rem 0.5rem',
                           textAlign: 'center',
                           fontWeight: 600,
                           color: '#0284c7',
-                          fontFeatureSettings: '"tnum"'
+                          fontFeatureSettings: '"tnum"',
+                          whiteSpace: 'nowrap'
                         }}>
                           {item.soldQty}
                         </td>
-                        <td style={{ padding: '0.85rem 1.15rem', textAlign: 'right' }}>
+                        <td style={{ padding: '0.75rem 0.85rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
                           <span style={{
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '0.3rem',
-                            padding: '0.25rem 0.65rem',
+                            gap: '0.25rem',
+                            padding: '0.2rem 0.55rem',
                             borderRadius: '0.375rem',
-                            fontSize: '0.95rem',
+                            fontSize: '0.92rem',
                             fontWeight: 700,
                             fontFeatureSettings: '"tnum"',
                             background: isLow ? '#fef3f2' : item.remainingOnTruck === 0 ? '#f1f5f9' : '#ecfdf5',
                             color: isLow ? '#b91c1c' : item.remainingOnTruck === 0 ? '#64748b' : '#047857',
                             border: `1px solid ${isLow ? '#fecaca' : item.remainingOnTruck === 0 ? '#e2e8f0' : '#a7f3d0'}`
                           }}>
-                            {isLow && <BadgeAlert size={14} strokeWidth={2.5} />}
+                            {isLow && <BadgeAlert size={13} strokeWidth={2.5} />}
                             {item.remainingOnTruck}
                           </span>
                         </td>
@@ -697,18 +725,23 @@ export function SellerDashboard({
               </table>
             </div>
 
-            {/* Barra de resumen inferior */}
+            {/* Barra de resumen inferior con wrap seguro para no desbordar en móvil */}
             <div style={{
               display: 'flex',
+              flexWrap: 'wrap',
               justifyContent: 'space-between',
               alignItems: 'center',
-              padding: '0.75rem 1.15rem',
+              gap: '0.5rem',
+              padding: '0.75rem 1rem',
               background: '#f8fafc',
               borderTop: '1px solid #e2e8f0',
-              fontSize: '0.82rem'
+              fontSize: '0.82rem',
+              minWidth: 0,
+              width: '100%',
+              boxSizing: 'border-box'
             }}>
               <span style={{ color: '#64748b' }}>
-                Progreso total del camión: <strong>{progressPct}%</strong> ({totalSoldUnits} de {totalLoadedUnits} u.)
+                Progreso del camión: <strong>{progressPct}%</strong> ({totalSoldUnits} de {totalLoadedUnits} u.)
               </span>
               <span style={{ color: '#0f172a', fontWeight: 600 }}>
                 Restante a bordo: <strong style={{ color: '#047857', fontSize: '0.92rem' }}>{remainingTotalUnits} unidades</strong>
@@ -732,13 +765,18 @@ export function SellerDashboard({
         borderRadius: '0.65rem',
         marginBottom: '1.25rem',
         overflow: 'hidden',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
+        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+        minWidth: 0,
+        width: '100%',
+        boxSizing: 'border-box'
       }}>
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          padding: '0.85rem 1.15rem',
+          flexWrap: 'wrap',
+          gap: '0.5rem',
+          padding: '0.85rem 1rem',
           borderBottom: '1px solid #f1f5f9',
           background: '#f8fafc'
         }}>
@@ -753,22 +791,27 @@ export function SellerDashboard({
           </span>
         </div>
 
-        <div style={{ padding: '1.15rem' }}>
+        <div style={{ padding: '1rem', minWidth: 0 }}>
           {/* Tarjeta destacada: Efectivo en mano */}
           <div style={{
             background: '#f8fafc',
             border: '1px solid #e2e8f0',
             borderRadius: '0.5rem',
-            padding: '1rem 1.25rem',
+            padding: '1rem',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: '1rem'
+            flexWrap: 'wrap',
+            gap: '0.75rem',
+            marginBottom: '1rem',
+            minWidth: 0,
+            boxSizing: 'border-box'
           }}>
-            <div>
+            <div style={{ minWidth: 0, flex: '1 1 200px' }}>
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
+                flexWrap: 'wrap',
                 gap: '0.35rem',
                 fontSize: '0.78rem',
                 fontWeight: 600,
@@ -776,20 +819,21 @@ export function SellerDashboard({
                 textTransform: 'uppercase',
                 letterSpacing: '0.04em'
               }}>
-                <Banknote size={15} strokeWidth={2} style={{ color: '#059669' }} />
-                Efectivo en mano (A entregar en caja)
+                <Banknote size={15} strokeWidth={2} style={{ color: '#059669', flexShrink: 0 }} />
+                <span>Efectivo en mano (A entregar)</span>
               </div>
               <div style={{
-                fontSize: '1.85rem',
+                fontSize: '1.75rem',
                 fontWeight: 800,
                 color: '#0f172a',
                 fontFeatureSettings: '"tnum"',
                 letterSpacing: '-0.02em',
-                marginTop: '0.2rem'
+                marginTop: '0.2rem',
+                wordBreak: 'break-word'
               }}>
                 {money(cashInHand, dashboard.currencyCode)}
               </div>
-              <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '0.15rem' }}>
+              <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '0.15rem', wordBreak: 'break-word' }}>
                 {isSettled ? 'Liquidado oficialmente y depositado en caja' : 'Monto físico recaudado a rendir en liquidación'}
               </div>
             </div>
@@ -802,7 +846,8 @@ export function SellerDashboard({
               height: '44px',
               borderRadius: '0.5rem',
               background: '#ecfdf5',
-              color: '#059669'
+              color: '#059669',
+              flexShrink: 0
             }}>
               <Wallet size={22} strokeWidth={2} />
             </div>
@@ -811,62 +856,69 @@ export function SellerDashboard({
           {/* Desglose de cobros en fila */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-            gap: '0.75rem'
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))',
+            gap: '0.65rem',
+            minWidth: 0
           }}>
             {/* Total Vendido */}
             <div style={{
-              padding: '0.75rem 0.9rem',
+              padding: '0.75rem 0.85rem',
               background: '#ffffff',
               border: '1px solid #f1f5f9',
-              borderRadius: '0.45rem'
+              borderRadius: '0.45rem',
+              minWidth: 0,
+              boxSizing: 'border-box'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', color: '#64748b', marginBottom: '0.25rem' }}>
-                <Receipt size={13} strokeWidth={2} />
-                <span>Total Facturado Hoy</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.74rem', color: '#64748b', marginBottom: '0.25rem' }}>
+                <Receipt size={13} strokeWidth={2} style={{ flexShrink: 0 }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Total Facturado Hoy</span>
               </div>
-              <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0f172a', fontFeatureSettings: '"tnum"' }}>
+              <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', fontFeatureSettings: '"tnum"', wordBreak: 'break-word' }}>
                 {money(effectiveSalesToday, dashboard.currencyCode)}
               </div>
-              <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+              <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '0.1rem' }}>
                 Efectivo + Crédito + Transf.
               </div>
             </div>
 
             {/* Transferencias */}
             <div style={{
-              padding: '0.75rem 0.9rem',
+              padding: '0.75rem 0.85rem',
               background: '#ffffff',
               border: '1px solid #f1f5f9',
-              borderRadius: '0.45rem'
+              borderRadius: '0.45rem',
+              minWidth: 0,
+              boxSizing: 'border-box'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', color: '#64748b', marginBottom: '0.25rem' }}>
-                <ArrowRightLeft size={13} strokeWidth={2} />
-                <span>Transferencias Bancarias</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.74rem', color: '#64748b', marginBottom: '0.25rem' }}>
+                <ArrowRightLeft size={13} strokeWidth={2} style={{ flexShrink: 0 }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Transferencias Bancarias</span>
               </div>
-              <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0284c7', fontFeatureSettings: '"tnum"' }}>
+              <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0284c7', fontFeatureSettings: '"tnum"', wordBreak: 'break-word' }}>
                 {money(effectiveTransfers, dashboard.currencyCode)}
               </div>
-              <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+              <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '0.1rem' }}>
                 Acredita directo a cuenta
               </div>
             </div>
 
             {/* Crédito */}
             <div style={{
-              padding: '0.75rem 0.9rem',
+              padding: '0.75rem 0.85rem',
               background: '#ffffff',
               border: '1px solid #f1f5f9',
-              borderRadius: '0.45rem'
+              borderRadius: '0.45rem',
+              minWidth: 0,
+              boxSizing: 'border-box'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', color: '#64748b', marginBottom: '0.25rem' }}>
-                <CreditCard size={13} strokeWidth={2} />
-                <span>Ventas al Crédito</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.74rem', color: '#64748b', marginBottom: '0.25rem' }}>
+                <CreditCard size={13} strokeWidth={2} style={{ flexShrink: 0 }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Ventas al Crédito</span>
               </div>
-              <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#b45309', fontFeatureSettings: '"tnum"' }}>
+              <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#b45309', fontFeatureSettings: '"tnum"', wordBreak: 'break-word' }}>
                 {money(effectiveCredit, dashboard.currencyCode)}
               </div>
-              <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+              <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '0.1rem' }}>
                 Cuentas por cobrar
               </div>
             </div>
@@ -880,13 +932,18 @@ export function SellerDashboard({
         border: '1px solid #e2e8f0',
         borderRadius: '0.65rem',
         overflow: 'hidden',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
+        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+        minWidth: 0,
+        width: '100%',
+        boxSizing: 'border-box'
       }}>
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          padding: '0.85rem 1.15rem',
+          flexWrap: 'wrap',
+          gap: '0.5rem',
+          padding: '0.85rem 1rem',
           borderBottom: '1px solid #f1f5f9',
           background: '#f8fafc'
         }}>
@@ -914,7 +971,7 @@ export function SellerDashboard({
             </Link>
           </div>
         ) : (
-          <div>
+          <div style={{ minWidth: 0 }}>
             {sellerSales.slice(0, 8).map((sale, index) => {
               const saleTime = new Date(sale.createdAt).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' });
               return (
@@ -924,26 +981,27 @@ export function SellerDashboard({
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    padding: '0.75rem 1.15rem',
-                    borderBottom: index === Math.min(sellerSales.length, 8) - 1 ? 'none' : '1px solid #f1f5f9'
+                    gap: '0.75rem',
+                    padding: '0.75rem 1rem',
+                    borderBottom: index === Math.min(sellerSales.length, 8) - 1 ? 'none' : '1px solid #f1f5f9',
+                    minWidth: 0,
+                    boxSizing: 'border-box'
                   }}
                 >
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '0.88rem', color: '#0f172a' }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.88rem', color: '#0f172a', wordBreak: 'break-word' }}>
                       {sale.customerName}
                     </div>
-                    <div style={{ fontSize: '0.76rem', color: '#64748b', display: 'flex', gap: '0.45rem', marginTop: '0.15rem' }}>
+                    <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '0.15rem', lineHeight: 1.35 }}>
                       <span style={{ fontWeight: 500, color: '#334155' }}>{sale.documentNumber}</span>
-                      <span>·</span>
-                      <span>{saleTime}</span>
-                      <span>·</span>
-                      <span style={{ color: '#475569' }}>
+                      <span> · {saleTime}</span>
+                      <div style={{ color: '#475569', marginTop: '0.1rem', wordBreak: 'break-word' }}>
                         {sale.items.map(it => `${Number(it.presentationQuantity || it.quantityBaseUnits)}x ${it.productName}`).join(', ')}
-                      </span>
+                      </div>
                     </div>
                   </div>
 
-                  <div style={{ textAlign: 'right' }}>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
                     <div style={{
                       fontWeight: 700,
                       fontSize: '0.98rem',

@@ -476,16 +476,16 @@ export function AdminDashboard({
                   }}>
                     <div>
                       <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b' }}>Cargado</span>
-                      <strong style={{ fontSize: '0.95rem', color: '#334155', fontFeatureSettings: '"tnum"' }}>{totalLoadedUnits}</strong>
+                      <strong style={{ fontSize: '0.95rem', color: '#334155', fontFeatureSettings: '"tnum"' }}>{totalLoadedUnits} {unitLabel}</strong>
                     </div>
                     <div>
                       <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b' }}>Vendido</span>
-                      <strong style={{ fontSize: '0.95rem', color: '#0284c7', fontFeatureSettings: '"tnum"' }}>{totalSoldUnits}</strong>
+                      <strong style={{ fontSize: '0.95rem', color: '#0284c7', fontFeatureSettings: '"tnum"' }}>{totalSoldUnits} {unitLabel}</strong>
                     </div>
                     <div>
                       <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b' }}>En Camión</span>
                       <strong style={{ fontSize: '0.95rem', color: remainingOnTruck <= 10 && remainingOnTruck > 0 ? '#b91c1c' : '#047857', fontFeatureSettings: '"tnum"' }}>
-                        {remainingOnTruck}
+                        {remainingOnTruck} {unitLabel}
                       </strong>
                     </div>
                   </div>
