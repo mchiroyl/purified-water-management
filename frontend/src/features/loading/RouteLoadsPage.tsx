@@ -157,7 +157,17 @@ export function RouteLoadsPage({ canPrepare, canConfirmWarehouse, canReceive, ca
           {canCorrect && ['RECEIVED', 'STARTED'].includes(load.status) && <div className="correction-form"><h3>Corrección compensatoria</h3><select aria-label={`Producto corrección ${load.loadNumber}`} value={correction.productId} onChange={event => setCorrections({ ...corrections, [load.id]: { ...correction, productId: event.target.value } })}>{load.items.map(item => <option value={item.productId} key={item.id}>{item.productName}</option>)}</select><input aria-label={`Cantidad corrección ${load.loadNumber}`} type="number" step="0.0001" value={correction.quantityDelta} onChange={event => setCorrections({ ...corrections, [load.id]: { ...correction, quantityDelta: Number(event.target.value) } })} /><input aria-label={`Motivo corrección ${load.loadNumber}`} placeholder="Motivo obligatorio" value={correction.reason} onChange={event => setCorrections({ ...corrections, [load.id]: { ...correction, reason: event.target.value } })} /><button className="secondary" disabled={!correction.productId || correction.quantityDelta === 0 || !correction.reason} onClick={() => correct.mutate({ id: load.id, value: correction })}>Registrar corrección</button></div>}
           {load.corrections.length > 0 && <div className="data-list"><h3>Correcciones</h3>{load.corrections.map(item => <div className="data-row" key={item.id}><span>{item.productName} · {item.reason} · {item.actorUsername}</span><strong>{Number(item.quantityDelta) > 0 ? '+' : ''}{Number(item.quantityDelta).toLocaleString('es-GT')}</strong></div>)}</div>}
         </article>;
-      })}</div>{(locationError || transition.error || correct.error) && <div className="alert error">{locationError || (transition.error ?? correct.error)?.message}</div>}
+      })}</div>
+      {(locationError || transition.error || correct.error) && (
+        <div className="alert error">
+          <div>{locationError || (transition.error ?? correct.error)?.message}</div>
+          {transition.error?.message?.includes('distinto de quien entregó') && (
+            <div style={{ marginTop: '0.45rem', fontSize: '0.88rem', fontWeight: 500, color: '#991b1b' }}>
+              👉 <strong>Aviso de Doble Confirmación:</strong> La entrega física fue registrada por el usuario que despachó en bodega. Por regla de control y auditoría, la recepción debe ser confirmada por el <strong>vendedor asignado a la ruta</strong> iniciando sesión con su propia cuenta en su dispositivo.
+            </div>
+          )}
+        </div>
+      )}
     </section>
   </main>;
 }

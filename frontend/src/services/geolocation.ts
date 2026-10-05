@@ -44,7 +44,7 @@ export function captureCurrentLocation(
   }
 
   const targetAccuracy = options?.targetAccuracyMeters ?? TARGET_ACCURACY_METERS;
-  const maxWait = options?.maxWaitMs ?? MAX_WAIT_MS;
+  const maxWait = options?.maxWaitMs ?? 8_000;
 
   return new Promise((resolve, reject) => {
     let watchId: number | null = null;
@@ -59,6 +59,7 @@ export function captureCurrentLocation(
         watchId = null;
       }
       if (timeoutId) clearTimeout(timeoutId);
+      if (quickGraceTimeout) clearTimeout(quickGraceTimeout);
       if (tickerId) clearInterval(tickerId);
     };
 
@@ -76,6 +77,31 @@ export function captureCurrentLocation(
         accuracyMeters: best?.accuracyMeters ?? null,
       });
     }, 1000);
+
+    // Si pasaron 4 segundos y ya tenemos una lectura (aunque sea de 15-40m en bodega), resolver con ella
+    const quickGraceTimeout = setTimeout(() => {
+      if (settled) return;
+      if (best) {
+        finish(best);
+      } else if (typeof navigator.geolocation.getCurrentPosition === 'function') {
+        // Si a los 4s no hay fix de satélite, intentar lectura de red/WiFi directa
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            if (settled) return;
+            finish({
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude,
+              accuracyMeters: Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : null,
+              capturedAt: new Date().toISOString(),
+            });
+          },
+          () => {
+            // Si también falla, dejar que continúe hasta maxWait
+          },
+          { enableHighAccuracy: false, timeout: 3_000, maximumAge: 30_000 },
+        );
+      }
+    }, 4_000);
 
     const timeoutId = setTimeout(() => {
       if (settled) return;
