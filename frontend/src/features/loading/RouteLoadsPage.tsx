@@ -38,6 +38,7 @@ export function RouteLoadsPage({ canPrepare, canConfirmWarehouse, canReceive, ca
   const [locationError, setLocationError] = useState('');
   const [locationProgress, setLocationProgress] = useState('');
   const [isCapturingLocation, setIsCapturingLocation] = useState(false);
+  const [activeLoadId, setActiveLoadId] = useState<string | null>(null);
   const refresh = () => void client.invalidateQueries({ queryKey: ['route-loads'] });
   const [mapLoadId, setMapLoadId] = useState<string | null>(null);
   const routeMapQuery = useQuery({
@@ -53,7 +54,10 @@ export function RouteLoadsPage({ canPrepare, canConfirmWarehouse, canReceive, ca
     mutationFn: ({ id, action, body }: { id: string; action: string; body?: unknown }) => apiRequest<RouteLoad>(`/loads/${id}/${action}`, {
       method: 'POST', body: body === undefined ? undefined : JSON.stringify(body),
     }),
-    onSuccess: refresh
+    onSuccess: () => {
+      setActiveLoadId(null);
+      refresh();
+    }
   });
   const correct = useMutation({
     mutationFn: ({ id, value }: { id: string; value: CorrectionForm }) => apiRequest<RouteLoad>(`/loads/${id}/corrections`, { method: 'POST', body: JSON.stringify(value) }),
@@ -62,6 +66,7 @@ export function RouteLoadsPage({ canPrepare, canConfirmWarehouse, canReceive, ca
   const submit = (event: FormEvent) => { event.preventDefault(); create.mutate(); };
   const confirmReceipt = async (load: RouteLoad) => {
     setLocationError('');
+    setActiveLoadId(load.id);
     if (load.loadType === 'REPLENISHMENT') {
       transition.mutate({ id: load.id, action: 'receipt', body: {} });
       return;
@@ -147,6 +152,21 @@ export function RouteLoadsPage({ canPrepare, canConfirmWarehouse, canReceive, ca
             {load.status === 'RECEIVED' && canStart && load.loadType !== 'REPLENISHMENT' && <button className="primary" onClick={() => transition.mutate({ id: load.id, action: 'start' })}>Iniciar recorrido</button>}
             {load.status === 'STARTED' && <button type="button" className="secondary" onClick={() => setMapLoadId(prev => prev === load.id ? null : load.id)}>🗺 {mapLoadId === load.id ? 'Ocultar mi ruta' : 'Ver mi ruta'}</button>}
           </div>
+          {activeLoadId === load.id && (locationError || transition.error) && (
+            <div className="alert error" style={{ marginTop: '0.65rem', fontSize: '0.85rem' }}>
+              <div>❌ <strong>Error:</strong> {locationError || transition.error?.message}</div>
+              {transition.error?.message?.includes('Stock insuficiente') && (
+                <div style={{ marginTop: '0.4rem', fontSize: '0.82rem', color: '#991b1b', lineHeight: 1.4 }}>
+                  👉 <strong>Causa:</strong> No hay suficientes existencias en bodega física para despachar esta carga. Bodega debe registrar la producción o ajuste de entrada en el sistema antes de que el camión pueda salir.
+                </div>
+              )}
+              {transition.error?.message?.includes('distinto de quien entregó') && (
+                <div style={{ marginTop: '0.4rem', fontSize: '0.82rem', color: '#991b1b', lineHeight: 1.4 }}>
+                  👉 <strong>Doble confirmación obligatoria:</strong> La entrega física fue registrada por <strong>{load.warehouseConfirmedByUsername}</strong>. El vendedor de la ruta debe confirmar la recepción iniciando sesión con su propia cuenta.
+                </div>
+              )}
+            </div>
+          )}
           {mapLoadId === load.id && (
             <div style={{ marginTop: '1rem' }}>
               {routeMapQuery.isLoading && <p className="muted">Cargando mapa…</p>}
@@ -158,9 +178,14 @@ export function RouteLoadsPage({ canPrepare, canConfirmWarehouse, canReceive, ca
           {load.corrections.length > 0 && <div className="data-list"><h3>Correcciones</h3>{load.corrections.map(item => <div className="data-row" key={item.id}><span>{item.productName} · {item.reason} · {item.actorUsername}</span><strong>{Number(item.quantityDelta) > 0 ? '+' : ''}{Number(item.quantityDelta).toLocaleString('es-GT')}</strong></div>)}</div>}
         </article>;
       })}</div>
-      {(locationError || transition.error || correct.error) && (
+      {!activeLoadId && (locationError || transition.error || correct.error) && (
         <div className="alert error">
           <div>{locationError || (transition.error ?? correct.error)?.message}</div>
+          {transition.error?.message?.includes('Stock insuficiente') && (
+            <div style={{ marginTop: '0.45rem', fontSize: '0.88rem', fontWeight: 500, color: '#991b1b' }}>
+              👉 <strong>Causa:</strong> No hay suficientes existencias en bodega física para despachar esta carga. Bodega debe registrar la producción o ajuste de entrada en el sistema antes de que el camión pueda salir.
+            </div>
+          )}
           {transition.error?.message?.includes('distinto de quien entregó') && (
             <div style={{ marginTop: '0.45rem', fontSize: '0.88rem', fontWeight: 500, color: '#991b1b' }}>
               👉 <strong>Aviso de Doble Confirmación:</strong> La entrega física fue registrada por el usuario que despachó en bodega. Por regla de control y auditoría, la recepción debe ser confirmada por el <strong>vendedor asignado a la ruta</strong> iniciando sesión con su propia cuenta en su dispositivo.

@@ -64,7 +64,8 @@ public class InventoryApplicationService {
             throw validation("INVENTORY_PRODUCT_NOT_FOUND", "No se encontró el producto activo.");
         }
         var current = persistence.lockBalance(request.locationId(), request.productId());
-        var balanceAfter = InventoryStockPolicy.balanceAfter(current.quantityBaseUnits(), request.quantityDelta());
+        var balanceAfter = InventoryStockPolicy.balanceAfter(current.quantityBaseUnits(), request.quantityDelta(),
+                current.productName(), current.baseUnitCode());
         String type = request.quantityDelta().signum() > 0 ? "ADJUSTMENT_IN" : "ADJUSTMENT_OUT";
         var movement = new InventoryPort.NewMovement(UUID.randomUUID(), request.locationId(), request.productId(),
                 type, request.quantityDelta(), current.quantityBaseUnits(), balanceAfter, request.reason().trim(),
@@ -93,8 +94,10 @@ public class InventoryApplicationService {
         }
         var source = first.locationId().equals(sourceLocationId) ? first : second;
         var target = first.locationId().equals(targetLocationId) ? first : second;
-        var sourceAfter = InventoryStockPolicy.balanceAfter(source.quantityBaseUnits(), quantity.negate());
-        var targetAfter = InventoryStockPolicy.balanceAfter(target.quantityBaseUnits(), quantity);
+        var sourceAfter = InventoryStockPolicy.balanceAfter(source.quantityBaseUnits(), quantity.negate(),
+                source.productName(), source.baseUnitCode());
+        var targetAfter = InventoryStockPolicy.balanceAfter(target.quantityBaseUnits(), quantity,
+                target.productName(), target.baseUnitCode());
         persistence.storeMovement(new InventoryPort.NewMovement(UUID.randomUUID(), sourceLocationId, productId,
                 outgoingType, quantity.negate(), source.quantityBaseUnits(), sourceAfter, reason, referenceType,
                 referenceId, actorId, deviceId), source.version());
@@ -110,7 +113,8 @@ public class InventoryApplicationService {
             throw validation("INVENTORY_CONSUMPTION_QUANTITY", "La cantidad descontada debe ser mayor que cero.");
         }
         var current = persistence.lockBalance(locationId, productId);
-        var balanceAfter = InventoryStockPolicy.balanceAfter(current.quantityBaseUnits(), quantity.negate());
+        var balanceAfter = InventoryStockPolicy.balanceAfter(current.quantityBaseUnits(), quantity.negate(),
+                current.productName(), current.baseUnitCode());
         persistence.storeMovement(new InventoryPort.NewMovement(UUID.randomUUID(), locationId, productId,
                 movementType, quantity.negate(), current.quantityBaseUnits(), balanceAfter, reason, referenceType,
                 referenceId, actorId, deviceId), current.version());

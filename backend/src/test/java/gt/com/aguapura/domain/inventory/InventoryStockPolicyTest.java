@@ -24,6 +24,12 @@ class InventoryStockPolicyTest {
                 new BigDecimal("3"), new BigDecimal("-3.0001")))
                 .isInstanceOf(BusinessException.class)
                 .extracting("code").isEqualTo("INSUFFICIENT_STOCK");
+
+        assertThatThrownBy(() -> InventoryStockPolicy.balanceAfter(
+                new BigDecimal("245"), new BigDecimal("-400"), "Fardo", "FARDO"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("Stock insuficiente para Fardo: se requieren 400 FARDO pero solo hay 245 FARDO en bodega.")
+                .extracting("code").isEqualTo("INSUFFICIENT_STOCK");
     }
 
     @Test
