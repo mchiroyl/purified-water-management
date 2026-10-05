@@ -10,6 +10,11 @@ public final class InventoryStockPolicy {
     }
 
     public static BigDecimal balanceAfter(BigDecimal currentBalance, BigDecimal quantityDelta) {
+        return balanceAfter(currentBalance, quantityDelta, null, null);
+    }
+
+    public static BigDecimal balanceAfter(BigDecimal currentBalance, BigDecimal quantityDelta,
+                                          String productName, String unitCode) {
         if (currentBalance == null || currentBalance.signum() < 0) {
             throw new IllegalArgumentException("El saldo actual no puede ser negativo.");
         }
@@ -19,8 +24,17 @@ public final class InventoryStockPolicy {
         }
         BigDecimal result = currentBalance.add(quantityDelta);
         if (result.signum() < 0) {
-            throw new BusinessException("INSUFFICIENT_STOCK",
-                    "La operación dejaría existencias negativas.", ErrorCategory.CONFLICT);
+            String message;
+            if (productName != null && !productName.isBlank()) {
+                BigDecimal required = quantityDelta.abs().stripTrailingZeros();
+                BigDecimal available = currentBalance.stripTrailingZeros();
+                String unit = (unitCode != null && !unitCode.isBlank()) ? " " + unitCode : "";
+                message = String.format("Stock insuficiente para %s: se requieren %s%s pero solo hay %s%s en bodega.",
+                        productName, required.toPlainString(), unit, available.toPlainString(), unit);
+            } else {
+                message = "La operación dejaría existencias negativas.";
+            }
+            throw new BusinessException("INSUFFICIENT_STOCK", message, ErrorCategory.CONFLICT);
         }
         return result.stripTrailingZeros();
     }
