@@ -57,6 +57,9 @@ export function RouteLoadsPage({ canPrepare, canConfirmWarehouse, canReceive, ca
     onSuccess: () => {
       setActiveLoadId(null);
       refresh();
+    },
+    onError: () => {
+      refresh();
     }
   });
   const correct = useMutation({
@@ -149,7 +152,19 @@ export function RouteLoadsPage({ canPrepare, canConfirmWarehouse, canReceive, ca
                 )}
               </div>
             )}
-            {load.status === 'RECEIVED' && canStart && load.loadType !== 'REPLENISHMENT' && <button className="primary" onClick={() => transition.mutate({ id: load.id, action: 'start' })}>Iniciar recorrido</button>}
+            {load.status === 'RECEIVED' && canStart && load.loadType !== 'REPLENISHMENT' && (
+              <button
+                className="primary"
+                disabled={transition.isPending && activeLoadId === load.id}
+                onClick={() => {
+                  setLocationError('');
+                  setActiveLoadId(load.id);
+                  transition.mutate({ id: load.id, action: 'start' });
+                }}
+              >
+                {transition.isPending && activeLoadId === load.id ? 'Iniciando recorrido…' : 'Iniciar recorrido'}
+              </button>
+            )}
             {load.status === 'STARTED' && <button type="button" className="secondary" onClick={() => setMapLoadId(prev => prev === load.id ? null : load.id)}>🗺 {mapLoadId === load.id ? 'Ocultar mi ruta' : 'Ver mi ruta'}</button>}
           </div>
           {activeLoadId === load.id && (locationError || transition.error) && (

@@ -131,6 +131,9 @@ public class RouteLoadApplicationService {
         if ("REPLENISHMENT".equals(load.loadType())) {
             throw conflict("REPLENISHMENT_CANNOT_START", "Una recarga se recibe dentro del recorrido y no inicia otro recorrido.");
         }
+        if ("STARTED".equals(load.status())) {
+            return response(load);
+        }
         RouteLoadWorkflow.start(load.status());
         return response(persistence.start(id, actorId, deviceId));
     }

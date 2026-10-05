@@ -25,6 +25,9 @@ public final class RouteLoadWorkflow {
     }
 
     public static String start(String currentStatus) {
+        if ("STARTED".equals(currentStatus)) {
+            return "STARTED";
+        }
         require(currentStatus, "RECEIVED");
         return "STARTED";
     }
@@ -32,7 +35,8 @@ public final class RouteLoadWorkflow {
     private static void require(String currentStatus, String expectedStatus) {
         if (!expectedStatus.equals(currentStatus)) {
             throw new BusinessException("INVALID_LOAD_STATUS",
-                    "La carga no se encuentra en el estado requerido para esta operación.", ErrorCategory.CONFLICT);
+                    String.format("La carga se encuentra en estado '%s' pero se requiere '%s' para esta operación.",
+                            currentStatus, expectedStatus), ErrorCategory.CONFLICT);
         }
     }
 }
