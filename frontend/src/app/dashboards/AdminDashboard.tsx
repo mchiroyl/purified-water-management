@@ -385,10 +385,6 @@ export function AdminDashboard({
             padding: '1.15rem'
           }}>
             {activeOrTodayLoads.map(load => {
-              const totalLoadedUnits = load.items.reduce((acc, it) => acc + Number(it.quantityBaseUnits || 0), 0);
-              const firstItem = load.items[0];
-              const unitLabel = firstItem?.baseUnitCode ?? 'unidades';
-
               const loadStartTime = load.startedAt || load.sellerReceivedAt || load.createdAt;
               const routeSales = sales.filter(s => {
                 if (s.routeId !== load.routeId && s.routeCode !== load.routeCode) return false;
@@ -401,13 +397,32 @@ export function AdminDashboard({
                 return true;
               });
               const totalSalesQ = routeSales.reduce((acc, s) => acc + Number(s.total || 0), 0);
-              const totalSoldUnits = routeSales.reduce((acc, s) => {
-                return acc + (s.items?.reduce((iAcc, item) => iAcc + Number(item.quantityBaseUnits || 0), 0) || 0);
-              }, 0);
 
-              const cappedSoldUnits = Math.min(totalLoadedUnits, totalSoldUnits);
-              const remainingOnTruck = Math.max(0, totalLoadedUnits - cappedSoldUnits);
+              const itemsBreakdown = load.items.map(it => {
+                const loaded = Number(it.quantityBaseUnits || 0);
+                const soldForProduct = routeSales.reduce((acc, s) => {
+                  const matchingItems = s.items?.filter(si =>
+                    si.productName?.toLowerCase().trim() === it.productName?.toLowerCase().trim()
+                  ) ?? [];
+                  return acc + matchingItems.reduce((mAcc, mi) => mAcc + Number(mi.quantityBaseUnits || 0), 0);
+                }, 0);
+                const sold = Math.min(loaded, soldForProduct);
+                const remaining = Math.max(0, loaded - sold);
+                return {
+                  id: it.id,
+                  productName: it.productName,
+                  unitLabel: it.baseUnitCode || 'unidades',
+                  loaded,
+                  sold,
+                  remaining
+                };
+              });
+
+              const totalLoadedUnits = itemsBreakdown.reduce((acc, it) => acc + it.loaded, 0);
+              const totalSoldUnits = itemsBreakdown.reduce((acc, it) => acc + it.sold, 0);
+              const remainingOnTruck = Math.max(0, totalLoadedUnits - totalSoldUnits);
               const progressPct = totalLoadedUnits > 0 ? Math.min(100, Math.round((totalSoldUnits / totalLoadedUnits) * 100)) : 0;
+              const unitSummary = itemsBreakdown.length === 1 ? itemsBreakdown[0].unitLabel : 'unidades';
 
               const isStarted = load.status === 'STARTED';
               const isReceived = load.status === 'RECEIVED';
@@ -458,37 +473,83 @@ export function AdminDashboard({
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b', marginBottom: '0.3rem' }}>
                       <span>Progreso de venta</span>
-                      <strong>{progressPct}% ({totalSoldUnits} de {totalLoadedUnits} {unitLabel})</strong>
+                      <strong>{progressPct}% ({totalSoldUnits} de {totalLoadedUnits} {unitSummary})</strong>
                     </div>
                     <div style={{ width: '100%', height: '6px', background: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
                       <div style={{ width: `${progressPct}%`, height: '100%', background: '#0284c7' }} />
                     </div>
                   </div>
 
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(3, 1fr)',
-                    gap: '0.5rem',
-                    background: '#f8fafc',
-                    padding: '0.6rem 0.75rem',
-                    borderRadius: '0.45rem',
-                    textAlign: 'center'
-                  }}>
-                    <div>
-                      <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b' }}>Cargado</span>
-                      <strong style={{ fontSize: '0.95rem', color: '#334155', fontFeatureSettings: '"tnum"' }}>{totalLoadedUnits} {unitLabel}</strong>
+                  {itemsBreakdown.length > 1 ? (
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.35rem',
+                      background: '#f8fafc',
+                      padding: '0.6rem 0.75rem',
+                      borderRadius: '0.45rem',
+                      fontSize: '0.78rem'
+                    }}>
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: '2fr 1fr 1fr 1fr',
+                        color: '#64748b',
+                        fontWeight: 600,
+                        borderBottom: '1px solid #e2e8f0',
+                        paddingBottom: '0.25rem'
+                      }}>
+                        <span>Producto</span>
+                        <span style={{ textAlign: 'center' }}>Cargado</span>
+                        <span style={{ textAlign: 'center' }}>Vendido</span>
+                        <span style={{ textAlign: 'center' }}>En Camión</span>
+                      </div>
+                      {itemsBreakdown.map(b => (
+                        <div key={b.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', alignItems: 'center', gap: '0.2rem' }}>
+                          <span style={{ fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={b.productName}>
+                            {b.productName}
+                          </span>
+                          <span style={{ textAlign: 'center', color: '#334155' }}>
+                            {b.loaded} <small style={{ color: '#64748b', fontSize: '0.7rem' }}>{b.unitLabel}</small>
+                          </span>
+                          <span style={{ textAlign: 'center', color: '#0284c7', fontWeight: 600 }}>
+                            {b.sold}
+                          </span>
+                          <span style={{ textAlign: 'center', color: b.remaining <= 10 && b.remaining > 0 ? '#b91c1c' : '#047857', fontWeight: 600 }}>
+                            {b.remaining}
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                    <div>
-                      <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b' }}>Vendido</span>
-                      <strong style={{ fontSize: '0.95rem', color: '#0284c7', fontFeatureSettings: '"tnum"' }}>{totalSoldUnits} {unitLabel}</strong>
+                  ) : (
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(3, 1fr)',
+                      gap: '0.5rem',
+                      background: '#f8fafc',
+                      padding: '0.6rem 0.75rem',
+                      borderRadius: '0.45rem',
+                      textAlign: 'center'
+                    }}>
+                      <div>
+                        <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b' }}>Cargado</span>
+                        <strong style={{ fontSize: '0.95rem', color: '#334155', fontFeatureSettings: '"tnum"' }}>
+                          {itemsBreakdown[0]?.loaded ?? 0} {itemsBreakdown[0]?.unitLabel ?? 'unidades'}
+                        </strong>
+                      </div>
+                      <div>
+                        <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b' }}>Vendido</span>
+                        <strong style={{ fontSize: '0.95rem', color: '#0284c7', fontFeatureSettings: '"tnum"' }}>
+                          {itemsBreakdown[0]?.sold ?? 0} {itemsBreakdown[0]?.unitLabel ?? 'unidades'}
+                        </strong>
+                      </div>
+                      <div>
+                        <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b' }}>En Camión</span>
+                        <strong style={{ fontSize: '0.95rem', color: (itemsBreakdown[0]?.remaining ?? 0) <= 10 && (itemsBreakdown[0]?.remaining ?? 0) > 0 ? '#b91c1c' : '#047857', fontFeatureSettings: '"tnum"' }}>
+                          {itemsBreakdown[0]?.remaining ?? 0} {itemsBreakdown[0]?.unitLabel ?? 'unidades'}
+                        </strong>
+                      </div>
                     </div>
-                    <div>
-                      <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b' }}>En Camión</span>
-                      <strong style={{ fontSize: '0.95rem', color: remainingOnTruck <= 10 && remainingOnTruck > 0 ? '#b91c1c' : '#047857', fontFeatureSettings: '"tnum"' }}>
-                        {remainingOnTruck} {unitLabel}
-                      </strong>
-                    </div>
-                  </div>
+                  )}
 
                   <div style={{
                     display: 'flex',
