@@ -161,6 +161,10 @@ public class JdbcRouteLoadAdapter implements RouteLoadPort {
 
     @Override
     public LoadView start(UUID id, UUID actorId, UUID deviceId) {
+        var current = findLoad(id);
+        if ("STARTED".equals(current.status())) {
+            return current;
+        }
         updateStatus("""
                 UPDATE route_load SET status='STARTED',started_by=:actorId,started_device_id=:deviceId,
                     started_at=now(),version=version+1 WHERE id=:id AND status='RECEIVED'

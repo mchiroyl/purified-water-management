@@ -18,6 +18,7 @@ class RouteLoadWorkflowTest {
         assertThat(RouteLoadWorkflow.confirmReceipt("WAREHOUSE_CONFIRMED", warehouseActor, sellerActor))
                 .isEqualTo("RECEIVED");
         assertThat(RouteLoadWorkflow.start("RECEIVED")).isEqualTo("STARTED");
+        assertThat(RouteLoadWorkflow.start("STARTED")).isEqualTo("STARTED");
     }
 
     @Test
