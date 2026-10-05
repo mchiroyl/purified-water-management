@@ -36,6 +36,7 @@ export function RouteLoadsPage({ canPrepare, canConfirmWarehouse, canReceive, ca
   const [items, setItems] = useState<ItemForm[]>([{ productId: '', quantityBaseUnits: 1 }]);
   const [corrections, setCorrections] = useState<Record<string, CorrectionForm>>({});
   const [locationError, setLocationError] = useState('');
+  const [locationProgress, setLocationProgress] = useState('');
   const [isCapturingLocation, setIsCapturingLocation] = useState(false);
   const refresh = () => void client.invalidateQueries({ queryKey: ['route-loads'] });
   const [mapLoadId, setMapLoadId] = useState<string | null>(null);
@@ -66,10 +67,21 @@ export function RouteLoadsPage({ canPrepare, canConfirmWarehouse, canReceive, ca
       return;
     }
     setIsCapturingLocation(true);
+    setLocationProgress('Buscando GPS…');
     try {
-      const location = await captureCurrentLocation('registrar la recepción de la carga');
+      const location = await captureCurrentLocation('registrar la recepción de la carga', {
+        onProgress: (p) => {
+          if (p.accuracyMeters !== null) {
+            setLocationProgress(p.accuracyMeters <= 10 ? '¡Precisión alcanzada!' : `GPS: ±${Math.round(p.accuracyMeters)}m (buscando ≤10m) [${p.elapsedSeconds}s]`);
+          } else {
+            setLocationProgress(`Buscando GPS (${p.elapsedSeconds}s)…`);
+          }
+        },
+      });
+      setLocationProgress('');
       transition.mutate({ id: load.id, action: 'receipt', body: { location } });
     } catch (error) {
+      setLocationProgress('');
       setLocationError(error instanceof Error ? error.message : 'No fue posible obtener la ubicación.');
     } finally {
       setIsCapturingLocation(false);
@@ -120,7 +132,18 @@ export function RouteLoadsPage({ canPrepare, canConfirmWarehouse, canReceive, ca
           <div className="form-actions">
             {load.status === 'PREPARED' && canConfirmWarehouse && <button className="primary" onClick={() => transition.mutate({ id: load.id, action: 'warehouse-confirmation' })}>Confirmar entrega de bodega</button>}
             {load.status === 'PREPARED' && !canConfirmWarehouse && <span style={{ fontSize: '0.88rem', color: '#b45309', fontWeight: 600, padding: '0.4rem 0' }}>⏳ Esperando que Bodega confirme la entrega</span>}
-            {load.status === 'WAREHOUSE_CONFIRMED' && canReceive && <button className="primary" disabled={isCapturingLocation || transition.isPending} onClick={() => void confirmReceipt(load)}>{isCapturingLocation ? 'Obteniendo ubicación…' : 'Confirmar recepción'}</button>}
+            {load.status === 'WAREHOUSE_CONFIRMED' && canReceive && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                <button className="primary" disabled={isCapturingLocation || transition.isPending} onClick={() => void confirmReceipt(load)}>
+                  {isCapturingLocation ? (locationProgress || 'Obteniendo ubicación…') : 'Confirmar recepción'}
+                </button>
+                {isCapturingLocation && (
+                  <span style={{ fontSize: '0.82rem', color: '#4b5563' }}>
+                    📡 Obteniendo coordenadas. Si está dentro de bodega con techo de lámina, acérquese a la puerta o salida.
+                  </span>
+                )}
+              </div>
+            )}
             {load.status === 'RECEIVED' && canStart && load.loadType !== 'REPLENISHMENT' && <button className="primary" onClick={() => transition.mutate({ id: load.id, action: 'start' })}>Iniciar recorrido</button>}
             {load.status === 'STARTED' && <button type="button" className="secondary" onClick={() => setMapLoadId(prev => prev === load.id ? null : load.id)}>🗺 {mapLoadId === load.id ? 'Ocultar mi ruta' : 'Ver mi ruta'}</button>}
           </div>
