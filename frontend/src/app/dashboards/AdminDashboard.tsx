@@ -16,6 +16,7 @@ import {
   Package,
 } from 'lucide-react';
 import { PageHeader } from '../PageHeader';
+import { StackedSalesChart } from './StackedSalesChart';
 
 type DashboardAlert = { code: string; severity: string; title: string; count: number };
 type Dashboard = {
@@ -340,6 +341,9 @@ export function AdminDashboard({
           </div>
         </article>
       </div>
+
+      {/* Gráfica de Líneas Apiladas: Tendencias Históricas y Récords de Ventas */}
+      <StackedSalesChart sales={sales} currencyCode={data.currencyCode} />
 
       {/* 1. MONITOR DE RUTAS Y VENDEDORES EN VIVO */}
       <section className="panel section-panel" style={{

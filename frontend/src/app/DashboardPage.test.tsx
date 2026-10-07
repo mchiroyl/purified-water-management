@@ -84,7 +84,7 @@ describe('DashboardPage', () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByText('Ruta Retalhuleu')).toBeInTheDocument();
+    expect((await screen.findAllByText('Ruta Retalhuleu'))[0]).toBeInTheDocument();
     expect(screen.getAllByText(/amartinez/i)[0]).toBeInTheDocument();
     expect(screen.getByText('100 GARRAFON')).toBeInTheDocument();
     expect(screen.getByText('30 GARRAFON')).toBeInTheDocument();
