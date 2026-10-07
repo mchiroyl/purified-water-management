@@ -35,53 +35,60 @@ const mockSales: ChartSale[] = [
   },
 ];
 
-describe('StackedSalesChart', () => {
+describe('StackedSalesChart - Línea del Tiempo', () => {
   it('renderiza mensaje adecuado cuando no hay ventas', () => {
     render(<StackedSalesChart sales={[]} />);
     expect(screen.getByText(/No hay ventas registradas suficientes/i)).toBeInTheDocument();
   });
 
-  it('renderiza título, filtros y tarjetas de picos con ventas existentes', () => {
+  it('renderiza por defecto la línea del tiempo con tarjetas secuenciales de hitos', () => {
     render(<StackedSalesChart sales={mockSales} />);
 
-    // Título y filtros
-    expect(screen.getByText('Tendencias Históricas y Récords de Ventas')).toBeInTheDocument();
-    expect(screen.getByText('Días')).toBeInTheDocument();
-    expect(screen.getByText('Semanas')).toBeInTheDocument();
-    expect(screen.getByText('Meses')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Por Rutas/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Por Vendedor/i })).toBeInTheDocument();
+    // Título y selector de vista
+    expect(screen.getByText('Línea del Tiempo de Ventas y Récords')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Línea del Tiempo/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Gráfica de Área/i })).toBeInTheDocument();
 
-    // Récords (el día con más venta fue el 04 de Octubre con 2400 + 1450 = 3850)
+    // Controles de navegación de la cinta cronológica
+    expect(screen.getByRole('button', { name: /Anterior/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Siguiente/i })).toBeInTheDocument();
+
+    // Récords del período superior
     expect(screen.getByText(/período récord/i)).toBeInTheDocument();
-    expect(screen.getByText('Q3,850.00')).toBeInTheDocument();
+    expect(screen.getAllByText('Q3,850.00').length).toBeGreaterThan(0);
 
-    // Ruta líder es Ruta San José (2400 + 1200 = 3600)
+    // En las tarjetas secuenciales se identifican las rutas y los vendedores destacados
     expect(screen.getAllByText('Ruta San José').length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Q3,600.00/).length).toBeGreaterThan(0);
-  });
-
-  it('permite alternar dimensión a Por Vendedor', () => {
-    render(<StackedSalesChart sales={mockSales} />);
-
-    const sellerBtn = screen.getByRole('button', { name: /Por Vendedor/i });
-    fireEvent.click(sellerBtn);
-
-    // Debe mostrar la etiqueta de Vendedor Top
-    expect(screen.getByText(/vendedor top/i)).toBeInTheDocument();
-    // Vendedor líder es Carlos Gómez
     expect(screen.getAllByText('Carlos Gómez').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/DÍA PICO/i).length).toBeGreaterThan(0);
   });
 
-  it('permite alternar escalas de tiempo (Semanas y Meses)', () => {
+  it('permite alternar entre Línea del Tiempo y Gráfica de Área', () => {
     render(<StackedSalesChart sales={mockSales} />);
 
+    const chartBtn = screen.getByRole('button', { name: /Gráfica de Área/i });
+    fireEvent.click(chartBtn);
+
+    // En vista gráfica se renderiza el subtítulo y el SVG
+    expect(screen.getByText(/Gráfica de líneas y áreas apiladas/i)).toBeInTheDocument();
+
+    // Regresar a Línea del Tiempo
+    const timelineBtn = screen.getByRole('button', { name: /Línea del Tiempo/i });
+    fireEvent.click(timelineBtn);
+    expect(screen.getByText(/Cinta cronológica secuencial/i)).toBeInTheDocument();
+  });
+
+  it('permite alternar dimensión y escala temporal', () => {
+    render(<StackedSalesChart sales={mockSales} />);
+
+    // Cambiar a Semanas
     const semanasBtn = screen.getByText('Semanas');
     fireEvent.click(semanasBtn);
     expect(screen.getByText(/Promedio por Semana/i)).toBeInTheDocument();
 
-    const mesesBtn = screen.getByText('Meses');
-    fireEvent.click(mesesBtn);
-    expect(screen.getByText(/Promedio por Mes/i)).toBeInTheDocument();
+    // Cambiar dimensión a Por Vendedor
+    const sellerBtn = screen.getByRole('button', { name: /Por Vendedor/i });
+    fireEvent.click(sellerBtn);
+    expect(screen.getByText(/vendedor top/i)).toBeInTheDocument();
   });
 });
