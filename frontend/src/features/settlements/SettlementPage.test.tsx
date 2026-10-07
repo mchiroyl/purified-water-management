@@ -31,9 +31,9 @@ describe('SettlementPage', () => {
     </QueryClientProvider>);
 
     expect(screen.getByRole('heading', { name: 'Liquidaciones' })).toBeInTheDocument();
-    expect(await screen.findByText('Diferencia monetaria')).toBeInTheDocument();
-    expect(screen.getAllByText('Q200.00')[0]).toBeInTheDocument();
-    expect(screen.getByText(/100 − 60 − 38 − 2 = 0/)).toBeInTheDocument();
+    expect(await screen.findByText(/Faltante Q200.00/)).toBeInTheDocument();
+    expect(screen.getByText('Agua')).toBeInTheDocument();
+    expect(screen.getByText('Conciliación Física de Inventario')).toBeInTheDocument();
     expect(screen.getByText(/Existen operaciones pendientes de sincronización/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /cerrar liquidación/i })).toBeDisabled();
   });
@@ -61,13 +61,13 @@ describe('SettlementPage', () => {
       <SettlementPage canClose canReceiveCash />
     </QueryClientProvider>);
 
-    expect(await screen.findByText('Productos Vendidos por Precio')).toBeInTheDocument();
+    expect(await screen.findByText(/Productos Vendidos por Precio/)).toBeInTheDocument();
     expect(screen.getByText('Fardo 500ml')).toBeInTheDocument();
     expect(screen.getByText('Total: 25 und · Q110.00')).toBeInTheDocument();
-    expect(screen.getByText('a Q5.00 c/u')).toBeInTheDocument();
-    expect(screen.getByText('a Q4.00 c/u')).toBeInTheDocument();
+    expect(screen.getByText(/a Q5.00 c\/u/)).toBeInTheDocument();
+    expect(screen.getByText(/a Q4.00 c\/u/)).toBeInTheDocument();
     expect(screen.getByText('Garrafón 20L')).toBeInTheDocument();
     expect(screen.getByText('Total: 4 und · Q40.00')).toBeInTheDocument();
-    expect(screen.getByText('a Q10.00 c/u')).toBeInTheDocument();
+    expect(screen.getByText(/a Q10.00 c\/u/)).toBeInTheDocument();
   });
 });

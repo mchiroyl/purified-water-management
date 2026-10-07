@@ -305,20 +305,20 @@ public class JdbcSettlementAdapter implements SettlementPort {
                 .param("id", item.routeLoadId()).query((rs, row) -> cashRow(rs)).list();
         var salesByPrice = jdbc.sql("""
                 SELECT p.id product_id, p.code product_code, p.name product_name,
-                       pp.name presentation_name, si.unit_price,
+                       COALESCE(pp.name, p.name) presentation_name, si.unit_price,
                        SUM(si.presentation_quantity) quantity_sold,
                        SUM(si.line_total) total_amount
                 FROM route_load rl
                 JOIN sale s ON s.route_id = rl.route_id
                 JOIN sale_item si ON si.sale_id = s.id
                 JOIN product p ON p.id = si.product_id
-                JOIN product_presentation pp ON pp.id = si.presentation_id
+                LEFT JOIN product_presentation pp ON pp.id = si.presentation_id
                 WHERE rl.id = :loadId
                   AND s.status = 'CONFIRMED'
                   AND NOT EXISTS (SELECT 1 FROM annulment_request ar WHERE ar.sale_id = s.id AND ar.status = 'APPROVED')
                   AND s.created_at >= rl.started_at
                   AND s.created_at <= COALESCE((SELECT closed_at FROM settlement WHERE route_load_id = rl.id), now())
-                GROUP BY p.id, p.code, p.name, pp.name, si.unit_price
+                GROUP BY p.id, p.code, p.name, COALESCE(pp.name, p.name), si.unit_price
                 ORDER BY p.name, si.unit_price DESC
                 """).param("loadId", item.routeLoadId())
                 .query((rs, row) -> new SalePriceBreakdown(
