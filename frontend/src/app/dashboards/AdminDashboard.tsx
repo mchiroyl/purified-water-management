@@ -17,10 +17,10 @@ import {
   FileText,
   DollarSign,
   ArrowRight,
-  Package,
 } from 'lucide-react';
 import { PageHeader } from '../PageHeader';
-import { StackedSalesChart } from './StackedSalesChart';
+import { SalesRankingChart, DebtorChart, LoanedGarrafonsChart } from './GerentialCharts';
+import type { ChartSale, RouteBalance } from './GerentialCharts';
 
 type DashboardAlert = { code: string; severity: string; title: string; count: number };
 type Dashboard = {
@@ -190,7 +190,6 @@ export function AdminDashboard({
   // 5. Métricas de efectividad de recaudación
   const cashRecPct = data.expectedCash > 0 ? Math.min(100, Math.round((data.deliveredCash / data.expectedCash) * 100)) : 100;
   const creditPct = data.salesToday > 0 ? Math.round((data.credit / data.salesToday) * 100) : 0;
-  const recentSales = sales.slice(0, 5);
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
@@ -614,8 +613,47 @@ export function AdminDashboard({
         </div>
       </section>
 
-      {/* 4. LÍNEA DEL TIEMPO Y TENDENCIAS HISTÓRICAS DE VENTAS */}
-      <StackedSalesChart sales={sales} currencyCode={data.currencyCode} />
+      {/* 4. DASHBOARD GERENCIAL DE GRÁFICAS DE BARRAS */}
+      {(() => {
+        // Build RouteBalance array from route locations
+        const routeBalances: RouteBalance[] = routeLocations.map(loc => ({
+          routeId: loc.id,
+          routeCode: loc.routeCode ?? loc.code,
+          routeName: loc.routeName ?? loc.name,
+          sellerName: activeOrTodayLoads.find(l => l.routeId === loc.routeId || l.routeCode === loc.routeCode)?.sellerReceivedByUsername,
+          products: (loc.balances ?? []).map(b => ({
+            productName: b.productName,
+            qty: Number(b.quantityBaseUnits || 0),
+          })).filter(p => p.qty > 0),
+        })).filter(r => r.products.length > 0);
+
+        // Cast sales to ChartSale (compatible subset)
+        const chartSales: ChartSale[] = sales.map(s => ({
+          id: s.id,
+          routeCode: s.routeCode,
+          routeName: s.routeName,
+          sellerName: s.sellerName,
+          total: s.total,
+          createdAt: s.createdAt,
+        }));
+
+        return (
+          <div style={{ marginBottom: '1.5rem' }}>
+            {/* Row 1: Ranking Vendedores + Cartera CxC */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+              gap: '1rem',
+              marginBottom: '1rem',
+            }}>
+              <SalesRankingChart sales={chartSales} />
+              <DebtorChart sales={chartSales} creditTotal={data.credit} />
+            </div>
+            {/* Row 2: Garrafones prestados — ancho completo */}
+            <LoanedGarrafonsChart routes={routeBalances} />
+          </div>
+        );
+      })()}
 
       {/* 5. MATRIZ GERENCIAL DE RENDIMIENTO FINANCIERO POR RUTA */}
       <section style={{
@@ -866,60 +904,13 @@ export function AdminDashboard({
         </div>
       </section>
 
-      {/* 7. ÚLTIMAS OPERACIONES COMERCIALES Y PENDIENTES */}
+      {/* 7. PENDIENTES DE CIERRE */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
         gap: '1rem',
         marginBottom: '1.5rem'
       }}>
-        {/* Registro de Últimas Ventas */}
-        <section style={{
-          background: '#ffffff',
-          border: '1px solid #e2e8f0',
-          borderRadius: '0.65rem',
-          padding: '1.15rem'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
-            <h2 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
-              Registro de Últimas Ventas
-            </h2>
-            <Link to="/sales/list" className="secondary" style={{ textDecoration: 'none', padding: '0.35rem 0.75rem', fontSize: '0.78rem' }}>
-              Ver todas ({sales.length})
-            </Link>
-          </div>
-
-          {recentSales.length === 0 ? (
-            <p style={{ color: '#64748b', fontSize: '0.85rem', margin: 0 }}>Sin transacciones registradas hoy.</p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-              {recentSales.map(sale => (
-                <article key={sale.id} style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '0.65rem 0.75rem',
-                  borderRadius: '0.45rem',
-                  border: '1px solid #f1f5f9',
-                  background: '#f8fafc'
-                }}>
-                  <div>
-                    <strong style={{ fontSize: '0.88rem', color: '#0f172a', display: 'block' }}>{sale.customerName}</strong>
-                    <span style={{ fontSize: '0.74rem', color: '#64748b' }}>
-                      {sale.routeName || sale.routeCode} · {sale.sellerName} · {new Date(sale.createdAt).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                    <div style={{ fontSize: '0.74rem', color: '#475569', marginTop: '0.15rem' }}>
-                      {sale.items.map(it => `${it.presentationQuantity}x ${it.productName}`).join(', ')}
-                    </div>
-                  </div>
-                  <strong style={{ fontSize: '1rem', color: '#047857', fontFeatureSettings: '"tnum"' }}>
-                    {money(sale.total)}
-                  </strong>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
 
         {/* Resumen de Pendientes de Cierre */}
         <section style={{
