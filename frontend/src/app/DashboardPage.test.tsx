@@ -89,7 +89,9 @@ describe('DashboardPage', () => {
     expect(screen.getByText('100 GARRAFON')).toBeInTheDocument();
     expect(screen.getByText('30 GARRAFON')).toBeInTheDocument();
     expect(screen.getAllByText('70 GARRAFON')).toHaveLength(2);
-    expect(screen.getByText('Tienda La Bendición')).toBeInTheDocument();
+    // La lista de últimas ventas fue reemplazada por el dashboard gerencial de gráficas;
+    // el cliente individual no se muestra en panel admin (sí en panel vendedor)
+    expect(screen.getByText(/ranking de ventas por vendedor/i)).toBeInTheDocument();
   });
 
   it('muestra la cabina especializada y operativa para el rol VENDEDOR', async () => {
