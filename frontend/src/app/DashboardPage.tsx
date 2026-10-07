@@ -45,7 +45,23 @@ type PriceVersion = { id: string; status: string; tiers: PriceTier[] };
 type PriceList = { id: string; status: string; versions: PriceVersion[] };
 
 type SettlementItem = { id: string; productName: string; loadedUnits: number; soldUnits: number; physicalDifference: number };
-type Settlement = { id: string; routeLoadId: string; loadNumber: number; routeCode: string; routeName: string; status: string; items: SettlementItem[] };
+type Settlement = {
+  id: string;
+  routeLoadId: string;
+  loadNumber: number | string;
+  routeId?: string;
+  routeCode: string;
+  routeName: string;
+  sellerName?: string;
+  status: string;
+  salesTotal?: number;
+  salesCash?: number;
+  expectedCash?: number;
+  deliveredCash?: number;
+  monetaryDifference?: number;
+  physicalDifferenceTotal?: number;
+  items: SettlementItem[];
+};
 
 export function DashboardPage() {
   const client = useQueryClient();
@@ -164,6 +180,7 @@ export function DashboardPage() {
           sales={sales.data ?? []}
           products={products.data ?? []}
           priceLists={priceLists.data ?? []}
+          settlements={settlements.data ?? []}
           isRefreshing={isRefreshing}
           onRefresh={handleRefresh}
         />
