@@ -93,11 +93,14 @@ public class SettlementApplicationService {
         var deliveries = item.cashDeliveries().stream().map(row -> new SettlementResponse.CashDelivery(
                 row.id(), row.amount(), row.deliveredByUsername(), row.receivedByUsername(), row.notes(),
                 row.deliveredAt())).toList();
+        var salesByPrice = item.salesByPrice().stream().map(row -> new SettlementResponse.SalePriceBreakdown(
+                row.productId(), row.productCode(), row.productName(), row.presentationName(),
+                row.unitPrice(), row.quantitySold(), row.totalAmount())).toList();
         return new SettlementResponse(item.id(), item.routeLoadId(), item.loadNumber(), item.routeId(),
                 item.routeCode(), item.routeName(), item.sellerName(), item.loadStatus(), item.status(),
                 item.salesTotal(), item.salesCash(), item.creditCollectionsCash(), item.expectedCash(),
                 item.deliveredCash(), item.verifiedTransfers(), item.appliedCredit(), item.monetaryDifference(),
                 item.physicalDifferenceTotal(), item.blockingReasons(), item.calculatedAt(), item.closedBy(),
-                item.closedByUsername(), item.closedAt(), item.closeNotes(), details, deliveries);
+                item.closedByUsername(), item.closedAt(), item.closeNotes(), details, deliveries, salesByPrice);
     }
 }

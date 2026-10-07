@@ -40,3 +40,4 @@ diagrams/**/*.png
 
 # Internal agent work artifacts
 .superpowers/
+.docx-task/
