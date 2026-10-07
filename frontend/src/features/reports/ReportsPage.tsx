@@ -3,7 +3,6 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { PageHeader } from '../../app/PageHeader';
 import { StatusPanel } from '../../app/StatusPanel';
 import { apiFile, apiRequest } from '../../services/apiClient';
-import { calendarOnlyProps, currentMonthDateBounds } from '../../utils/dateInput';
 
 type ReportType = 'sales' | 'wastes' | 'settlements';
 type Page<T> = { content: T[]; totalElements: number; page: number; size: number; hasNext: boolean };
@@ -20,8 +19,14 @@ type SettlementRow = { settlementId: string; occurredAt: string; sellerName: str
 type Filters = { from: string; to: string; seller: string; route: string; customer: string; product: string;
   presentation: string; paymentMethod: string; differenceOnly: boolean };
 
-const today = new Date().toISOString().slice(0, 10);
-const initialFilters: Filters = { from: today, to: today, seller: '', route: '', customer: '', product: '',
+const now = new Date();
+const today = now.toISOString().slice(0, 10);
+const firstDayOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+// Permite consultar todo el historial (hasta 365 días atrás según política de servidor)
+const oneYearAgoDate = new Date(now.getTime() - 364 * 24 * 60 * 60 * 1000);
+const historyStart = oneYearAgoDate.toISOString().slice(0, 10);
+
+const initialFilters: Filters = { from: historyStart, to: today, seller: '', route: '', customer: '', product: '',
   presentation: '', paymentMethod: '', differenceOnly: false };
 const money = (value: number) => `Q${Number(value).toFixed(2)}`;
 
@@ -34,7 +39,6 @@ function parameters(filters: Filters, page: number): string {
 }
 
 export function ReportsPage() {
-  const dateBounds = currentMonthDateBounds();
   const [type, setType] = useState<ReportType>('sales');
   const [draft, setDraft] = useState<Filters>(initialFilters);
   const [filters, setFilters] = useState<Filters>(initialFilters);
@@ -45,8 +49,28 @@ export function ReportsPage() {
     queryKey: ['reports', type, queryString],
     queryFn: () => apiRequest<Page<SalesRow | WasteRow | SettlementRow>>(`/reports/${type}?${queryString}`)
   });
-  const submit = (event: FormEvent) => { event.preventDefault(); setPage(0); setFilters({ ...draft }); };
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    setExportError('');
+    if (draft.from > draft.to) {
+      setExportError('La fecha "Desde" no puede ser posterior a la fecha "Hasta".');
+      return;
+    }
+    const diffDays = Math.round((new Date(draft.to).getTime() - new Date(draft.from).getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays > 365) {
+      setExportError('El rango seleccionado no puede superar 365 días por políticas del servidor.');
+      return;
+    }
+    setPage(0);
+    setFilters({ ...draft });
+  };
   const changeType = (next: ReportType) => { setType(next); setPage(0); };
+  const applyPreset = (from: string, to: string) => {
+    setExportError('');
+    setDraft(d => ({ ...d, from, to }));
+    setFilters(f => ({ ...f, from, to }));
+    setPage(0);
+  };
   const exportFile = async (format: 'xlsx' | 'pdf') => {
     setExportError('');
     try {
@@ -66,8 +90,35 @@ export function ReportsPage() {
       <button className={type === 'settlements' ? 'primary' : 'secondary'} onClick={() => changeType('settlements')}>Liquidaciones</button>
     </div>
     <form className="panel report-filters" onSubmit={submit}>
-      <label>Desde<input type="date" min={dateBounds.min} max={dateBounds.max} {...calendarOnlyProps()} value={draft.from} onChange={event => setDraft({ ...draft, from: event.target.value })} required /></label>
-      <label>Hasta<input type="date" min={dateBounds.min} max={dateBounds.max} {...calendarOnlyProps()} value={draft.to} onChange={event => setDraft({ ...draft, to: event.target.value })} required /></label>
+      <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '0.75rem', paddingBottom: '0.75rem', borderBottom: '1px solid var(--border-color, #e2e8f0)' }}>
+        <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted, #64748b)' }}>Rango rápido:</span>
+        <button
+          type="button"
+          className={filters.from === historyStart && filters.to === today ? 'primary' : 'secondary'}
+          style={{ fontSize: '0.82rem', padding: '0.35rem 0.75rem' }}
+          onClick={() => applyPreset(historyStart, today)}
+        >
+          📜 Todo el historial (Desde venta 1)
+        </button>
+        <button
+          type="button"
+          className={filters.from === firstDayOfMonth && filters.to === today ? 'primary' : 'secondary'}
+          style={{ fontSize: '0.82rem', padding: '0.35rem 0.75rem' }}
+          onClick={() => applyPreset(firstDayOfMonth, today)}
+        >
+          📅 Este mes
+        </button>
+        <button
+          type="button"
+          className={filters.from === today && filters.to === today ? 'primary' : 'secondary'}
+          style={{ fontSize: '0.82rem', padding: '0.35rem 0.75rem' }}
+          onClick={() => applyPreset(today, today)}
+        >
+          📍 Solo hoy
+        </button>
+      </div>
+      <label>Desde<input type="date" max={today} value={draft.from} onChange={event => setDraft({ ...draft, from: event.target.value })} required /></label>
+      <label>Hasta<input type="date" max={today} value={draft.to} onChange={event => setDraft({ ...draft, to: event.target.value })} required /></label>
       <label>Vendedor<input value={draft.seller} onChange={event => setDraft({ ...draft, seller: event.target.value })} placeholder="Código o nombre" /></label>
       <label>Ruta<input value={draft.route} onChange={event => setDraft({ ...draft, route: event.target.value })} placeholder="Código o nombre" /></label>
       {type === 'sales' && <label>Cliente<input value={draft.customer} onChange={event => setDraft({ ...draft, customer: event.target.value })} placeholder="Código o nombre" /></label>}
