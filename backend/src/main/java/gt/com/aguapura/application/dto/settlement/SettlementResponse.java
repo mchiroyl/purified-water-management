@@ -14,7 +14,8 @@ public record SettlementResponse(UUID id, UUID routeLoadId, long loadNumber, UUI
                                  BigDecimal physicalDifferenceTotal, List<String> blockingReasons,
                                  Instant calculatedAt, UUID closedBy, String closedByUsername,
                                  Instant closedAt, String closeNotes, List<Item> items,
-                                 List<CashDelivery> cashDeliveries) {
+                                 List<CashDelivery> cashDeliveries,
+                                 List<SalePriceBreakdown> salesByPrice) {
     public record Item(UUID id, UUID productId, String productCode, String productName,
                        BigDecimal loadedUnits, BigDecimal soldUnits, BigDecimal returnedGoodUnits,
                        BigDecimal customerReturnUnits, BigDecimal approvedWasteUnits,
@@ -22,5 +23,9 @@ public record SettlementResponse(UUID id, UUID routeLoadId, long loadNumber, UUI
     }
     public record CashDelivery(UUID id, BigDecimal amount, String deliveredByUsername,
                                String receivedByUsername, String notes, Instant deliveredAt) {
+    }
+    public record SalePriceBreakdown(UUID productId, String productCode, String productName,
+                                     String presentationName, BigDecimal unitPrice,
+                                     BigDecimal quantitySold, BigDecimal totalAmount) {
     }
 }

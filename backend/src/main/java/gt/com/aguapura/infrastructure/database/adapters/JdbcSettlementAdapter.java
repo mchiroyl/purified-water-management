@@ -303,12 +303,39 @@ public class JdbcSettlementAdapter implements SettlementPort {
                 rs.getBigDecimal("approved_waste_units"), rs.getBigDecimal("physical_difference"))).list();
         var cash = jdbc.sql(cashSelect() + " WHERE cd.route_load_id=:id ORDER BY cd.delivered_at")
                 .param("id", item.routeLoadId()).query((rs, row) -> cashRow(rs)).list();
+        var salesByPrice = jdbc.sql("""
+                SELECT p.id product_id, p.code product_code, p.name product_name,
+                       pp.name presentation_name, si.unit_price,
+                       SUM(si.presentation_quantity) quantity_sold,
+                       SUM(si.line_total) total_amount
+                FROM route_load rl
+                JOIN sale s ON s.route_id = rl.route_id
+                JOIN sale_item si ON si.sale_id = s.id
+                JOIN product p ON p.id = si.product_id
+                JOIN product_presentation pp ON pp.id = si.presentation_id
+                WHERE rl.id = :loadId
+                  AND s.status = 'CONFIRMED'
+                  AND NOT EXISTS (SELECT 1 FROM annulment_request ar WHERE ar.sale_id = s.id AND ar.status = 'APPROVED')
+                  AND s.created_at >= rl.started_at
+                  AND s.created_at <= COALESCE((SELECT closed_at FROM settlement WHERE route_load_id = rl.id), now())
+                GROUP BY p.id, p.code, p.name, pp.name, si.unit_price
+                ORDER BY p.name, si.unit_price DESC
+                """).param("loadId", item.routeLoadId())
+                .query((rs, row) -> new SalePriceBreakdown(
+                        rs.getObject("product_id", UUID.class),
+                        rs.getString("product_code"),
+                        rs.getString("product_name"),
+                        rs.getString("presentation_name"),
+                        rs.getBigDecimal("unit_price"),
+                        rs.getBigDecimal("quantity_sold"),
+                        rs.getBigDecimal("total_amount")
+                )).list();
         return new SettlementView(item.id(), item.routeLoadId(), item.loadNumber(), item.routeId(), item.routeCode(),
                 item.routeName(), item.sellerName(), item.loadStatus(), item.status(), item.salesTotal(),
                 item.salesCash(), item.creditCollectionsCash(),
                 item.expectedCash(), item.deliveredCash(), item.verifiedTransfers(), item.appliedCredit(),
                 item.monetaryDifference(), item.physicalDifferenceTotal(), item.blockingReasons(), item.calculatedAt(),
-                item.closedBy(), item.closedByUsername(), item.closedAt(), item.closeNotes(), details, cash);
+                item.closedBy(), item.closedByUsername(), item.closedAt(), item.closeNotes(), details, cash, salesByPrice);
     }
 
     private String settlementSelect() {
@@ -335,7 +362,7 @@ public class JdbcSettlementAdapter implements SettlementPort {
                 rs.getBigDecimal("physical_difference_total"), blockers,
                 rs.getTimestamp("calculated_at").toInstant(), rs.getObject("closed_by", UUID.class),
                 rs.getString("closed_by_username"), rs.getTimestamp("closed_at") == null ? null : rs.getTimestamp("closed_at").toInstant(),
-                rs.getString("close_notes"), List.of(), List.of());
+                rs.getString("close_notes"), List.of(), List.of(), List.of());
     }
 
     private String cashSelect() {

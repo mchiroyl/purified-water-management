@@ -7,12 +7,23 @@ import { apiRequest } from '../../services/apiClient';
 type RouteLoad = { id: string; loadNumber: string; routeCode: string; routeName: string; status: string };
 type SettlementItem = { id: string; productName: string; loadedUnits: number; soldUnits: number;
   returnedGoodUnits: number; customerReturnUnits: number; approvedWasteUnits: number; physicalDifference: number };
+type SalePriceBreakdown = {
+  productId: string;
+  productCode: string;
+  productName: string;
+  presentationName: string;
+  unitPrice: number;
+  quantitySold: number;
+  totalAmount: number;
+};
 type Settlement = { id: string; routeLoadId: string; loadNumber: number; routeCode: string; routeName: string;
   sellerName: string; loadStatus: string; status: string; salesTotal: number;
   salesCash?: number; creditCollectionsCash?: number; expectedCash: number;
   deliveredCash: number; verifiedTransfers: number; appliedCredit: number; monetaryDifference: number;
   physicalDifferenceTotal: number; blockingReasons: string[]; closeNotes?: string; items: SettlementItem[];
-  cashDeliveries: Array<{ id: string; amount: number; notes: string; deliveredAt: string; deliveredByUsername?: string; receivedByUsername?: string }> };
+  cashDeliveries: Array<{ id: string; amount: number; notes: string; deliveredAt: string; deliveredByUsername?: string; receivedByUsername?: string }>;
+  salesByPrice?: SalePriceBreakdown[];
+};
 
 type ToastNotification = {
   title: string;
@@ -436,6 +447,104 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
                 <p className="status-note" style={{ marginTop: '0.4rem', fontSize: '0.8rem' }}>
                   Carga − ventas − producto bueno devuelto − merma aprobada = diferencia física. Devoluciones de cliente recibidas: {item.items.reduce((sum, row) => sum + Number(row.customerReturnUnits), 0)}.
                 </p>
+              </div>
+
+              {/* Bloque: Desglose de Ventas por Producto y Precio */}
+              <div
+                style={{
+                  border: '1.5px solid #0d9488',
+                  backgroundColor: '#f0fdfa',
+                  borderRadius: '8px',
+                  padding: '0.85rem',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                  <h4 style={{ margin: 0, color: '#0f766e', fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <span>🏷️</span>
+                    <span>Productos Vendidos por Precio</span>
+                  </h4>
+                  <small style={{ color: '#0f766e', fontWeight: 600 }}>Detalle de tarifas aplicadas</small>
+                </div>
+
+                {(!item.salesByPrice || item.salesByPrice.length === 0) ? (
+                  <p style={{ margin: 0, fontSize: '0.85rem', color: '#6b7280', fontStyle: 'italic' }}>
+                    No se registraron ventas en este recorrido.
+                  </p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                    {Object.values(
+                      item.salesByPrice.reduce<Record<string, {
+                        productName: string;
+                        totalQuantity: number;
+                        totalAmount: number;
+                        prices: Array<{ presentationName: string; unitPrice: number; quantitySold: number; totalAmount: number }>;
+                      }>>((acc, row) => {
+                        const key = row.productId || row.productName;
+                        if (!acc[key]) {
+                          acc[key] = {
+                            productName: row.productName,
+                            totalQuantity: 0,
+                            totalAmount: 0,
+                            prices: [],
+                          };
+                        }
+                        acc[key].totalQuantity += Number(row.quantitySold);
+                        acc[key].totalAmount += Number(row.totalAmount);
+                        acc[key].prices.push({
+                          presentationName: row.presentationName,
+                          unitPrice: Number(row.unitPrice),
+                          quantitySold: Number(row.quantitySold),
+                          totalAmount: Number(row.totalAmount),
+                        });
+                        return acc;
+                      }, {})
+                    ).map((group, groupIndex) => (
+                      <div
+                        key={groupIndex}
+                        style={{
+                          background: '#ffffff',
+                          border: '1px solid #ccfbf1',
+                          borderRadius: '6px',
+                          padding: '0.6rem 0.75rem',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f0fdfa', paddingBottom: '0.35rem', marginBottom: '0.4rem' }}>
+                          <strong style={{ fontSize: '0.9rem', color: '#134e4a' }}>
+                            {group.productName}
+                          </strong>
+                          <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f766e', background: '#ccfbf1', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
+                            Total: {group.totalQuantity} und · {money(group.totalAmount)}
+                          </span>
+                        </div>
+
+                        <table style={{ width: '100%', fontSize: '0.84rem', borderCollapse: 'collapse' }}>
+                          <thead>
+                            <tr style={{ color: '#64748b', fontSize: '0.76rem', textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>
+                              <th style={{ padding: '0.2rem 0', fontWeight: 600 }}>Cantidad vendida</th>
+                              <th style={{ padding: '0.2rem 0', fontWeight: 600 }}>Precio unitario</th>
+                              <th style={{ padding: '0.2rem 0', fontWeight: 600, textAlign: 'right' }}>Total a este precio</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {group.prices.map((p, pIndex) => (
+                              <tr key={pIndex} style={{ borderBottom: pIndex < group.prices.length - 1 ? '1px dashed #f1f5f9' : 'none' }}>
+                                <td style={{ padding: '0.3rem 0', fontWeight: 600, color: '#1e293b' }}>
+                                  {p.quantitySold} {p.presentationName ? `(${p.presentationName})` : 'und'}
+                                </td>
+                                <td style={{ padding: '0.3rem 0', color: '#0f766e', fontWeight: 600 }}>
+                                  a {money(p.unitPrice)} c/u
+                                </td>
+                                <td style={{ padding: '0.3rem 0', textAlign: 'right', fontWeight: 700, color: '#0f766e' }}>
+                                  {money(p.totalAmount)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Historial de entregas de efectivo registradas */}

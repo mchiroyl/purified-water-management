@@ -43,7 +43,8 @@ public interface SettlementPort {
                           BigDecimal monetaryDifference, BigDecimal physicalDifferenceTotal,
                           List<String> blockingReasons, Instant calculatedAt, UUID closedBy,
                           String closedByUsername, Instant closedAt, String closeNotes,
-                          List<ItemView> items, List<CashDeliveryView> cashDeliveries) {
+                          List<ItemView> items, List<CashDeliveryView> cashDeliveries,
+                          List<SalePriceBreakdown> salesByPrice) {
     }
     record ItemView(UUID id, UUID productId, String productCode, String productName,
                     BigDecimal loadedUnits, BigDecimal soldUnits, BigDecimal returnedGoodUnits,
@@ -52,5 +53,9 @@ public interface SettlementPort {
     }
     record CashDeliveryView(UUID id, BigDecimal amount, String deliveredByUsername,
                             String receivedByUsername, String notes, Instant deliveredAt) {
+    }
+    record SalePriceBreakdown(UUID productId, String productCode, String productName,
+                              String presentationName, BigDecimal unitPrice,
+                              BigDecimal quantitySold, BigDecimal totalAmount) {
     }
 }
