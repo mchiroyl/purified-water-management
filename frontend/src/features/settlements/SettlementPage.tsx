@@ -347,131 +347,124 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
                 </span>
               </div>
 
-              {/* Bloque 1: Desglose de Efectivo Físico (Dinero que el vendedor rinde en mano) */}
+              {/* BLOQUE FINANCIERO COMPACTO: 2 Columnas (Ventas vs Caja en Mano) */}
               <div
                 style={{
-                  border: '1.5px solid #0284c7',
-                  backgroundColor: '#f0f9ff',
-                  borderRadius: '10px',
-                  padding: '1rem',
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                  gap: '0.75rem',
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                  <h4 style={{ margin: 0, color: '#0369a1', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <span>💵</span>
-                    <span>Flujo de Efectivo Físico en Mano</span>
-                  </h4>
-                  <small style={{ color: '#0284c7', fontWeight: 600 }}>Rendición de cuentas de ruta</small>
+                {/* Columna Izquierda: Resumen de Ventas */}
+                <div
+                  style={{
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
+                    padding: '0.65rem 0.85rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Resumen de Ventas
+                    </span>
+                    <strong style={{ fontSize: '1rem', color: '#0f172a' }}>{money(item.salesTotal)}</strong>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.3rem 0.6rem', fontSize: '0.8rem', color: '#475569' }}>
+                    <div>Contado: <strong style={{ color: '#0f172a' }}>{money(salesCashValue)}</strong></div>
+                    <div>Crédito: <strong style={{ color: '#b45309' }}>{money(item.appliedCredit)}</strong></div>
+                    <div>Transferencias: <strong style={{ color: '#0369a1' }}>{money(item.verifiedTransfers)}</strong></div>
+                    <div>Abonos cobrados: <strong style={{ color: '#0284c7' }}>{money(creditCollectionsCashValue)}</strong></div>
+                  </div>
                 </div>
 
-                <div className="metric-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))' }}>
-                  <article style={{ background: '#ffffff', border: '1px solid #bae6fd' }}>
-                    <span title="Efectivo cobrado por ventas al contado realizadas hoy">Ventas contado (Hoy)</span>
-                    <strong>{money(salesCashValue)}</strong>
-                  </article>
-                  <article style={{ background: '#ffffff', border: '1px solid #bae6fd' }}>
-                    <span title="Abonos en efectivo cobrados hoy a clientes con crédito pendiente">Abonos cobrados (Ruta)</span>
-                    <strong style={{ color: '#0284c7' }}>{money(creditCollectionsCashValue)}</strong>
-                  </article>
-                  <article style={{ background: '#e0f2fe', border: '2px solid #0284c7' }}>
-                    <span title="Total de dinero físico que el vendedor debe entregar">Total efectivo a entregar</span>
-                    <strong style={{ color: '#0369a1', fontSize: '1.15rem' }}>{money(item.expectedCash)}</strong>
-                  </article>
-                  <article style={{ background: '#ffffff', border: '1px solid #bae6fd' }}>
-                    <span title="Efectivo contado y recibido físicamente por administración">Efectivo entregado</span>
-                    <strong style={{ color: item.deliveredCash > 0 ? '#15803d' : '#6b7280' }}>{money(item.deliveredCash)}</strong>
-                  </article>
-                  <article
-                    style={{
-                      background: item.monetaryDifference === 0 ? '#ecfdf5' : '#fef2f2',
-                      border: `2px solid ${item.monetaryDifference === 0 ? '#10b981' : '#ef4444'}`,
-                    }}
-                  >
-                    <span>Diferencia monetaria</span>
-                    <strong
+                {/* Columna Derecha: Rendición de Caja y Efectivo */}
+                <div
+                  style={{
+                    background: '#f0f9ff',
+                    border: '1.5px solid #0284c7',
+                    borderRadius: '8px',
+                    padding: '0.65rem 0.85rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0369a1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      💵 Efectivo en Mano
+                    </span>
+                    <span
                       style={{
-                        color: item.monetaryDifference === 0 ? '#15803d' : '#dc2626',
-                        fontSize: '1.15rem',
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        padding: '0.15rem 0.45rem',
+                        borderRadius: '4px',
+                        background: item.monetaryDifference === 0 ? '#dcfce7' : item.monetaryDifference > 0 ? '#fee2e2' : '#dbeafe',
+                        color: item.monetaryDifference === 0 ? '#15803d' : item.monetaryDifference > 0 ? '#dc2626' : '#1d4ed8',
                       }}
                     >
-                      {money(item.monetaryDifference)}
-                    </strong>
-                    <small style={{ fontSize: '0.75rem', fontWeight: 600, color: item.monetaryDifference === 0 ? '#15803d' : '#dc2626' }}>
-                      {item.monetaryDifference === 0 ? '✓ Cuadrado' : item.monetaryDifference > 0 ? '⚠️ Faltante' : '🔵 Sobrante'}
-                    </small>
-                  </article>
+                      {item.monetaryDifference === 0 ? '✓ Cuadrado' : item.monetaryDifference > 0 ? `⚠️ Faltante ${money(item.monetaryDifference)}` : `🔵 Sobrante ${money(Math.abs(item.monetaryDifference))}`}
+                    </span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.3rem 0.6rem', fontSize: '0.8rem', color: '#0369a1' }}>
+                    <div>A entregar: <strong style={{ fontSize: '0.9rem', color: '#0c4a6e' }}>{money(item.expectedCash)}</strong></div>
+                    <div>Entregado: <strong style={{ fontSize: '0.9rem', color: item.deliveredCash > 0 ? '#15803d' : '#64748b' }}>{money(item.deliveredCash)}</strong></div>
+                  </div>
                 </div>
               </div>
 
-              {/* Bloque 2: Otras Formas de Cobro y Facturación del Día */}
-              <div
-                style={{
-                  border: '1px solid #e5e7eb',
-                  backgroundColor: '#f9fafb',
-                  borderRadius: '8px',
-                  padding: '0.85rem',
-                }}
-              >
-                <h4 style={{ margin: '0 0 0.5rem 0', color: '#4b5563', fontSize: '0.85rem' }}>
-                  Resumen de Ventas y Formas de Cobro del Día
-                </h4>
-                <div className="metric-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))' }}>
-                  <article>
-                    <span title="Ventas que se entregaron al cliente a crédito">Crédito otorgado hoy</span>
-                    <strong style={{ color: '#b45309' }}>{money(item.appliedCredit)}</strong>
-                  </article>
-                  <article>
-                    <span title="Pagos verificados por transferencia bancaria">Transferencias verificadas</span>
-                    <strong>{money(item.verifiedTransfers)}</strong>
-                  </article>
-                  <article>
-                    <span title="Total de ventas concretadas en este recorrido">Total ventas recorrido</span>
-                    <strong>{money(item.salesTotal)}</strong>
-                  </article>
+              {/* CONCILIACIÓN FÍSICA EN TABLA COMPACTA Y ELEGANTE */}
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                <div style={{ background: '#f8fafc', padding: '0.4rem 0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0' }}>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Conciliación Física de Inventario
+                  </span>
+                  <small style={{ color: '#64748b', fontSize: '0.72rem' }}>
+                    Devoluciones de clientes: {item.items.reduce((sum, row) => sum + Number(row.customerReturnUnits), 0)}
+                  </small>
                 </div>
+                <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse', textAlign: 'center' }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc', color: '#64748b', fontSize: '0.72rem', borderBottom: '1px solid #e2e8f0' }}>
+                      <th style={{ textAlign: 'left', padding: '0.35rem 0.75rem', fontWeight: 600 }}>Producto</th>
+                      <th style={{ padding: '0.35rem', fontWeight: 600 }}>Cargado</th>
+                      <th style={{ padding: '0.35rem', fontWeight: 600 }}>Vendido</th>
+                      <th style={{ padding: '0.35rem', fontWeight: 600 }}>Devuelto</th>
+                      <th style={{ padding: '0.35rem', fontWeight: 600 }}>Merma</th>
+                      <th style={{ padding: '0.35rem 0.75rem', textAlign: 'right', fontWeight: 700 }}>Sobrante Físico</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {item.items.map(row => (
+                      <tr key={row.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ textAlign: 'left', padding: '0.35rem 0.75rem', fontWeight: 600, color: '#1e293b' }}>{row.productName}</td>
+                        <td style={{ padding: '0.35rem', color: '#475569' }}>{Number(row.loadedUnits)}</td>
+                        <td style={{ padding: '0.35rem', color: '#0284c7', fontWeight: 600 }}>{Number(row.soldUnits)}</td>
+                        <td style={{ padding: '0.35rem', color: '#475569' }}>{Number(row.returnedGoodUnits)}</td>
+                        <td style={{ padding: '0.35rem', color: '#475569' }}>{Number(row.approvedWasteUnits)}</td>
+                        <td style={{ padding: '0.35rem 0.75rem', textAlign: 'right', fontWeight: 700, color: '#0f766e' }}>
+                          {Number(row.physicalDifference)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
 
-              {/* Conciliación Física */}
-              <div>
-                <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>Conciliación física</h3>
-                <div className="data-list">
-                  {item.items.map(row => (
-                    <div className="data-row" key={row.id}>
-                      <span>{row.productName}</span>
-                      <strong>
-                        {Number(row.loadedUnits)} − {Number(row.soldUnits)} − {Number(row.returnedGoodUnits)} − {Number(row.approvedWasteUnits)} = {Number(row.physicalDifference)}
-                      </strong>
-                    </div>
-                  ))}
-                </div>
-                <p className="status-note" style={{ marginTop: '0.4rem', fontSize: '0.8rem' }}>
-                  Carga − ventas − producto bueno devuelto − merma aprobada = diferencia física. Devoluciones de cliente recibidas: {item.items.reduce((sum, row) => sum + Number(row.customerReturnUnits), 0)}.
-                </p>
-              </div>
-
-              {/* Bloque: Desglose de Ventas por Producto y Precio */}
-              <div
-                style={{
-                  border: '1.5px solid #0d9488',
-                  backgroundColor: '#f0fdfa',
-                  borderRadius: '8px',
-                  padding: '0.85rem',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
-                  <h4 style={{ margin: 0, color: '#0f766e', fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <span>🏷️</span>
-                    <span>Productos Vendidos por Precio</span>
-                  </h4>
-                  <small style={{ color: '#0f766e', fontWeight: 600 }}>Detalle de tarifas aplicadas</small>
-                </div>
-
-                {(!item.salesByPrice || item.salesByPrice.length === 0) ? (
-                  <p style={{ margin: 0, fontSize: '0.85rem', color: '#6b7280', fontStyle: 'italic' }}>
-                    No se registraron ventas en este recorrido.
-                  </p>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              {/* BLOQUE: DESGLOSE DE PRODUCTOS VENDIDOS POR PRECIO (COMPACTO Y ORDENADO) */}
+              {item.salesByPrice && item.salesByPrice.length > 0 ? (
+                <div style={{ border: '1px solid #ccfbf1', background: '#f0fdfa', borderRadius: '8px', padding: '0.65rem 0.85rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0f766e', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      🏷️ Productos Vendidos por Precio
+                    </span>
+                    <small style={{ color: '#0f766e', fontWeight: 600, fontSize: '0.75rem' }}>Tarifas aplicadas en ruta</small>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
                     {Object.values(
                       item.salesByPrice.reduce<Record<string, {
                         productName: string;
@@ -503,64 +496,48 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
                         key={groupIndex}
                         style={{
                           background: '#ffffff',
-                          border: '1px solid #ccfbf1',
+                          border: '1px solid #99f6e4',
                           borderRadius: '6px',
-                          padding: '0.6rem 0.75rem',
+                          padding: '0.45rem 0.7rem',
                         }}
                       >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f0fdfa', paddingBottom: '0.35rem', marginBottom: '0.4rem' }}>
-                          <strong style={{ fontSize: '0.9rem', color: '#134e4a' }}>
-                            {group.productName}
-                          </strong>
-                          <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f766e', background: '#ccfbf1', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
+                          <strong style={{ fontSize: '0.86rem', color: '#134e4a' }}>{group.productName}</strong>
+                          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f766e', background: '#ccfbf1', padding: '0.1rem 0.45rem', borderRadius: '4px' }}>
                             Total: {group.totalQuantity} und · {money(group.totalAmount)}
                           </span>
                         </div>
-
-                        <table style={{ width: '100%', fontSize: '0.84rem', borderCollapse: 'collapse' }}>
-                          <thead>
-                            <tr style={{ color: '#64748b', fontSize: '0.76rem', textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>
-                              <th style={{ padding: '0.2rem 0', fontWeight: 600 }}>Cantidad vendida</th>
-                              <th style={{ padding: '0.2rem 0', fontWeight: 600 }}>Precio unitario</th>
-                              <th style={{ padding: '0.2rem 0', fontWeight: 600, textAlign: 'right' }}>Total a este precio</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {group.prices.map((p, pIndex) => (
-                              <tr key={pIndex} style={{ borderBottom: pIndex < group.prices.length - 1 ? '1px dashed #f1f5f9' : 'none' }}>
-                                <td style={{ padding: '0.3rem 0', fontWeight: 600, color: '#1e293b' }}>
-                                  {p.quantitySold} {p.presentationName ? `(${p.presentationName})` : 'und'}
-                                </td>
-                                <td style={{ padding: '0.3rem 0', color: '#0f766e', fontWeight: 600 }}>
-                                  a {money(p.unitPrice)} c/u
-                                </td>
-                                <td style={{ padding: '0.3rem 0', textAlign: 'right', fontWeight: 700, color: '#0f766e' }}>
-                                  {money(p.totalAmount)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem 1rem', fontSize: '0.8rem' }}>
+                          {group.prices.map((p, pIndex) => (
+                            <span key={pIndex} style={{ color: '#334155' }}>
+                              • <strong>{p.quantitySold} und</strong> {p.presentationName ? `(${p.presentationName})` : ''} <span style={{ color: '#0f766e', fontWeight: 600 }}>a {money(p.unitPrice)} c/u</span> = <strong>{money(p.totalAmount)}</strong>
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div style={{ fontSize: '0.78rem', color: '#64748b', fontStyle: 'italic', padding: '0.2rem 0.4rem' }}>
+                  🏷️ Detalle de tarifas por producto: Se activará con las ventas del recorrido al reiniciar el servicio del backend.
+                </div>
+              )}
 
-              {/* Historial de entregas de efectivo registradas */}
+              {/* Historial de entregas de efectivo registradas (COMPACTO) */}
               {item.cashDeliveries && item.cashDeliveries.length > 0 && (
-                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.75rem' }}>
-                  <strong style={{ fontSize: '0.85rem', display: 'block', marginBottom: '0.4rem', color: '#334155' }}>
-                    Recibos de efectivo ingresados:
-                  </strong>
-                  <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.85rem', color: '#475569' }}>
+                <details style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.4rem 0.75rem', fontSize: '0.8rem' }}>
+                  <summary style={{ cursor: 'pointer', fontWeight: 600, color: '#334155' }}>
+                    💵 {item.cashDeliveries.length} entrega(s) de efectivo registrada(s) &mdash; Total recibido: {money(item.deliveredCash)}
+                  </summary>
+                  <ul style={{ margin: '0.4rem 0 0', paddingLeft: '1.2rem', color: '#475569', fontSize: '0.78rem' }}>
                     {item.cashDeliveries.map(cd => (
                       <li key={cd.id}>
-                        <strong>{money(cd.amount)}</strong> &mdash; {cd.notes} (Recibido por {cd.receivedByUsername || 'administrador'} el {new Date(cd.deliveredAt).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })})
+                        <strong>{money(cd.amount)}</strong> &mdash; {cd.notes} (Recibido por {cd.receivedByUsername || 'administrador'} a las {new Date(cd.deliveredAt).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })})
                       </li>
                     ))}
                   </ul>
-                </div>
+                </details>
               )}
 
               {item.blockingReasons.length > 0 && (
