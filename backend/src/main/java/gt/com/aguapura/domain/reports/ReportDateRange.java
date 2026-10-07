@@ -12,8 +12,8 @@ import java.time.temporal.ChronoUnit;
 public record ReportDateRange(Instant startInclusive, Instant endExclusive) {
     public static ReportDateRange of(LocalDate from, LocalDate to, ZoneId timezone, Clock clock) {
         LocalDate defaultDate = clock.instant().atZone(timezone).toLocalDate();
-        LocalDate actualFrom = from == null ? defaultDate : from;
-        LocalDate actualTo = to == null ? actualFrom : to;
+        LocalDate actualTo = to == null ? defaultDate : to;
+        LocalDate actualFrom = from == null ? actualTo.minusDays(365) : from;
         long days = ChronoUnit.DAYS.between(actualFrom, actualTo);
         if (days < 0 || days > 365) {
             throw new BusinessException("INVALID_REPORT_RANGE",
