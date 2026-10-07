@@ -7,6 +7,11 @@ import {
   Calendar,
   BarChart3,
   Layers,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Sparkles,
+  ArrowRight,
 } from 'lucide-react';
 
 export type ChartSaleItem = {
@@ -38,6 +43,7 @@ interface StackedSalesChartProps {
 
 type TimeScale = 'days' | 'weeks' | 'months';
 type Dimension = 'route' | 'seller';
+type ViewMode = 'timeline' | 'chart';
 
 // Paleta distinguible y moderna
 const PALETTE = [
@@ -72,16 +78,25 @@ function getWeekNumber(d: Date): { year: number; week: number } {
   return { year: target.getFullYear(), week };
 }
 
-type Bucket = {
+export type BreakdownItem = {
+  name: string;
+  amount: number;
+  pct: number;
+};
+
+export type Bucket = {
   key: string;
   label: string;
   fullDateDesc: string;
   rawDate: Date;
   seriesValues: Record<string, number>;
   total: number;
+  routes: BreakdownItem[];
+  sellers: BreakdownItem[];
+  transactionCount: number;
 };
 
-type ProcessedData = {
+export type ProcessedData = {
   buckets: Bucket[];
   seriesList: string[];
   grandTotal: number;
@@ -92,13 +107,16 @@ type ProcessedData = {
 };
 
 export function StackedSalesChart({ sales, currencyCode = 'GTQ' }: StackedSalesChartProps) {
+  const [viewMode, setViewMode] = useState<ViewMode>('timeline');
   const [timeScale, setTimeScale] = useState<TimeScale>('days');
   const [dimension, setDimension] = useState<Dimension>('route');
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [selectedBucketKey, setSelectedBucketKey] = useState<string | null>(null);
   const [activeSeriesFilter, setActiveSeriesFilter] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const timelineScrollRef = useRef<HTMLDivElement | null>(null);
 
-  // 1. Procesamiento de datos y agrupación
+  // 1. Procesamiento de datos y agrupación cronológica
   const processed = useMemo<ProcessedData>(() => {
     if (!sales || sales.length === 0) {
       return {
@@ -112,7 +130,6 @@ export function StackedSalesChart({ sales, currencyCode = 'GTQ' }: StackedSalesC
       };
     }
 
-    // Identificar claves de serie globales (todas las rutas o todos los vendedores)
     const seriesTotals: Record<string, number> = {};
     const routeTotals: Record<string, number> = {};
     const sellerTotals: Record<string, number> = {};
@@ -129,13 +146,24 @@ export function StackedSalesChart({ sales, currencyCode = 'GTQ' }: StackedSalesC
       seriesTotals[dimKey] = (seriesTotals[dimKey] || 0) + amt;
     });
 
-    // Ordenar series por volumen total descendente
     const sortedSeries = Object.keys(seriesTotals).sort(
       (a, b) => seriesTotals[b] - seriesTotals[a]
     );
 
-    // Agrupar ventas en cubetas de tiempo
-    const bucketMap = new Map<string, Bucket>();
+    // Mapeo temporal
+    type RawBucket = {
+      key: string;
+      label: string;
+      fullDateDesc: string;
+      rawDate: Date;
+      seriesValues: Record<string, number>;
+      routeMap: Record<string, number>;
+      sellerMap: Record<string, number>;
+      total: number;
+      txCount: number;
+    };
+
+    const bucketMap = new Map<string, RawBucket>();
 
     sales.forEach((s) => {
       if (!s.createdAt) return;
@@ -168,52 +196,84 @@ export function StackedSalesChart({ sales, currencyCode = 'GTQ' }: StackedSalesC
           fullDateDesc,
           rawDate: d,
           seriesValues: {},
+          routeMap: {},
+          sellerMap: {},
           total: 0,
+          txCount: 0,
         });
       }
 
       const b = bucketMap.get(key)!;
       const amt = Number(s.total || 0);
-      const dimKey = dimension === 'route'
-        ? (s.routeName?.trim() || s.routeCode?.trim() || 'Sin Ruta')
-        : (s.sellerName?.trim() || 'Vendedor');
+      const rName = s.routeName?.trim() || s.routeCode?.trim() || 'Sin Ruta';
+      const sName = s.sellerName?.trim() || 'Vendedor';
+      const dimKey = dimension === 'route' ? rName : sName;
 
       b.seriesValues[dimKey] = (b.seriesValues[dimKey] || 0) + amt;
+      b.routeMap[rName] = (b.routeMap[rName] || 0) + amt;
+      b.sellerMap[sName] = (b.sellerMap[sName] || 0) + amt;
       b.total += amt;
+      b.txCount += 1;
     });
 
-    // Ordenar cronológicamente ascendente
-    const sortedBuckets = Array.from(bucketMap.values()).sort(
+    const sortedRaw = Array.from(bucketMap.values()).sort(
       (a, b) => a.key.localeCompare(b.key)
     );
 
-    // Limitar cubetas para mantener legibilidad visual
-    const displayBuckets = timeScale === 'days'
-      ? sortedBuckets.slice(-14)
+    // Limitar para mantener fluidez
+    const displayRaw = timeScale === 'days'
+      ? sortedRaw.slice(-21)
       : timeScale === 'weeks'
-      ? sortedBuckets.slice(-10)
-      : sortedBuckets.slice(-12);
+      ? sortedRaw.slice(-14)
+      : sortedRaw.slice(-12);
 
-    const grandTotal = displayBuckets.reduce((acc, b) => acc + b.total, 0);
+    const formattedBuckets: Bucket[] = displayRaw.map((rb) => {
+      const routes: BreakdownItem[] = Object.entries(rb.routeMap)
+        .map(([name, amount]) => ({
+          name,
+          amount,
+          pct: rb.total > 0 ? (amount / rb.total) * 100 : 0,
+        }))
+        .sort((a, b) => b.amount - a.amount);
 
-    // Calcular pico máximo (período récord)
+      const sellers: BreakdownItem[] = Object.entries(rb.sellerMap)
+        .map(([name, amount]) => ({
+          name,
+          amount,
+          pct: rb.total > 0 ? (amount / rb.total) * 100 : 0,
+        }))
+        .sort((a, b) => b.amount - a.amount);
+
+      return {
+        key: rb.key,
+        label: rb.label,
+        fullDateDesc: rb.fullDateDesc,
+        rawDate: rb.rawDate,
+        seriesValues: rb.seriesValues,
+        total: rb.total,
+        routes,
+        sellers,
+        transactionCount: rb.txCount,
+      };
+    });
+
+    const grandTotal = formattedBuckets.reduce((acc, b) => acc + b.total, 0);
+
     let peakBucket: Bucket | null = null;
-    displayBuckets.forEach((b) => {
+    formattedBuckets.forEach((b) => {
       if (!peakBucket || b.total > peakBucket.total) {
         peakBucket = b;
       }
     });
 
-    // Serie líder
     const topSeriesName = sortedSeries[0] || 'N/A';
     const topSeriesTotal = seriesTotals[topSeriesName] || 0;
 
-    // Top general de rutas y vendedores
     const topRoute = Object.entries(routeTotals).sort((a, b) => b[1] - a[1])[0];
     const topSeller = Object.entries(sellerTotals).sort((a, b) => b[1] - a[1])[0];
 
     return {
-      buckets: displayBuckets,
+      buckets: formattedBuckets,
       seriesList: sortedSeries,
       grandTotal,
       peakBucket,
@@ -227,41 +287,39 @@ export function StackedSalesChart({ sales, currencyCode = 'GTQ' }: StackedSalesC
     };
   }, [sales, timeScale, dimension]);
 
-  // Dimensiones del gráfico SVG
+  const { buckets, seriesList, peakBucket, topSeries, grandTotal, topSellerOverall, topRouteOverall } = processed;
+
+  // Scroll horizontal en la línea de tiempo
+  const scrollTimeline = (direction: 'left' | 'right') => {
+    if (!timelineScrollRef.current) return;
+    const scrollAmount = direction === 'left' ? -380 : 380;
+    timelineScrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+  };
+
+  // Coordenadas para la vista de gráfica (SVG)
   const width = 860;
   const height = 300;
   const paddingLeft = 65;
   const paddingRight = 30;
   const paddingTop = 25;
   const paddingBottom = 40;
-
   const chartWidth = width - paddingLeft - paddingRight;
   const chartHeight = height - paddingTop - paddingBottom;
 
-  const { buckets, seriesList, peakBucket, topSeries, grandTotal, topSellerOverall, topRouteOverall } = processed;
-
-  // 2. Cálculo de apilamiento (Stacking coordinates)
   const chartData = useMemo(() => {
     if (buckets.length === 0) return null;
-
-    // Determinar valor Y máximo
     const maxVal = Math.max(...buckets.map((b) => b.total), 10);
-    // Redondear maxVal hacia arriba a un múltiplo agradable
     const yMax = Math.ceil(maxVal * 1.15 / 500) * 500 || 500;
 
-    // Series activas según filtro de leyenda si existe
     const activeSeries = activeSeriesFilter
       ? seriesList.filter((s) => s === activeSeriesFilter)
       : seriesList;
 
-    // Coordenadas X para cada cubeta
     const xStep = buckets.length > 1 ? chartWidth / (buckets.length - 1) : chartWidth / 2;
     const xCoords = buckets.map((_, i) =>
       buckets.length > 1 ? paddingLeft + i * xStep : paddingLeft + chartWidth / 2
     );
 
-    // Calcular capas apiladas (de abajo hacia arriba)
-    // Para cada serie: capa inferior (y0) y capa superior (y1)
     const stackedLayers: {
       seriesName: string;
       color: typeof PALETTE[0];
@@ -270,7 +328,6 @@ export function StackedSalesChart({ sales, currencyCode = 'GTQ' }: StackedSalesC
       points: { x: number; yTop: number; yBottom: number; value: number }[];
     }[] = [];
 
-    // Acumulador de base por cada punto X
     const currentBaseY = new Array(buckets.length).fill(0);
 
     activeSeries.forEach((seriesName, seriesIdx) => {
@@ -290,7 +347,6 @@ export function StackedSalesChart({ sales, currencyCode = 'GTQ' }: StackedSalesC
         points.push({ x, yTop, yBottom, value: val });
       });
 
-      // Construir Path poligonal con curvas suaves para el área apilada
       let topCurve = `M ${points[0].x},${points[0].yTop}`;
       for (let i = 0; i < points.length - 1; i++) {
         const p0 = points[i];
@@ -317,22 +373,15 @@ export function StackedSalesChart({ sales, currencyCode = 'GTQ' }: StackedSalesC
       });
     });
 
-    // Líneas guía horizontales del eje Y (4 divisiones)
     const yGridLines = [0, 0.25, 0.5, 0.75, 1].map((pct) => {
       const val = yMax * pct;
       const yPos = paddingTop + chartHeight - pct * chartHeight;
       return { val, yPos };
     });
 
-    return {
-      xCoords,
-      yMax,
-      stackedLayers,
-      yGridLines,
-    };
+    return { xCoords, yMax, stackedLayers, yGridLines };
   }, [buckets, seriesList, activeSeriesFilter, chartWidth, chartHeight, paddingLeft, paddingTop]);
 
-  // Manejador del cursor sobre el SVG para el Tooltip interactivo
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
     if (!svgRef.current || !chartData || buckets.length === 0) return;
     const rect = svgRef.current.getBoundingClientRect();
@@ -340,7 +389,6 @@ export function StackedSalesChart({ sales, currencyCode = 'GTQ' }: StackedSalesC
     const scaleX = width / rect.width;
     const svgX = clientX * scaleX;
 
-    // Encontrar el índice de la cubeta más cercana
     let closestIdx = 0;
     let minDist = Infinity;
     chartData.xCoords.forEach((x, idx) => {
@@ -354,10 +402,6 @@ export function StackedSalesChart({ sales, currencyCode = 'GTQ' }: StackedSalesC
     setHoveredIndex(closestIdx);
   };
 
-  const handleMouseLeave = () => {
-    setHoveredIndex(null);
-  };
-
   if (!sales || sales.length === 0) {
     return (
       <div style={{
@@ -369,9 +413,9 @@ export function StackedSalesChart({ sales, currencyCode = 'GTQ' }: StackedSalesC
         marginBottom: '1.5rem',
         color: '#64748b'
       }}>
-        <BarChart3 size={32} strokeWidth={1.5} style={{ margin: '0 auto 0.75rem', color: '#94a3b8' }} />
+        <Clock size={32} strokeWidth={1.5} style={{ margin: '0 auto 0.75rem', color: '#94a3b8' }} />
         <h3 style={{ margin: '0 0 0.35rem', color: '#0f172a', fontSize: '1rem', fontWeight: 600 }}>
-          Gráfica de Tendencias Históricas
+          Línea del Tiempo y Tendencias de Ventas
         </h3>
         <p style={{ margin: 0, fontSize: '0.85rem' }}>
           No hay ventas registradas suficientes para calcular el historial acumulado en este momento.
@@ -394,7 +438,7 @@ export function StackedSalesChart({ sales, currencyCode = 'GTQ' }: StackedSalesC
         boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
       }}
     >
-      {/* 1. Cabecera con título, subtítulo y controles interactivos */}
+      {/* 1. Header con Título, Selector de Vista (Línea de Tiempo vs Gráfica) y Filtros */}
       <div
         style={{
           display: 'flex',
@@ -420,20 +464,71 @@ export function StackedSalesChart({ sales, currencyCode = 'GTQ' }: StackedSalesC
                 justifyContent: 'center',
               }}
             >
-              <TrendingUp size={16} strokeWidth={2.5} />
+              <Clock size={16} strokeWidth={2.5} />
             </div>
             <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#0f172a' }}>
-              Tendencias Históricas y Récords de Ventas
+              Línea del Tiempo de Ventas y Récords
             </h2>
           </div>
           <p style={{ margin: '0.2rem 0 0 2.2rem', color: '#64748b', fontSize: '0.8rem' }}>
-            Líneas apiladas por volumen acumulado · {dimension === 'route' ? 'Segmentado por Rutas' : 'Segmentado por Vendedores'}
+            {viewMode === 'timeline'
+              ? 'Cinta cronológica secuencial con ventas, picos, rutas y vendedores'
+              : 'Gráfica de líneas y áreas apiladas por volumen acumulado'}
           </p>
         </div>
 
-        {/* Controles de Filtro: Escala de tiempo y Dimensión */}
+        {/* Barra de Controles: Vista + Tiempo + Dimensión */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
-          {/* Selector de Tiempo */}
+          {/* Alternar Vista: Línea del Tiempo vs Gráfica */}
+          <div
+            style={{
+              display: 'inline-flex',
+              background: '#0f172a',
+              padding: '2px',
+              borderRadius: '0.5rem',
+              fontSize: '0.78rem',
+              fontWeight: 600,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setViewMode('timeline')}
+              style={{
+                background: viewMode === 'timeline' ? '#0284c7' : 'transparent',
+                color: '#ffffff',
+                border: 'none',
+                padding: '0.35rem 0.75rem',
+                borderRadius: '0.4rem',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <Clock size={13} strokeWidth={2.5} /> Línea del Tiempo
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('chart')}
+              style={{
+                background: viewMode === 'chart' ? '#0284c7' : 'transparent',
+                color: '#ffffff',
+                border: 'none',
+                padding: '0.35rem 0.75rem',
+                borderRadius: '0.4rem',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <TrendingUp size={13} strokeWidth={2.5} /> Gráfica de Área
+            </button>
+          </div>
+
+          {/* Selector de Tiempo (Días, Semanas, Meses) */}
           <div
             style={{
               display: 'inline-flex',
@@ -536,7 +631,6 @@ export function StackedSalesChart({ sales, currencyCode = 'GTQ' }: StackedSalesC
           borderBottom: '1px solid #f1f5f9',
         }}
       >
-        {/* Récord / Pico Máximo */}
         <div
           style={{
             background: '#ffffff',
@@ -576,7 +670,6 @@ export function StackedSalesChart({ sales, currencyCode = 'GTQ' }: StackedSalesC
           </div>
         </div>
 
-        {/* Líder de la Dimensión Seleccionada */}
         <div
           style={{
             background: '#ffffff',
@@ -619,7 +712,6 @@ export function StackedSalesChart({ sales, currencyCode = 'GTQ' }: StackedSalesC
           </div>
         </div>
 
-        {/* Métrica Cruzada (Si está en Ruta muestra Vendedor, si está en Vendedor muestra Ruta) */}
         <div
           style={{
             background: '#ffffff',
@@ -666,7 +758,6 @@ export function StackedSalesChart({ sales, currencyCode = 'GTQ' }: StackedSalesC
           </div>
         </div>
 
-        {/* Promedio y Total del Período */}
         <div
           style={{
             background: '#ffffff',
@@ -702,357 +793,594 @@ export function StackedSalesChart({ sales, currencyCode = 'GTQ' }: StackedSalesC
             {buckets.length > 0 ? formatMoney(grandTotal / buckets.length, currencyCode) : 'Q0.00'}
           </strong>
           <div style={{ fontSize: '0.74rem', color: '#64748b' }}>
-            Total visible: <strong>{formatMoney(grandTotal, currencyCode)}</strong>
+            Total acumulado: <strong>{formatMoney(grandTotal, currencyCode)}</strong>
           </div>
         </div>
       </div>
 
-      {/* 3. Área Gráfica SVG Vectorial Responsiva */}
-      <div style={{ padding: '1.25rem', position: 'relative' }}>
-        <div style={{ width: '100%', position: 'relative' }}>
-          <svg
-            ref={svgRef}
-            viewBox={`0 0 ${width} ${height}`}
-            style={{
-              width: '100%',
-              height: 'auto',
-              display: 'block',
-              overflow: 'visible',
-              cursor: 'crosshair',
-            }}
-            onMouseMove={handleMouseMove}
-            onMouseLeave={handleMouseLeave}
-          >
-            <defs>
-              {/* Degradados SVG dinámicos por cada serie */}
-              {chartData?.stackedLayers.map((layer) => (
-                <linearGradient
-                  key={layer.seriesName}
-                  id={`grad-${layer.seriesName.replace(/[^a-zA-Z0-9]/g, '_')}`}
-                  x1="0"
-                  y1="0"
-                  x2="0"
-                  y2="1"
-                >
-                  <stop offset="0%" stopColor={layer.color.fill} stopOpacity="0.65" />
-                  <stop offset="100%" stopColor={layer.color.fill} stopOpacity="0.08" />
-                </linearGradient>
-              ))}
-            </defs>
+      {/* 3. VISTA A: CINTA DE LÍNEA DEL TIEMPO SECUENCIAL (TIMELINE FEED) */}
+      {viewMode === 'timeline' && (
+        <div style={{ padding: '1.25rem' }}>
+          {/* Controles de navegación y leyenda rápida de la línea de tiempo */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#64748b', fontSize: '0.82rem' }}>
+              <Sparkles size={14} color="#d97706" />
+              <span>Desplázate cronológicamente para revisar cada hito: qué día/semana se vendió más, en qué ruta y por qué vendedor.</span>
+            </div>
 
-            {/* Rejilla de Fondo Horizontal y Etiquetas de Eje Y */}
-            {chartData?.yGridLines.map((grid, i) => (
-              <g key={i}>
-                <line
-                  x1={paddingLeft}
-                  y1={grid.yPos}
-                  x2={width - paddingRight}
-                  y2={grid.yPos}
-                  stroke={i === 0 ? '#cbd5e1' : '#f1f5f9'}
-                  strokeWidth={i === 0 ? 1.5 : 1}
-                  strokeDasharray={i === 0 ? undefined : '3 3'}
-                />
-                <text
-                  x={paddingLeft - 10}
-                  y={grid.yPos + 4}
-                  fill="#94a3b8"
-                  fontSize="10"
-                  fontWeight="600"
-                  textAnchor="end"
-                  fontFamily="system-ui, sans-serif"
-                >
-                  {grid.val >= 1000
-                    ? `Q${(grid.val / 1000).toFixed(grid.val % 1000 === 0 ? 0 : 1)}k`
-                    : `Q${Math.round(grid.val)}`}
-                </text>
-              </g>
-            ))}
+            <div style={{ display: 'flex', gap: '0.4rem' }}>
+              <button
+                type="button"
+                onClick={() => scrollTimeline('left')}
+                className="secondary"
+                style={{ padding: '0.35rem 0.65rem', display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem' }}
+                title="Desplazar a fechas anteriores"
+              >
+                <ChevronLeft size={16} /> Anterior
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollTimeline('right')}
+                className="secondary"
+                style={{ padding: '0.35rem 0.65rem', display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem' }}
+                title="Desplazar a fechas siguientes"
+              >
+                Siguiente <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
 
-            {/* Capas apiladas renderizadas en orden inverso para que las líneas superiores queden por encima */}
-            {chartData?.stackedLayers.map((layer) => {
-              const gradId = `grad-${layer.seriesName.replace(/[^a-zA-Z0-9]/g, '_')}`;
-              return (
-                <g key={layer.seriesName}>
-                  {/* Relleno con degradado */}
-                  <path d={layer.pathD} fill={`url(#${gradId})`} />
-                  {/* Línea de trazo superior */}
-                  <path
-                    d={layer.lineD}
-                    fill="none"
-                    stroke={layer.color.stroke}
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </g>
-              );
-            })}
-
-            {/* Eje X y Etiquetas de Fechas */}
-            {buckets.map((b, i) => {
-              const x = chartData?.xCoords[i] || 0;
-              const isHovered = hoveredIndex === i;
-              const isPeak = peakBucket?.key === b.key;
-
-              return (
-                <g key={b.key}>
-                  {/* Pequeña marca vertical */}
-                  <line
-                    x1={x}
-                    y1={paddingTop + chartHeight}
-                    x2={x}
-                    y2={paddingTop + chartHeight + 5}
-                    stroke="#cbd5e1"
-                    strokeWidth="1"
-                  />
-                  <text
-                    x={x}
-                    y={paddingTop + chartHeight + 18}
-                    fill={isHovered ? '#0f172a' : isPeak ? '#0284c7' : '#64748b'}
-                    fontSize={isHovered || isPeak ? '11' : '10'}
-                    fontWeight={isHovered || isPeak ? '700' : '500'}
-                    textAnchor="middle"
-                    fontFamily="system-ui, sans-serif"
-                  >
-                    {b.label}
-                  </text>
-                  {isPeak && (
-                    <text
-                      x={x}
-                      y={paddingTop + chartHeight + 29}
-                      fill="#d97706"
-                      fontSize="9"
-                      fontWeight="700"
-                      textAnchor="middle"
-                    >
-                      ★ Pico
-                    </text>
-                  )}
-                </g>
-              );
-            })}
-
-            {/* Cursor vertical interactivo (Crosshair) y Puntos en hover */}
-            {hoveredIndex !== null && chartData && (
-              <g>
-                <line
-                  x1={chartData.xCoords[hoveredIndex]}
-                  y1={paddingTop}
-                  x2={chartData.xCoords[hoveredIndex]}
-                  y2={paddingTop + chartHeight}
-                  stroke="#475569"
-                  strokeWidth="1.5"
-                  strokeDasharray="4 4"
-                />
-
-                {/* Círculos en cada nivel apilado */}
-                {chartData.stackedLayers.map((layer) => {
-                  const pt = layer.points[hoveredIndex];
-                  if (!pt || pt.value <= 0) return null;
-                  return (
-                    <circle
-                      key={layer.seriesName}
-                      cx={pt.x}
-                      cy={pt.yTop}
-                      r="4.5"
-                      fill={layer.color.stroke}
-                      stroke="#ffffff"
-                      strokeWidth="2"
-                    />
-                  );
-                })}
-              </g>
-            )}
-          </svg>
-
-          {/* 4. Tooltip Flotante de Alta Fidelidad */}
-          {activeBucket && hoveredIndex !== null && chartData && (
+          {/* Riel Cronológico Horizontal Deslizable con Línea Central Conectora */}
+          <div style={{ position: 'relative' }}>
+            {/* Línea horizontal central del Timeline (Spine) */}
             <div
               style={{
                 position: 'absolute',
-                top: `${paddingTop + 10}px`,
-                left: `${
-                  chartData.xCoords[hoveredIndex] > width * 0.6
-                    ? Math.max(10, (chartData.xCoords[hoveredIndex] / width) * 100 - 32)
-                    : Math.min(68, (chartData.xCoords[hoveredIndex] / width) * 100 + 3)
-                }%`,
-                background: '#0f172a',
-                color: '#ffffff',
-                border: '1px solid #334155',
-                borderRadius: '0.65rem',
-                padding: '0.75rem 0.95rem',
-                boxShadow: '0 8px 24px rgba(15, 23, 42, 0.4)',
-                pointerEvents: 'none',
-                minWidth: '220px',
-                zIndex: 10,
-                fontSize: '0.8rem',
+                top: '26px',
+                left: '20px',
+                right: '20px',
+                height: '3px',
+                background: 'linear-gradient(90deg, #cbd5e1 0%, #0284c7 50%, #cbd5e1 100%)',
+                zIndex: 1,
+              }}
+            />
+
+            <div
+              ref={timelineScrollRef}
+              style={{
+                display: 'flex',
+                gap: '1.15rem',
+                overflowX: 'auto',
+                padding: '0.5rem 0.25rem 1.25rem',
+                position: 'relative',
+                zIndex: 2,
+                scrollSnapType: 'x mandatory',
+                scrollbarWidth: 'thin',
               }}
             >
-              <div
-                style={{
-                  fontWeight: 700,
-                  color: '#f8fafc',
-                  borderBottom: '1px solid #334155',
-                  paddingBottom: '0.35rem',
-                  marginBottom: '0.45rem',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                }}
-              >
-                <span>{activeBucket.fullDateDesc}</span>
-                {peakBucket?.key === activeBucket.key && (
-                  <span
+              {buckets.map((b, idx) => {
+                const isPeak = peakBucket?.key === b.key;
+                const isSelected = selectedBucketKey === b.key;
+                const peakMax = peakBucket?.total || 1;
+                const pctOfPeak = Math.min(100, Math.round((b.total / peakMax) * 100));
+
+                const topRouteOfDay = b.routes[0];
+                const topSellerOfDay = b.sellers[0];
+
+                return (
+                  <div
+                    key={b.key}
+                    onClick={() => setSelectedBucketKey(isSelected ? null : b.key)}
                     style={{
-                      background: '#d97706',
-                      color: '#ffffff',
-                      fontSize: '0.65rem',
-                      padding: '1px 5px',
-                      borderRadius: '4px',
+                      flex: '0 0 290px',
+                      scrollSnapAlign: 'start',
+                      background: isPeak ? '#f0fdf4' : isSelected ? '#f8fafc' : '#ffffff',
+                      border: isPeak
+                        ? '2px solid #22c55e'
+                        : isSelected
+                        ? '2px solid #0284c7'
+                        : '1px solid #e2e8f0',
+                      borderRadius: '0.75rem',
+                      padding: '1rem',
+                      boxShadow: isPeak
+                        ? '0 6px 16px rgba(34, 197, 94, 0.15)'
+                        : '0 2px 5px rgba(0,0,0,0.03)',
+                      position: 'relative',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
                     }}
                   >
-                    RÉCORD
-                  </span>
-                )}
-              </div>
-
-              <div
-                style={{
-                  fontWeight: 800,
-                  fontSize: '1.05rem',
-                  color: '#38bdf8',
-                  marginBottom: '0.55rem',
-                }}
-              >
-                Total: {formatMoney(activeBucket.total, currencyCode)}
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                {chartData.stackedLayers.map((layer) => {
-                  const val = activeBucket.seriesValues[layer.seriesName] || 0;
-                  const pct = activeBucket.total > 0 ? (val / activeBucket.total) * 100 : 0;
-                  return (
+                    {/* Nodo de la Línea de Tiempo (Círculo con fecha) */}
                     <div
-                      key={layer.seriesName}
                       style={{
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        fontSize: '0.74rem',
+                        marginBottom: '0.65rem',
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                        <span
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <div
                           style={{
-                            width: '8px',
-                            height: '8px',
+                            width: '24px',
+                            height: '24px',
                             borderRadius: '50%',
-                            background: layer.color.stroke,
-                            display: 'inline-block',
+                            background: isPeak ? '#16a34a' : '#0f172a',
+                            color: '#ffffff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.7rem',
+                            fontWeight: 800,
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
                           }}
-                        />
-                        <span style={{ color: '#cbd5e1' }}>{layer.seriesName}:</span>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <strong style={{ color: '#ffffff', marginLeft: '0.4rem' }}>
-                          {formatMoney(val, currencyCode)}
-                        </strong>
-                        <span style={{ color: '#94a3b8', fontSize: '0.7rem', marginLeft: '0.3rem' }}>
-                          ({pct.toFixed(0)}%)
+                        >
+                          {idx + 1}
+                        </div>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>
+                          {b.label}
                         </span>
                       </div>
+
+                      {/* Insignia de Récord o Pico */}
+                      {isPeak && (
+                        <span
+                          style={{
+                            background: '#16a34a',
+                            color: '#ffffff',
+                            fontSize: '0.65rem',
+                            fontWeight: 800,
+                            padding: '0.2rem 0.5rem',
+                            borderRadius: '999px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.25rem',
+                          }}
+                        >
+                          <Award size={11} /> DÍA PICO
+                        </span>
+                      )}
                     </div>
-                  );
-                })}
-              </div>
+
+                    <div style={{ fontSize: '0.74rem', color: '#64748b', marginBottom: '0.5rem' }}>
+                      {b.fullDateDesc}
+                    </div>
+
+                    {/* Monto de Ventas en Grande */}
+                    <div style={{ marginBottom: '0.65rem' }}>
+                      <span style={{ fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>
+                        Vendido en el hito:
+                      </span>
+                      <div style={{ fontSize: '1.35rem', fontWeight: 800, color: isPeak ? '#15803d' : '#0f172a' }}>
+                        {formatMoney(b.total, currencyCode)}
+                      </div>
+                    </div>
+
+                    {/* Barra de progreso relativo respecto al pico */}
+                    <div style={{ marginBottom: '0.75rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#64748b', marginBottom: '2px' }}>
+                        <span>Volumen vs Récord</span>
+                        <strong>{pctOfPeak}%</strong>
+                      </div>
+                      <div style={{ width: '100%', height: '6px', background: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
+                        <div
+                          style={{
+                            width: `${pctOfPeak}%`,
+                            height: '100%',
+                            background: isPeak ? '#22c55e' : '#0284c7',
+                            borderRadius: '3px',
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Desglose: Ruta que más vendió */}
+                    <div
+                      style={{
+                        background: '#f8fafc',
+                        border: '1px solid #f1f5f9',
+                        borderRadius: '0.5rem',
+                        padding: '0.55rem 0.65rem',
+                        marginBottom: '0.5rem',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#0369a1', fontSize: '0.72rem', fontWeight: 700 }}>
+                        <Truck size={13} /> RUTA CON MÁS VENTA:
+                      </div>
+                      {topRouteOfDay ? (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
+                          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a' }}>
+                            {topRouteOfDay.name}
+                          </span>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0369a1' }}>
+                            {formatMoney(topRouteOfDay.amount, currencyCode)} ({topRouteOfDay.pct.toFixed(0)}%)
+                          </span>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Sin ruta asignada</div>
+                      )}
+                    </div>
+
+                    {/* Desglose: Vendedor que más vendió */}
+                    <div
+                      style={{
+                        background: '#f8fafc',
+                        border: '1px solid #f1f5f9',
+                        borderRadius: '0.5rem',
+                        padding: '0.55rem 0.65rem',
+                        marginBottom: '0.5rem',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#047857', fontSize: '0.72rem', fontWeight: 700 }}>
+                        <User size={13} /> VENDEDOR MÁS PRODUCTIVO:
+                      </div>
+                      {topSellerOfDay ? (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
+                          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a' }}>
+                            {topSellerOfDay.name}
+                          </span>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#047857' }}>
+                            {formatMoney(topSellerOfDay.amount, currencyCode)} ({topSellerOfDay.pct.toFixed(0)}%)
+                          </span>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Sin vendedor</div>
+                      )}
+                    </div>
+
+                    {/* Operaciones */}
+                    <div style={{ marginTop: 'auto', paddingTop: '0.4rem', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#64748b' }}>
+                      <span>{b.transactionCount} {b.transactionCount === 1 ? 'venta realizada' : 'ventas realizadas'}</span>
+                      <span style={{ color: '#0284c7', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '2px' }}>
+                        Ver detalle <ArrowRight size={10} />
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          )}
+          </div>
         </div>
+      )}
 
-        {/* 5. Leyenda Inferior Interactiva con Chips Filtrables */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '0.6rem',
-            flexWrap: 'wrap',
-            marginTop: '0.85rem',
-            paddingTop: '0.75rem',
-            borderTop: '1px solid #f1f5f9',
-          }}
-        >
-          <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-            <Layers size={13} /> {dimension === 'route' ? 'Rutas:' : 'Vendedores:'}
-          </span>
+      {/* 3. VISTA B: GRÁFICA DE LÍNEAS Y ÁREAS APILADAS (CURVA VECTORIAL SVG) */}
+      {viewMode === 'chart' && (
+        <div style={{ padding: '1.25rem', position: 'relative' }}>
+          <div style={{ width: '100%', position: 'relative' }}>
+            <svg
+              ref={svgRef}
+              viewBox={`0 0 ${width} ${height}`}
+              style={{
+                width: '100%',
+                height: 'auto',
+                display: 'block',
+                overflow: 'visible',
+                cursor: 'crosshair',
+              }}
+              onMouseMove={handleMouseMove}
+              onMouseLeave={() => setHoveredIndex(null)}
+            >
+              <defs>
+                {chartData?.stackedLayers.map((layer) => (
+                  <linearGradient
+                    key={layer.seriesName}
+                    id={`grad-${layer.seriesName.replace(/[^a-zA-Z0-9]/g, '_')}`}
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop offset="0%" stopColor={layer.color.fill} stopOpacity="0.65" />
+                    <stop offset="100%" stopColor={layer.color.fill} stopOpacity="0.08" />
+                  </linearGradient>
+                ))}
+              </defs>
 
-          {seriesList.map((seriesName, idx) => {
-            const color = PALETTE[idx % PALETTE.length];
-            const isFiltered = activeSeriesFilter === seriesName;
-            const seriesTotal = buckets.reduce(
-              (acc, b) => acc + (b.seriesValues[seriesName] || 0),
-              0
-            );
+              {chartData?.yGridLines.map((grid, i) => (
+                <g key={i}>
+                  <line
+                    x1={paddingLeft}
+                    y1={grid.yPos}
+                    x2={width - paddingRight}
+                    y2={grid.yPos}
+                    stroke={i === 0 ? '#cbd5e1' : '#f1f5f9'}
+                    strokeWidth={i === 0 ? 1.5 : 1}
+                    strokeDasharray={i === 0 ? undefined : '3 3'}
+                  />
+                  <text
+                    x={paddingLeft - 10}
+                    y={grid.yPos + 4}
+                    fill="#94a3b8"
+                    fontSize="10"
+                    fontWeight="600"
+                    textAnchor="end"
+                    fontFamily="system-ui, sans-serif"
+                  >
+                    {grid.val >= 1000
+                      ? `Q${(grid.val / 1000).toFixed(grid.val % 1000 === 0 ? 0 : 1)}k`
+                      : `Q${Math.round(grid.val)}`}
+                  </text>
+                </g>
+              ))}
 
-            return (
-              <button
-                key={seriesName}
-                type="button"
-                onClick={() =>
-                  setActiveSeriesFilter(activeSeriesFilter === seriesName ? null : seriesName)
-                }
+              {chartData?.stackedLayers.map((layer) => {
+                const gradId = `grad-${layer.seriesName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+                return (
+                  <g key={layer.seriesName}>
+                    <path d={layer.pathD} fill={`url(#${gradId})`} />
+                    <path
+                      d={layer.lineD}
+                      fill="none"
+                      stroke={layer.color.stroke}
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </g>
+                );
+              })}
+
+              {buckets.map((b, i) => {
+                const x = chartData?.xCoords[i] || 0;
+                const isHovered = hoveredIndex === i;
+                const isPeak = peakBucket?.key === b.key;
+
+                return (
+                  <g key={b.key}>
+                    <line
+                      x1={x}
+                      y1={paddingTop + chartHeight}
+                      x2={x}
+                      y2={paddingTop + chartHeight + 5}
+                      stroke="#cbd5e1"
+                      strokeWidth="1"
+                    />
+                    <text
+                      x={x}
+                      y={paddingTop + chartHeight + 18}
+                      fill={isHovered ? '#0f172a' : isPeak ? '#0284c7' : '#64748b'}
+                      fontSize={isHovered || isPeak ? '11' : '10'}
+                      fontWeight={isHovered || isPeak ? '700' : '500'}
+                      textAnchor="middle"
+                      fontFamily="system-ui, sans-serif"
+                    >
+                      {b.label}
+                    </text>
+                    {isPeak && (
+                      <text
+                        x={x}
+                        y={paddingTop + chartHeight + 29}
+                        fill="#d97706"
+                        fontSize="9"
+                        fontWeight="700"
+                        textAnchor="middle"
+                      >
+                        ★ Pico
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
+
+              {hoveredIndex !== null && chartData && (
+                <g>
+                  <line
+                    x1={chartData.xCoords[hoveredIndex]}
+                    y1={paddingTop}
+                    x2={chartData.xCoords[hoveredIndex]}
+                    y2={paddingTop + chartHeight}
+                    stroke="#475569"
+                    strokeWidth="1.5"
+                    strokeDasharray="4 4"
+                  />
+                  {chartData.stackedLayers.map((layer) => {
+                    const pt = layer.points[hoveredIndex];
+                    if (!pt || pt.value <= 0) return null;
+                    return (
+                      <circle
+                        key={layer.seriesName}
+                        cx={pt.x}
+                        cy={pt.yTop}
+                        r="4.5"
+                        fill={layer.color.stroke}
+                        stroke="#ffffff"
+                        strokeWidth="2"
+                      />
+                    );
+                  })}
+                </g>
+              )}
+            </svg>
+
+            {activeBucket && hoveredIndex !== null && chartData && (
+              <div
                 style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.35rem',
-                  padding: '0.25rem 0.6rem',
-                  borderRadius: '999px',
-                  border: `1px solid ${isFiltered ? color.stroke : '#e2e8f0'}`,
-                  background: isFiltered ? color.bg : '#ffffff',
+                  position: 'absolute',
+                  top: `${paddingTop + 10}px`,
+                  left: `${
+                    chartData.xCoords[hoveredIndex] > width * 0.6
+                      ? Math.max(10, (chartData.xCoords[hoveredIndex] / width) * 100 - 32)
+                      : Math.min(68, (chartData.xCoords[hoveredIndex] / width) * 100 + 3)
+                  }%`,
+                  background: '#0f172a',
+                  color: '#ffffff',
+                  border: '1px solid #334155',
+                  borderRadius: '0.65rem',
+                  padding: '0.75rem 0.95rem',
+                  boxShadow: '0 8px 24px rgba(15, 23, 42, 0.4)',
+                  pointerEvents: 'none',
+                  minWidth: '220px',
+                  zIndex: 10,
+                  fontSize: '0.8rem',
+                }}
+              >
+                <div
+                  style={{
+                    fontWeight: 700,
+                    color: '#f8fafc',
+                    borderBottom: '1px solid #334155',
+                    paddingBottom: '0.35rem',
+                    marginBottom: '0.45rem',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}
+                >
+                  <span>{activeBucket.fullDateDesc}</span>
+                  {peakBucket?.key === activeBucket.key && (
+                    <span
+                      style={{
+                        background: '#d97706',
+                        color: '#ffffff',
+                        fontSize: '0.65rem',
+                        padding: '1px 5px',
+                        borderRadius: '4px',
+                      }}
+                    >
+                      RÉCORD
+                    </span>
+                  )}
+                </div>
+
+                <div
+                  style={{
+                    fontWeight: 800,
+                    fontSize: '1.05rem',
+                    color: '#38bdf8',
+                    marginBottom: '0.55rem',
+                  }}
+                >
+                  Total: {formatMoney(activeBucket.total, currencyCode)}
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  {chartData.stackedLayers.map((layer) => {
+                    const val = activeBucket.seriesValues[layer.seriesName] || 0;
+                    const pct = activeBucket.total > 0 ? (val / activeBucket.total) * 100 : 0;
+                    return (
+                      <div
+                        key={layer.seriesName}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          fontSize: '0.74rem',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <span
+                            style={{
+                              width: '8px',
+                              height: '8px',
+                              borderRadius: '50%',
+                              background: layer.color.stroke,
+                              display: 'inline-block',
+                            }}
+                          />
+                          <span style={{ color: '#cbd5e1' }}>{layer.seriesName}:</span>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <strong style={{ color: '#ffffff', marginLeft: '0.4rem' }}>
+                            {formatMoney(val, currencyCode)}
+                          </strong>
+                          <span style={{ color: '#94a3b8', fontSize: '0.7rem', marginLeft: '0.3rem' }}>
+                            ({pct.toFixed(0)}%)
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.6rem',
+              flexWrap: 'wrap',
+              marginTop: '0.85rem',
+              paddingTop: '0.75rem',
+              borderTop: '1px solid #f1f5f9',
+            }}
+          >
+            <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+              <Layers size={13} /> {dimension === 'route' ? 'Rutas:' : 'Vendedores:'}
+            </span>
+
+            {seriesList.map((seriesName, idx) => {
+              const color = PALETTE[idx % PALETTE.length];
+              const isFiltered = activeSeriesFilter === seriesName;
+              const seriesTotal = buckets.reduce(
+                (acc, b) => acc + (b.seriesValues[seriesName] || 0),
+                0
+              );
+
+              return (
+                <button
+                  key={seriesName}
+                  type="button"
+                  onClick={() =>
+                    setActiveSeriesFilter(activeSeriesFilter === seriesName ? null : seriesName)
+                  }
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    padding: '0.25rem 0.6rem',
+                    borderRadius: '999px',
+                    border: `1px solid ${isFiltered ? color.stroke : '#e2e8f0'}`,
+                    background: isFiltered ? color.bg : '#ffffff',
+                    fontSize: '0.74rem',
+                    cursor: 'pointer',
+                    color: '#1e293b',
+                    fontWeight: isFiltered ? 700 : 500,
+                    transition: 'all 0.15s ease',
+                  }}
+                  title={`Haz clic para ${isFiltered ? 'mostrar todas' : `aislar ${seriesName}`}`}
+                >
+                  <span
+                    style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      background: color.stroke,
+                      display: 'inline-block',
+                    }}
+                  />
+                  <span>{seriesName}</span>
+                  <span style={{ color: '#64748b', fontSize: '0.7rem' }}>
+                    ({formatMoney(seriesTotal, currencyCode)})
+                  </span>
+                </button>
+              );
+            })}
+
+            {activeSeriesFilter && (
+              <button
+                type="button"
+                onClick={() => setActiveSeriesFilter(null)}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  color: '#0284c7',
                   fontSize: '0.74rem',
                   cursor: 'pointer',
-                  color: '#1e293b',
-                  fontWeight: isFiltered ? 700 : 500,
-                  transition: 'all 0.15s ease',
+                  fontWeight: 600,
+                  textDecoration: 'underline',
                 }}
-                title={`Haz clic para ${isFiltered ? 'mostrar todas' : `aislar ${seriesName}`}`}
               >
-                <span
-                  style={{
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '50%',
-                    background: color.stroke,
-                    display: 'inline-block',
-                  }}
-                />
-                <span>{seriesName}</span>
-                <span style={{ color: '#64748b', fontSize: '0.7rem' }}>
-                  ({formatMoney(seriesTotal, currencyCode)})
-                </span>
+                Mostrar todas
               </button>
-            );
-          })}
-
-          {activeSeriesFilter && (
-            <button
-              type="button"
-              onClick={() => setActiveSeriesFilter(null)}
-              style={{
-                border: 'none',
-                background: 'transparent',
-                color: '#0284c7',
-                fontSize: '0.74rem',
-                cursor: 'pointer',
-                fontWeight: 600,
-                textDecoration: 'underline',
-              }}
-            >
-              Mostrar todas
-            </button>
-          )}
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </section>
   );
 }
