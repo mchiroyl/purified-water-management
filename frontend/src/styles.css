@@ -1254,6 +1254,44 @@ table {
   color: var(--muted);
 }
 
+/* ── Inventario en Lista Compacta Profesional ── */
+.inventory-table-wrap table {
+  min-width: 920px;
+}
+.inventory-table-wrap th,
+.inventory-table-wrap td {
+  padding: 0.65rem 0.85rem;
+  vertical-align: middle;
+}
+.inventory-balances-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.65rem;
+  align-items: center;
+}
+.inventory-balance-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.55rem;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.4rem;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+.inventory-balance-chip strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+.inventory-balance-chip .chip-price {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.movement-table-wrap table {
+  min-width: 800px;
+}
+
 
 
 

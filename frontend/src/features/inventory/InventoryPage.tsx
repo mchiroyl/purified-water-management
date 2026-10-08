@@ -318,7 +318,7 @@ export function InventoryPage({ canManage, view = 'create' }: InventoryPageProps
         </>
       )}
 
-      {/* ── Vista de Listas de Inventario Registrado ── */}
+      {/* ── Vista de Listas de Inventario Registrado (Tablas compactas y profesionales) ── */}
       {effectiveView === 'list' && (
         <>
           {/* Inventario de Bodega Física */}
@@ -331,72 +331,86 @@ export function InventoryPage({ canManage, view = 'create' }: InventoryPageProps
               <span>{warehouseLocations.length} bodegas</span>
             </div>
             {locations.error && <div className="alert error">{locations.error.message}</div>}
-            <div className="inventory-grid">
-              {warehouseLocations.map(location => {
-                const totalVal = location.balances.reduce(
-                  (acc, b) => acc + Number(b.quantityBaseUnits) * getProductPrice(b.productId),
-                  0,
-                );
-                return (
-                  <article className="route-card" key={location.id}>
-                    <div className="route-card-title">
-                      <div>
-                        <strong>{location.name}</strong>
-                        <span>{location.code} · Bodega central</span>
-                      </div>
-                      <span className={`status ${location.active ? 'active' : 'inactive'}`}>
-                        {location.active ? 'Activa' : 'Inactiva'}
-                      </span>
-                    </div>
-                    <div className="data-list">
-                      {location.balances.length ? (
-                        location.balances.map(balance => {
-                          const unitPrice = getProductPrice(balance.productId);
-                          const lineTotal = Number(balance.quantityBaseUnits) * unitPrice;
-                          return (
-                            <div className="data-row" key={balance.productId}>
-                              <span>{balance.productName}</span>
-                              <strong>
-                                {Number(balance.quantityBaseUnits).toLocaleString('es-GT')} {balance.baseUnitCode}
-                                {unitPrice > 0 && (
-                                  <span style={{ fontWeight: 'normal', color: 'var(--muted)', marginLeft: '0.45rem' }}>
-                                    · Q{lineTotal.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                  </span>
-                                )}
-                              </strong>
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <span className="muted">Sin existencias registradas</span>
-                      )}
-                    </div>
-                    {totalVal > 0 && (
-                      <div
-                        style={{
-                          marginTop: '0.85rem',
-                          paddingTop: '0.75rem',
-                          borderTop: '1px solid var(--line)',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                        }}
-                      >
-                        <span style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>Valor comercial estimado en bodega:</span>
-                        <strong style={{ fontSize: '1.15rem', color: 'var(--primary-dark)' }}>
-                          Q{totalVal.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </strong>
-                      </div>
-                    )}
-                    <div style={{ marginTop: '0.65rem' }}>
-                      <button className="secondary" onClick={() => setSelectedLocation(location.id)}>
-                        Ver movimientos
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
+            {warehouseLocations.length > 0 ? (
+              <div className="table-wrap inventory-table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th style={{ width: '130px' }}>Código</th>
+                      <th style={{ width: '220px' }}>Bodega</th>
+                      <th>Existencias y Detalle de Stock</th>
+                      <th style={{ textAlign: 'right', width: '170px' }}>Valor Comercial</th>
+                      <th style={{ width: '100px' }}>Estado</th>
+                      <th style={{ textAlign: 'center', width: '150px' }}>Opciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {warehouseLocations.map(location => {
+                      const totalVal = location.balances.reduce(
+                        (acc, b) => acc + Number(b.quantityBaseUnits) * getProductPrice(b.productId),
+                        0,
+                      );
+                      return (
+                        <tr key={location.id}>
+                          <td><strong>{location.code}</strong></td>
+                          <td>
+                            <strong>{location.name}</strong>
+                            <small style={{ display: 'block', color: 'var(--muted)' }}>Almacén central</small>
+                          </td>
+                          <td>
+                            {location.balances.length ? (
+                              <div className="inventory-balances-cell">
+                                {location.balances.map(balance => {
+                                  const unitPrice = getProductPrice(balance.productId);
+                                  const lineTotal = Number(balance.quantityBaseUnits) * unitPrice;
+                                  return (
+                                    <span className="inventory-balance-chip" key={balance.productId}>
+                                      <span>{balance.productName}:</span>
+                                      <strong>
+                                        {Number(balance.quantityBaseUnits).toLocaleString('es-GT')} {balance.baseUnitCode}
+                                      </strong>
+                                      {unitPrice > 0 && (
+                                        <span className="chip-price">
+                                          · Q{lineTotal.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </span>
+                                      )}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <span className="muted">Sin existencias registradas</span>
+                            )}
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <strong style={{ fontSize: '1rem', color: 'var(--primary-dark)' }}>
+                              Q{totalVal.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </strong>
+                          </td>
+                          <td>
+                            <span className={`status ${location.active ? 'active' : 'inactive'}`}>
+                              {location.active ? 'Activa' : 'Inactiva'}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              className="secondary"
+                              style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}
+                              onClick={() => setSelectedLocation(location.id)}
+                            >
+                              Ver movimientos
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="muted">No hay bodegas registradas.</p>
+            )}
           </section>
 
           {/* Inventario en Circulación (Rutas en calle) */}
@@ -409,71 +423,81 @@ export function InventoryPage({ canManage, view = 'create' }: InventoryPageProps
                 </div>
                 <span>{routeLocations.length} rutas</span>
               </div>
-              <div className="inventory-grid">
-                {routeLocations.map(location => {
-                  const totalRouteVal = location.balances.reduce(
-                    (acc, b) => acc + Number(b.quantityBaseUnits) * getProductPrice(b.productId),
-                    0,
-                  );
-                  return (
-                    <article className="route-card" key={location.id}>
-                      <div className="route-card-title">
-                        <div>
-                          <strong>{location.name}</strong>
-                          <span>{location.code} · Inventario de ruta</span>
-                        </div>
-                        <span className={`status ${location.active ? 'active' : 'inactive'}`}>
-                          {location.active ? 'Activa' : 'Inactiva'}
-                        </span>
-                      </div>
-                      <div className="data-list">
-                        {location.balances.length ? (
-                          location.balances.map(balance => {
-                            const unitPrice = getProductPrice(balance.productId);
-                            const lineTotal = Number(balance.quantityBaseUnits) * unitPrice;
-                            return (
-                              <div className="data-row" key={balance.productId}>
-                                <span>{balance.productName}</span>
-                                <strong>
-                                  {Number(balance.quantityBaseUnits).toLocaleString('es-GT')} {balance.baseUnitCode}
-                                  {unitPrice > 0 && (
-                                    <span style={{ fontWeight: 'normal', color: 'var(--muted)', marginLeft: '0.45rem' }}>
-                                      · Q{lineTotal.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              <div className="table-wrap inventory-table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th style={{ width: '130px' }}>Código</th>
+                      <th style={{ width: '240px' }}>Ruta de Reparto</th>
+                      <th>Existencias a Bordo en Calle</th>
+                      <th style={{ textAlign: 'right', width: '170px' }}>Valor en Ruta</th>
+                      <th style={{ width: '100px' }}>Estado</th>
+                      <th style={{ textAlign: 'center', width: '150px' }}>Opciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {routeLocations.map(location => {
+                      const totalRouteVal = location.balances.reduce(
+                        (acc, b) => acc + Number(b.quantityBaseUnits) * getProductPrice(b.productId),
+                        0,
+                      );
+                      return (
+                        <tr key={location.id}>
+                          <td><strong>{location.code}</strong></td>
+                          <td>
+                            <strong>{location.name}</strong>
+                            <small style={{ display: 'block', color: 'var(--muted)' }}>Inventario de ruta</small>
+                          </td>
+                          <td>
+                            {location.balances.length ? (
+                              <div className="inventory-balances-cell">
+                                {location.balances.map(balance => {
+                                  const unitPrice = getProductPrice(balance.productId);
+                                  const lineTotal = Number(balance.quantityBaseUnits) * unitPrice;
+                                  return (
+                                    <span className="inventory-balance-chip" key={balance.productId}>
+                                      <span>{balance.productName}:</span>
+                                      <strong>
+                                        {Number(balance.quantityBaseUnits).toLocaleString('es-GT')} {balance.baseUnitCode}
+                                      </strong>
+                                      {unitPrice > 0 && (
+                                        <span className="chip-price">
+                                          · Q{lineTotal.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </span>
+                                      )}
                                     </span>
-                                  )}
-                                </strong>
+                                  );
+                                })}
                               </div>
-                            );
-                          })
-                        ) : (
-                          <span className="muted">Sin existencias a bordo en este momento</span>
-                        )}
-                      </div>
-                      {totalRouteVal > 0 && (
-                        <div
-                          style={{
-                            marginTop: '0.85rem',
-                            paddingTop: '0.75rem',
-                            borderTop: '1px dashed var(--line)',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <span style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>Valor potencial en ruta:</span>
-                          <strong style={{ color: '#087a54' }}>
-                            Q{totalRouteVal.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </strong>
-                        </div>
-                      )}
-                      <div style={{ marginTop: '0.65rem' }}>
-                        <button className="secondary" onClick={() => setSelectedLocation(location.id)}>
-                          Ver movimientos
-                        </button>
-                      </div>
-                    </article>
-                  );
-                })}
+                            ) : (
+                              <span className="muted">Sin existencias a bordo en este momento</span>
+                            )}
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <strong style={{ fontSize: '1rem', color: '#087a54' }}>
+                              Q{totalRouteVal.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </strong>
+                          </td>
+                          <td>
+                            <span className={`status ${location.active ? 'active' : 'inactive'}`}>
+                              {location.active ? 'Activa' : 'Inactiva'}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              className="secondary"
+                              style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}
+                              onClick={() => setSelectedLocation(location.id)}
+                            >
+                              Ver movimientos
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </section>
           )}
@@ -482,33 +506,61 @@ export function InventoryPage({ canManage, view = 'create' }: InventoryPageProps
           {selectedLocation && (
             <section className="panel section-panel">
               <div className="section-heading">
-                <h2>Libro de movimientos</h2>
-                <span>Solo lectura</span>
+                <div>
+                  <h2>Libro de movimientos</h2>
+                  <span style={{ fontSize: '0.85rem' }}>Historial de entradas y salidas para la ubicación seleccionada</span>
+                </div>
+                <button
+                  type="button"
+                  className="secondary"
+                  style={{ padding: '0.25rem 0.65rem', fontSize: '0.82rem' }}
+                  onClick={() => setSelectedLocation('')}
+                >
+                  Cerrar movimientos
+                </button>
               </div>
               {movements.error && <div className="alert error">{movements.error.message}</div>}
-              <div className="data-list">
-                {movements.data?.map(item => (
-                  <div className="data-row movement-row" key={item.id}>
-                    <div>
-                      <strong>{item.productName}</strong>
-                      <span>
-                        {item.movementType} · {item.reason} · {item.actorUsername}
-                      </span>
-                    </div>
-                    <div>
-                      <strong className={Number(item.quantityDelta) >= 0 ? 'positive' : 'negative'}>
-                        {Number(item.quantityDelta) > 0 ? '+' : ''}
-                        {Number(item.quantityDelta).toLocaleString('es-GT')}
-                      </strong>
-                      <span>
-                        {Number(item.balanceBefore).toLocaleString('es-GT')} →{' '}
-                        {Number(item.balanceAfter).toLocaleString('es-GT')}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {movements.data?.length === 0 && <p className="muted">Aún no hay movimientos para esta ubicación.</p>}
+              {movements.data && movements.data.length > 0 ? (
+                <div className="table-wrap movement-table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Producto</th>
+                        <th>Tipo y Motivo</th>
+                        <th>Responsable</th>
+                        <th style={{ textAlign: 'right' }}>Variación</th>
+                        <th style={{ textAlign: 'right' }}>Saldo (Antes → Después)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {movements.data.map(item => (
+                        <tr key={item.id}>
+                          <td><strong>{item.productName}</strong></td>
+                          <td>
+                            <span>{item.movementType}</span>
+                            <small style={{ display: 'block', color: 'var(--muted)' }}>{item.reason || 'Sin motivo especificado'}</small>
+                          </td>
+                          <td>{item.actorUsername || 'Sistema'}</td>
+                          <td style={{ textAlign: 'right' }}>
+                            <strong className={Number(item.quantityDelta) >= 0 ? 'positive' : 'negative'}>
+                              {Number(item.quantityDelta) > 0 ? '+' : ''}
+                              {Number(item.quantityDelta).toLocaleString('es-GT')}
+                            </strong>
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <span style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>
+                              {Number(item.balanceBefore).toLocaleString('es-GT')} →{' '}
+                            </span>
+                            <strong>{Number(item.balanceAfter).toLocaleString('es-GT')}</strong>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="muted">Aún no hay movimientos registrados para esta ubicación.</p>
+              )}
             </section>
           )}
         </>
