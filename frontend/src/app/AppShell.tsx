@@ -180,17 +180,88 @@ export function AppShell() {
     <div className="app-shell">
       <header>
         <div className="header-brand">
-          {company.data?.logoUrl && <img src={`${resolveApiUrl(company.data.logoUrl)}?v=${company.data.version}`} alt="" />}
-          <div><strong>{company.data?.commercialName ?? 'Agua Pura'}</strong><span className="user-name">{user?.displayName}</span></div>
+          {company.data?.logoUrl ? (
+            <img src={`${resolveApiUrl(company.data.logoUrl)}?v=${company.data.version}`} alt="" />
+          ) : (
+            <div className="sidebar-logo-icon" style={{ width: 34, height: 34 }}>
+              <Droplets size={18} color="#ffffff" strokeWidth={2.5} />
+            </div>
+          )}
+          <div>
+            <strong>{company.data?.commercialName ?? 'AquaFresh'}</strong>
+            <span className="user-name">{user?.displayName} · {user?.roles?.[0] ?? 'Operativo'}</span>
+          </div>
         </div>
         <ConnectionIndicator />
       </header>
+
       <aside>
-        <nav aria-label="Principal">{renderNavigation('desktop')}</nav>
-        <button className="secondary" onClick={handleLogout}>Cerrar sesión</button>
+        <div className="sidebar-brand">
+          <div className="sidebar-logo-icon">
+            {company.data?.logoUrl ? (
+              <img src={`${resolveApiUrl(company.data.logoUrl)}?v=${company.data.version}`} alt="" />
+            ) : (
+              <Droplets size={22} color="#ffffff" strokeWidth={2.5} />
+            )}
+          </div>
+          <div>
+            <strong>{company.data?.commercialName ?? 'AquaFresh'}</strong>
+            <span className="sidebar-sub">Panel de Control</span>
+          </div>
+        </div>
+
+        <div className="sidebar-nav-scroll">
+          <nav aria-label="Principal">{renderNavigation('desktop')}</nav>
+        </div>
+
+        <div className="sidebar-goal-card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="sidebar-goal-title">Objetivo Mensual</span>
+            <span className="sidebar-goal-pct" style={{ fontWeight: 700 }}>78%</span>
+          </div>
+          <div className="sidebar-goal-progress">
+            <div className="sidebar-goal-bar" style={{ width: '78%' }} />
+          </div>
+          <div style={{ fontSize: '0.72rem', opacity: 0.9, marginTop: '0.35rem' }}>
+            Meta de ventas y volumen
+          </div>
+        </div>
+
+        <div className="sidebar-footer">
+          <div className="sidebar-user">
+            <div className="sidebar-user-avatar">
+              {user?.displayName ? user.displayName.slice(0, 1).toUpperCase() : 'U'}
+            </div>
+            <div className="sidebar-user-info">
+              <strong>{user?.displayName ?? 'Usuario'}</strong>
+              <span>{user?.roles?.[0] ?? 'OPERATIVO'}</span>
+            </div>
+          </div>
+          <button className="sidebar-logout-btn" type="button" onClick={handleLogout} title="Cerrar sesión">
+            <LogOut size={17} />
+          </button>
+        </div>
       </aside>
+
       <section className="page"><Outlet /></section>
+
       <nav className="bottom-nav" aria-label="Navegación móvil">
+        <NavLink to="/" end>
+          <LayoutDashboard size={18} />
+          <span>Inicio</span>
+        </NavLink>
+        <NavLink to="/sales">
+          <ShoppingCart size={18} />
+          <span>Ventas</span>
+        </NavLink>
+        <NavLink to="/routes">
+          <Truck size={18} />
+          <span>Rutas</span>
+        </NavLink>
+        <NavLink to="/inventory">
+          <Warehouse size={18} />
+          <span>Stock</span>
+        </NavLink>
         <button
           ref={mobileMenuTriggerRef}
           className="mobile-menu-trigger"
@@ -199,9 +270,11 @@ export function AppShell() {
           aria-controls="mobile-menu-panel"
           onClick={() => setMobileMenuOpen(open => !open)}
         >
+          <Menu size={16} style={{ display: 'inline', marginRight: '4px' }} />
           Menú
         </button>
       </nav>
+
       {mobileMenuOpen && <div className="mobile-menu-overlay" onMouseDown={event => {
         if (event.target === event.currentTarget) setMobileMenuOpen(false);
       }}>

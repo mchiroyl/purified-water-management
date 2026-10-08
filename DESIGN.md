@@ -30,6 +30,8 @@ Sistema de diseño empresarial para Fresh Water (ERP & POS Logístico de Purific
 - **Estándar:** Iconos vectoriales SVG de trazo lineal uniforme de la biblioteca `lucide-react` con `strokeWidth={1.75}` o `{2}`, tamaño `14px` a `20px`.
 
 ## Responsividad Multidispositivo
+Toda pantalla debe adaptarse automáticamente a escritorio, laptops, tabletas y teléfonos según el espacio disponible. Los rangos siguientes son orientativos: el contenido debe seguir funcionando entre ellos, en orientación vertical y horizontal y con zoom al 200 %. Se deben conservar las funciones de cada rol en todos los tamaños, evitar el desplazamiento horizontal de la página y comprobar los flujos principales en anchos de 360, 390, 768, 1024, 1366 y 1920 px. Los controles táctiles tendrán un área mínima de 44 × 44 px. Este criterio aplica a todas las propuestas de diseño y a su implementación.
+
 1. **Teléfonos Móviles (< 640px):**
    - Vistas operativas y tablas con desplazamiento horizontal suave (`overflow-x: auto`) o apilamiento limpio.
    - Botones de acción táctiles con altura mínima de `44px` para interacción con pulgar en ruta.

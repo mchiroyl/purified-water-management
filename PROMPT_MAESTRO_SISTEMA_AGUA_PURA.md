@@ -20,6 +20,17 @@ Necesito que analices, diseñes, documentes, desarrolles, pruebes y dejes FUNCIO
 
 Este archivo es la fuente canónica de requisitos. Toda decisión, plan, caso de uso, módulo, prueba y documentación debe derivarse de este documento. No crear fases paralelas, módulos duplicados ni implementaciones distintas para una misma capacidad.
 
+## Requisito obligatorio de interfaz web responsiva
+
+El sistema es una aplicación web / PWA responsiva. Todas sus pantallas, módulos y flujos deben adaptarse automáticamente a computadoras de escritorio, laptops, tabletas y teléfonos, según el espacio disponible, sin requerir una configuración manual del usuario.
+
+- Diseñar con enfoque mobile-first y distribuir el contenido de forma fluida, sin depender de modelos específicos de dispositivos. Adaptar navegación, columnas, formularios, tablas, paneles y diálogos al ancho y alto disponibles.
+- Mantener las funciones autorizadas para cada rol accesibles en todos los tamaños de pantalla. No ocultar acciones esenciales para resolver problemas de espacio.
+- Soportar orientación vertical y horizontal, interacción táctil y uso con teclado y ratón. Los controles táctiles deben tener al menos 44 × 44 px.
+- Evitar desbordamientos, texto recortado, controles superpuestos y desplazamiento horizontal de toda la página. Las tablas extensas pueden tener desplazamiento horizontal dentro de su propio contenedor cuando sea necesario.
+- Verificar los flujos principales en anchos representativos de 360, 390, 768, 1024, 1366 y 1920 px, además de tamaños intermedios, cambio de orientación y zoom del navegador al 200 %. No considerar terminada una pantalla con fallos de adaptación conocidos.
+- Aplicar este requisito a todo trabajo de diseño UI/UX e implementación, incluidas las propuestas realizadas con Impeccable, Superdesign, Figma e Imagegen.
+
 NO quiero únicamente ejemplos.
 
 NO quiero únicamente una maqueta.
