@@ -46,6 +46,7 @@ type Product = {
 
 type Movement = {
   id: string;
+  productId?: string;
   productName: string;
   productCode: string;
   movementType: string;
@@ -128,6 +129,7 @@ export function InventoryPage({ canManage, view = 'create' }: InventoryPageProps
   });
 
   const [selectedLocation, setSelectedLocation] = useState('');
+  const [selectedProductFilter, setSelectedProductFilter] = useState('ALL');
   const [showOnlyStreetActiveRoutes, setShowOnlyStreetActiveRoutes] = useState(true);
 
   const movements = useQuery({
@@ -260,6 +262,70 @@ export function InventoryPage({ canManage, view = 'create' }: InventoryPageProps
       return op.isOnStreet;
     });
   }, [locations.data, loads.data, showOnlyStreetActiveRoutes]);
+
+  const activeLocationObj = useMemo(() => {
+    return locations.data?.find(l => l.id === selectedLocation);
+  }, [locations.data, selectedLocation]);
+
+  const uniqueProductsInMovements = useMemo(() => {
+    if (!movements.data) return [];
+    const map = new Map<string, string>();
+    for (const m of movements.data) {
+      const key = m.productCode || m.productName;
+      map.set(key, m.productName);
+    }
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [movements.data]);
+
+  const filteredMovements = useMemo(() => {
+    if (!movements.data) return [];
+    if (selectedProductFilter === 'ALL') return movements.data;
+    return movements.data.filter(m => (m.productCode || m.productName) === selectedProductFilter);
+  }, [movements.data, selectedProductFilter]);
+
+  const getMovementMeta = (movementType: string) => {
+    switch (movementType) {
+      case 'LOAD_IN':
+        return { label: 'Entrada por carga', badgeClass: 'active' };
+      case 'LOAD_OUT':
+        return { label: 'Despacho de bodega', badgeClass: 'inactive' };
+      case 'SALE_OUT':
+        return { label: 'Salida por venta', badgeClass: 'neutral' };
+      case 'ADJUSTMENT_IN':
+        return { label: 'Ajuste positivo', badgeClass: 'active' };
+      case 'ADJUSTMENT_OUT':
+        return { label: 'Ajuste negativo', badgeClass: 'inactive' };
+      case 'TRANSFER_IN':
+        return { label: 'Entrada transferencia', badgeClass: 'active' };
+      case 'TRANSFER_OUT':
+        return { label: 'Salida transferencia', badgeClass: 'inactive' };
+      case 'RETURN_IN':
+        return { label: 'Devolución recibida', badgeClass: 'active' };
+      case 'RETURN_OUT':
+        return { label: 'Devolución entregada', badgeClass: 'inactive' };
+      case 'WASTE_OUT':
+        return { label: 'Merma aprobada', badgeClass: 'inactive' };
+      default:
+        return { label: movementType, badgeClass: 'neutral' };
+    }
+  };
+
+  const formatMovementDateTime = (isoString?: string) => {
+    if (!isoString) return '—';
+    try {
+      const d = new Date(isoString);
+      return d.toLocaleString('es-GT', {
+        timeZone: 'America/Guatemala',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return isoString;
+    }
+  };
 
   // Si el usuario no tiene permisos de gestión, siempre ve la lista de inventario
   const effectiveView = canManage ? view : 'list';
@@ -472,7 +538,10 @@ export function InventoryPage({ canManage, view = 'create' }: InventoryPageProps
                               type="button"
                               className="secondary"
                               style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}
-                              onClick={() => setSelectedLocation(location.id)}
+                              onClick={() => {
+                                setSelectedLocation(location.id);
+                                setSelectedProductFilter('ALL');
+                              }}
                             >
                               Ver movimientos
                             </button>
@@ -594,7 +663,10 @@ export function InventoryPage({ canManage, view = 'create' }: InventoryPageProps
                               type="button"
                               className="secondary"
                               style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}
-                              onClick={() => setSelectedLocation(location.id)}
+                              onClick={() => {
+                                setSelectedLocation(location.id);
+                                setSelectedProductFilter('ALL');
+                              }}
                             >
                               Ver movimientos
                             </button>
@@ -629,62 +701,166 @@ export function InventoryPage({ canManage, view = 'create' }: InventoryPageProps
 
           {/* Libro de movimientos */}
           {selectedLocation && (
-            <section className="panel section-panel">
-              <div className="section-heading">
+            <section className="panel section-panel" style={{ marginTop: '1.25rem' }}>
+              <div className="section-heading" style={{ flexWrap: 'wrap', gap: '0.75rem' }}>
                 <div>
-                  <h2>Libro de movimientos</h2>
-                  <span style={{ fontSize: '0.85rem' }}>Historial de entradas y salidas para la ubicación seleccionada</span>
+                  <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    Libro de movimientos
+                    {activeLocationObj && (
+                      <span className="badge" style={{ fontSize: '0.85rem', fontWeight: 600, background: '#eff6ff', color: '#1d4ed8' }}>
+                        {activeLocationObj.name}
+                      </span>
+                    )}
+                  </h2>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
+                    {activeLocationObj?.locationType === 'ROUTE'
+                      ? `Kardex oficial de la ruta: ${activeLocationObj.routeName || activeLocationObj.routeCode || activeLocationObj.name}`
+                      : 'Historial de entradas y salidas de la bodega física'}
+                  </span>
                 </div>
                 <button
                   type="button"
                   className="secondary"
-                  style={{ padding: '0.25rem 0.65rem', fontSize: '0.82rem' }}
-                  onClick={() => setSelectedLocation('')}
+                  style={{ padding: '0.35rem 0.85rem', fontSize: '0.85rem' }}
+                  onClick={() => {
+                    setSelectedLocation('');
+                    setSelectedProductFilter('ALL');
+                  }}
                 >
                   Cerrar movimientos
                 </button>
               </div>
+
+              {/* Filtro por producto */}
+              {uniqueProductsInMovements.length > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.65rem', marginBottom: '0.75rem' }}>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--muted)' }}>Filtrar producto:</span>
+                  <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className={selectedProductFilter === 'ALL' ? 'primary' : 'secondary'}
+                      style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}
+                      onClick={() => setSelectedProductFilter('ALL')}
+                    >
+                      Todos ({movements.data?.length ?? 0})
+                    </button>
+                    {uniqueProductsInMovements.map(p => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className={selectedProductFilter === p.id ? 'primary' : 'secondary'}
+                        style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}
+                        onClick={() => setSelectedProductFilter(p.id)}
+                      >
+                        {p.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {movements.error && <div className="alert error">{movements.error.message}</div>}
-              {movements.data && movements.data.length > 0 ? (
-                <div className="table-wrap movement-table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Producto</th>
-                        <th>Tipo y Motivo</th>
-                        <th>Responsable</th>
-                        <th style={{ textAlign: 'right' }}>Variación</th>
-                        <th style={{ textAlign: 'right' }}>Saldo (Antes → Después)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {movements.data.map(item => (
-                        <tr key={item.id}>
-                          <td><strong>{item.productName}</strong></td>
-                          <td>
-                            <span>{item.movementType}</span>
-                            <small style={{ display: 'block', color: 'var(--muted)' }}>{item.reason || 'Sin motivo especificado'}</small>
-                          </td>
-                          <td>{item.actorUsername || 'Sistema'}</td>
-                          <td style={{ textAlign: 'right' }}>
-                            <strong className={Number(item.quantityDelta) >= 0 ? 'positive' : 'negative'}>
-                              {Number(item.quantityDelta) > 0 ? '+' : ''}
+
+              {filteredMovements.length > 0 ? (
+                <>
+                  {/* Vista Tarjetas para Móvil (auto-contenida, sin scroll horizontal) */}
+                  <div className="movement-cards-list">
+                    {filteredMovements.map(item => {
+                      const meta = getMovementMeta(item.movementType);
+                      const isPositive = Number(item.quantityDelta) >= 0;
+                      return (
+                        <div key={item.id} className="movement-card">
+                          <div className="movement-card-header">
+                            <div className="movement-card-type-date">
+                              <span className={`status ${meta.badgeClass}`} style={{ fontSize: '0.75rem', padding: '0.2rem 0.55rem' }}>
+                                {meta.label}
+                              </span>
+                              <span className="movement-card-date">{formatMovementDateTime(item.createdAt)}</span>
+                            </div>
+                            <strong className={`movement-card-delta ${isPositive ? 'positive' : 'negative'}`}>
+                              {isPositive ? '+' : ''}
                               {Number(item.quantityDelta).toLocaleString('es-GT')}
                             </strong>
-                          </td>
-                          <td style={{ textAlign: 'right' }}>
-                            <span style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>
-                              {Number(item.balanceBefore).toLocaleString('es-GT')} →{' '}
+                          </div>
+
+                          <div className="movement-card-body">
+                            <div className="movement-card-product">
+                              <strong>{item.productName}</strong>
+                              <span className="movement-card-reason">{item.reason || 'Sin motivo especificado'}</span>
+                            </div>
+                          </div>
+
+                          <div className="movement-card-footer">
+                            <span className="movement-card-actor">
+                              Por: <strong>{item.actorUsername || 'Sistema'}</strong>
                             </span>
-                            <strong>{Number(item.balanceAfter).toLocaleString('es-GT')}</strong>
-                          </td>
+                            <div className="movement-card-balance">
+                              <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>Saldo: </span>
+                              <span style={{ color: 'var(--muted)', fontSize: '0.82rem' }}>
+                                {Number(item.balanceBefore).toLocaleString('es-GT')} →{' '}
+                              </span>
+                              <strong style={{ color: 'var(--ink)' }}>{Number(item.balanceAfter).toLocaleString('es-GT')}</strong>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Vista Tabla para Desktop */}
+                  <div className="table-wrap movement-table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Fecha y Hora</th>
+                          <th>Producto</th>
+                          <th>Tipo y Motivo</th>
+                          <th>Responsable</th>
+                          <th style={{ textAlign: 'right' }}>Variación</th>
+                          <th style={{ textAlign: 'right' }}>Saldo (Antes → Después)</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {filteredMovements.map(item => {
+                          const meta = getMovementMeta(item.movementType);
+                          return (
+                            <tr key={item.id}>
+                              <td style={{ whiteSpace: 'nowrap', fontSize: '0.82rem', color: 'var(--muted)' }}>
+                                {formatMovementDateTime(item.createdAt)}
+                              </td>
+                              <td><strong>{item.productName}</strong></td>
+                              <td>
+                                <span className={`status ${meta.badgeClass}`} style={{ fontSize: '0.72rem', padding: '0.15rem 0.45rem', marginRight: '0.4rem' }}>
+                                  {meta.label}
+                                </span>
+                                <small style={{ display: 'block', color: 'var(--muted)', marginTop: '0.15rem' }}>{item.reason || 'Sin motivo'}</small>
+                              </td>
+                              <td>{item.actorUsername || 'Sistema'}</td>
+                              <td style={{ textAlign: 'right' }}>
+                                <strong className={Number(item.quantityDelta) >= 0 ? 'positive' : 'negative'}>
+                                  {Number(item.quantityDelta) > 0 ? '+' : ''}
+                                  {Number(item.quantityDelta).toLocaleString('es-GT')}
+                                </strong>
+                              </td>
+                              <td style={{ textAlign: 'right' }}>
+                                <span style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>
+                                  {Number(item.balanceBefore).toLocaleString('es-GT')} →{' '}
+                                </span>
+                                <strong>{Number(item.balanceAfter).toLocaleString('es-GT')}</strong>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               ) : (
-                <p className="muted">Aún no hay movimientos registrados para esta ubicación.</p>
+                <p className="muted" style={{ padding: '1rem 0' }}>
+                  {selectedProductFilter !== 'ALL'
+                    ? 'No hay movimientos para el producto seleccionado.'
+                    : 'Aún no hay movimientos registrados para esta ubicación.'}
+                </p>
               )}
             </section>
           )}
