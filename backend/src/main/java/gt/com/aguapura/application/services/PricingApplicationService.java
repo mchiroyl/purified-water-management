@@ -155,7 +155,7 @@ public class PricingApplicationService {
     private void ensureCustomerEligible(UUID id) {
         if (!persistence.customerEligibleForBenefits(id)) {
             throw validation("CUSTOMER_COMMERCIAL_BENEFIT_FORBIDDEN",
-                    "Solo un cliente permanente activo puede recibir precio especial o descuento manual.");
+                    "El cliente seleccionado debe ser un cliente activo para poder recibir precio especial o descuento manual.");
         }
     }
 

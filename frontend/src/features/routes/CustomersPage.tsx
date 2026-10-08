@@ -43,6 +43,7 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
     creditAllowed: false,
     creditLimit: 0,
     status: 'ACTIVE',
+    customerType: 'PERMANENT',
   });
   const [showUpdateSuccessModal, setShowUpdateSuccessModal] = useState(false);
   const [updatedCustomerName, setUpdatedCustomerName] = useState('');
@@ -350,6 +351,7 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
                                 creditAllowed: customer.creditAllowed,
                                 creditLimit: customer.creditLimit || 0,
                                 status: customer.status,
+                                customerType: customer.customerType || 'PERMANENT',
                               });
                             }}
                           >
@@ -844,6 +846,18 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
                   />
                 </label>
               )}
+
+              <label>
+                Tipo de cliente
+                <select
+                  value={editForm.customerType}
+                  onChange={e => setEditForm({ ...editForm, customerType: e.target.value })}
+                >
+                  <option value="PERMANENT">Permanente</option>
+                  <option value="OCCASIONAL">Ocasional / Creado en ruta</option>
+                  <option value="PROVISIONAL">Provisional</option>
+                </select>
+              </label>
 
               <label>
                 Estado

@@ -15,5 +15,13 @@ public record UpdateCustomerRequest(
         @NotBlank @Size(min = 3, max = 1000) String addressReference,
         boolean creditAllowed,
         @NotNull @DecimalMin("0.00") BigDecimal creditLimit,
-        String status
-) {}
+        String status,
+        String customerType
+) {
+    public UpdateCustomerRequest(String name, String contactName, String phone, String whatsapp,
+                                 String addressReference, boolean creditAllowed, BigDecimal creditLimit,
+                                 String status) {
+        this(name, contactName, phone, whatsapp, addressReference, creditAllowed, creditLimit, status, null);
+    }
+}
+

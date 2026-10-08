@@ -37,7 +37,15 @@ public interface CustomerRoutePort {
     record UpdateCustomer(String name, String normalizedName, String contactName, String phone,
                           String normalizedPhone, String whatsapp, String normalizedWhatsapp,
                           String addressReference, boolean creditAllowed, BigDecimal creditLimit,
-                          String status) {}
+                          String status, String customerType) {
+        public UpdateCustomer(String name, String normalizedName, String contactName, String phone,
+                              String normalizedPhone, String whatsapp, String normalizedWhatsapp,
+                              String addressReference, boolean creditAllowed, BigDecimal creditLimit,
+                              String status) {
+            this(name, normalizedName, contactName, phone, normalizedPhone, whatsapp, normalizedWhatsapp,
+                    addressReference, creditAllowed, creditLimit, status, null);
+        }
+    }
     record CustomerView(UUID id, String code, String name, String contactName, String phone, String whatsapp,
                         String addressReference, String customerType, String status, boolean creditAllowed,
                         BigDecimal creditLimit, BigDecimal currentBalance, UUID routeId, String routeCode,

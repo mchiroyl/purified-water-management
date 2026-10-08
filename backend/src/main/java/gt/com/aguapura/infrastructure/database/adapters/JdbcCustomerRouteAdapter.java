@@ -68,6 +68,7 @@ public class JdbcCustomerRouteAdapter implements CustomerRoutePort {
             throw notFound("CUSTOMER_NOT_FOUND", "No se encontró el cliente.");
         }
         String status = (item.status() != null && !item.status().isBlank()) ? item.status() : "ACTIVE";
+        String requestedType = (item.customerType() != null && !item.customerType().isBlank()) ? item.customerType() : null;
         jdbc.sql("""
                 UPDATE customer
                 SET name = :name,
@@ -81,8 +82,14 @@ public class JdbcCustomerRouteAdapter implements CustomerRoutePort {
                     credit_allowed = :creditAllowed,
                     credit_limit = :creditLimit,
                     status = :status,
-                    customer_type = CASE WHEN :creditAllowed THEN 'PERMANENT' ELSE customer_type END,
-                    registration_state = CASE WHEN :creditAllowed THEN 'ACTIVE' ELSE registration_state END
+                    customer_type = CASE
+                        WHEN :creditAllowed THEN 'PERMANENT'
+                        WHEN :requestedType IS NOT NULL THEN :requestedType
+                        ELSE customer_type END,
+                    registration_state = CASE
+                        WHEN :creditAllowed THEN 'ACTIVE'
+                        WHEN :requestedType = 'PERMANENT' THEN 'ACTIVE'
+                        ELSE registration_state END
                 WHERE id = :id
                 """).param("id", id)
                 .param("name", item.name())
@@ -96,6 +103,7 @@ public class JdbcCustomerRouteAdapter implements CustomerRoutePort {
                 .param("creditAllowed", item.creditAllowed())
                 .param("creditLimit", item.creditLimit())
                 .param("status", status)
+                .param("requestedType", requestedType, java.sql.Types.VARCHAR)
                 .update();
         return findCustomer(id);
     }
