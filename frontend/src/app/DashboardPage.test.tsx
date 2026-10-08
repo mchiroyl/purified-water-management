@@ -235,5 +235,24 @@ describe('DashboardPage', () => {
     expect(await screen.findByText(/ruta retalhuleu/i)).toBeInTheDocument();
     expect(screen.getAllByText(/amartinez|amilcar/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Q1,017.00').length).toBeGreaterThanOrEqual(1);
+
+    // Al hacer clic en "Personalizado"
+    fireEvent.click(screen.getByRole('button', { name: /personalizado/i }));
+    const startDateInput = screen.getByLabelText(/desde:/i) as HTMLInputElement;
+    const endDateInput = screen.getByLabelText(/hasta:/i) as HTMLInputElement;
+    expect(startDateInput).toBeInTheDocument();
+    expect(endDateInput).toBeInTheDocument();
+
+    // 1. Si fecha Desde es ayer y Hasta está vacío, debe encontrar la ruta de ayer
+    fireEvent.change(startDateInput, { target: { value: yStr } });
+    expect(screen.getByText(/ruta retalhuleu/i)).toBeInTheDocument();
+
+    // 2. Si fecha Desde es hace 5 días y Hasta está vacío, NO debe encontrar la ruta de ayer
+    fireEvent.change(startDateInput, { target: { value: '2020-01-01' } });
+    expect(screen.queryByText(/ruta retalhuleu/i)).not.toBeInTheDocument();
+
+    // 3. Si se define un rango Hasta que cubre la fecha de ayer ('2020-01-01' a '2030-01-01'), debe volver a mostrarla
+    fireEvent.change(endDateInput, { target: { value: '2030-01-01' } });
+    expect(await screen.findByText(/ruta retalhuleu/i)).toBeInTheDocument();
   });
 });
