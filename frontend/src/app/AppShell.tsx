@@ -82,7 +82,21 @@ export function AppShell() {
   const canSeeAnnulments = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'VENDEDOR'].includes(role));
   const company = useQuery({
     queryKey: ['company-configuration'],
-    queryFn: () => apiRequest<{ commercialName: string; logoUrl?: string; version: number }>('/company-configuration')
+    queryFn: async () => {
+      const data = await apiRequest<{ commercialName: string; logoUrl?: string; version: number }>('/company-configuration');
+      try {
+        localStorage.setItem('company_config_cache', JSON.stringify(data));
+      } catch {}
+      return data;
+    },
+    initialData: () => {
+      try {
+        const cached = localStorage.getItem('company_config_cache');
+        if (cached) return JSON.parse(cached);
+      } catch {}
+      return undefined;
+    },
+    staleTime: 1000 * 60 * 10,
   });
   const navigationGroups: NavigationGroup[] = [
     {
@@ -183,10 +197,12 @@ export function AppShell() {
         <div className="header-brand">
           {company.data?.logoUrl ? (
             <img src={`${resolveApiUrl(company.data.logoUrl)}?v=${company.data.version}`} alt="" />
-          ) : (
+          ) : !company.isPending && !company.data?.logoUrl ? (
             <div className="sidebar-logo-icon" style={{ width: 34, height: 34 }}>
               <Droplets size={18} color="#ffffff" strokeWidth={2.5} />
             </div>
+          ) : (
+            <div style={{ width: 34, height: 34, borderRadius: '0.75rem', background: 'transparent' }} />
           )}
           <div>
             <strong>{company.data?.commercialName ?? 'Fresh Water'}</strong>
