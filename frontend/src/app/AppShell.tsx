@@ -61,6 +61,7 @@ export function AppShell() {
     void logout();
   };
   const isAdmin = user?.roles.includes('ADMINISTRADOR');
+  const isSeller = Boolean(user?.roles.includes('VENDEDOR') && !user?.roles.includes('ADMINISTRADOR'));
   const isCreditAdmin = user?.roles.includes('ADMINISTRADOR_CREDITO');
   const canSeeAudit = isAdmin || user?.roles.includes('SUPERVISOR');
   const canCatalog = user?.roles.some(role => ['ADMINISTRADOR', 'BODEGA', 'SUPERVISOR'].includes(role));
@@ -227,21 +228,29 @@ export function AppShell() {
           <ShoppingCart size={18} />
           <span>Ventas</span>
         </NavLink>
-        {canSeeRoutes ? (
-          <NavLink to="/routes">
-            <Truck size={18} />
-            <span>Rutas</span>
-          </NavLink>
+        {isSeller ? (
+          <>
+            <NavLink to="/loads">
+              <Package size={18} />
+              <span>Mi Carga</span>
+            </NavLink>
+            <NavLink to="/settlements">
+              <Receipt size={18} />
+              <span>Liquidación</span>
+            </NavLink>
+          </>
         ) : (
-          <NavLink to="/loads">
-            <Package size={18} />
-            <span>Mi Carga</span>
-          </NavLink>
+          <>
+            <NavLink to="/routes">
+              <Truck size={18} />
+              <span>Rutas</span>
+            </NavLink>
+            <NavLink to="/inventory">
+              <Warehouse size={18} />
+              <span>Stock</span>
+            </NavLink>
+          </>
         )}
-        <NavLink to="/inventory">
-          <Warehouse size={18} />
-          <span>Stock</span>
-        </NavLink>
         <button
           ref={mobileMenuTriggerRef}
           className="mobile-menu-trigger"
