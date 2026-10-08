@@ -61,6 +61,9 @@ export function CompanyConfigurationPage() {
     },
     onSuccess: (data) => {
       queryClient.setQueryData(['company-configuration'], data);
+      try {
+        localStorage.setItem('company_config_cache', JSON.stringify(data));
+      } catch {}
       queryClient.invalidateQueries({ queryKey: ['company-configuration'] });
       setLogo(null);
       setMessage('Datos guardados correctamente.');
