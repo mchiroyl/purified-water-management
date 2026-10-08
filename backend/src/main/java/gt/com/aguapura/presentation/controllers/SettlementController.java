@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -52,6 +53,17 @@ public class SettlementController {
                                               @Valid @RequestBody CashDeliveryRequest request,
                                               @AuthenticationPrincipal Jwt jwt) {
         return service.addCashDelivery(loadId, request, actor(jwt), device(jwt));
+    }
+
+    @DeleteMapping("/{loadId}/cash-deliveries/{deliveryId}")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR','SUPERVISOR')")
+    public SettlementResponse deleteCashDelivery(@PathVariable UUID loadId,
+                                                @PathVariable UUID deliveryId,
+                                                @AuthenticationPrincipal Jwt jwt) {
+        var result = service.deleteCashDelivery(loadId, deliveryId, actor(jwt));
+        audit.record(actor(jwt), device(jwt), "CASH_DELIVERY_DELETE", "CASH_DELIVERY", deliveryId,
+                Map.of("routeLoadId", loadId), Map.of("newDeliveredCash", result.deliveredCash()));
+        return result;
     }
 
     @PostMapping("/{loadId}/close")

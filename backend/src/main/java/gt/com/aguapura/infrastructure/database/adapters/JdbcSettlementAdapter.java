@@ -264,6 +264,31 @@ public class JdbcSettlementAdapter implements SettlementPort {
     }
 
     @Override
+    public void deleteCashDelivery(UUID routeLoadId, UUID deliveryId) {
+        var status = jdbc.sql("SELECT status FROM settlement WHERE route_load_id=:loadId")
+                .param("loadId", routeLoadId).query(String.class).optional();
+        if (status.filter("CLOSED"::equals).isPresent()) {
+            throw new BusinessException("SETTLEMENT_ALREADY_CLOSED",
+                    "No se pueden anular entregas de efectivo en una liquidación cerrada.",
+                    ErrorCategory.CONFLICT);
+        }
+        int deleted = jdbc.sql("DELETE FROM cash_delivery WHERE id=:id AND route_load_id=:loadId")
+                .param("id", deliveryId).param("loadId", routeLoadId).update();
+        if (deleted == 0) {
+            throw new BusinessException("CASH_DELIVERY_NOT_FOUND",
+                    "No se encontró la entrega de efectivo especificada.",
+                    ErrorCategory.NOT_FOUND);
+        }
+        jdbc.sql("""
+                UPDATE settlement SET
+                  delivered_cash = COALESCE((SELECT SUM(amount) FROM cash_delivery WHERE route_load_id=:loadId), 0),
+                  monetary_difference = expected_cash - COALESCE((SELECT SUM(amount) FROM cash_delivery WHERE route_load_id=:loadId), 0),
+                  version = version + 1
+                WHERE route_load_id = :loadId
+                """).param("loadId", routeLoadId).update();
+    }
+
+    @Override
     public void reconcileClosedSettlementCash(UUID routeLoadId) {
         jdbc.sql("""
                 UPDATE settlement SET
