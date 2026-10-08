@@ -49,6 +49,9 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
   const [closeNotes, setCloseNotes] = useState<Record<string, string>>({});
   const [toast, setToast] = useState<ToastNotification | null>(null);
   const [confirmCloseLoad, setConfirmCloseLoad] = useState<Settlement | null>(null);
+  const [calculatingLoadId, setCalculatingLoadId] = useState<string | null>(null);
+  const [deliveringLoadId, setDeliveringLoadId] = useState<string | null>(null);
+  const [closingLoadId, setClosingLoadId] = useState<string | null>(null);
 
   const refresh = async () => {
     await client.invalidateQueries({ queryKey: ['settlements'] });
@@ -59,6 +62,9 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
     mutationFn: (loadId: string) => apiRequest<Settlement>(`/settlements/${loadId}/calculate`, {
       method: 'POST', body: JSON.stringify({ pendingLocalOperations }),
     }),
+    onMutate: (loadId: string) => {
+      setCalculatingLoadId(loadId);
+    },
     onSuccess: (data) => {
       setToast({
         title: 'Cálculo actualizado',
@@ -76,6 +82,9 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
         icon: '⚠️',
       });
     },
+    onSettled: () => {
+      setCalculatingLoadId(null);
+    },
   });
 
   const deliver = useMutation({
@@ -91,6 +100,9 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
           notes: cashNotes[loadId] || 'Efectivo contado y recibido',
         }),
       });
+    },
+    onMutate: (loadId: string) => {
+      setDeliveringLoadId(loadId);
     },
     onSuccess: (data, loadId) => {
       const formattedAmount = money(Number(cash[loadId]));
@@ -111,6 +123,9 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
         icon: '❌',
       });
     },
+    onSettled: () => {
+      setDeliveringLoadId(null);
+    },
   });
 
   const close = useMutation({
@@ -121,6 +136,9 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
         notes: closeNotes[loadId] || 'Liquidación cerrada por administración',
       }),
     }),
+    onMutate: (loadId: string) => {
+      setClosingLoadId(loadId);
+    },
     onSuccess: (data) => {
       setToast({
         title: 'Liquidación cerrada exitosamente',
@@ -138,6 +156,9 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
         type: 'error',
         icon: '⚠️',
       });
+    },
+    onSettled: () => {
+      setClosingLoadId(null);
     },
   });
 
@@ -275,7 +296,7 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
             <button
               type="button"
               className="primary"
-              disabled={close.isPending}
+              disabled={closingLoadId === confirmCloseLoad.routeLoadId || (close.isPending && close.variables === confirmCloseLoad.routeLoadId)}
               onClick={() => close.mutate(confirmCloseLoad.routeLoadId)}
               style={{
                 backgroundColor: '#dc2626',
@@ -284,7 +305,7 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
                 padding: '0.6rem 1rem',
               }}
             >
-              {close.isPending ? 'Cerrando...' : `Confirmar cierre con faltante (${money(confirmCloseLoad.monetaryDifference)})`}
+              {closingLoadId === confirmCloseLoad.routeLoadId || (close.isPending && close.variables === confirmCloseLoad.routeLoadId) ? 'Cerrando...' : `Confirmar cierre con faltante (${money(confirmCloseLoad.monetaryDifference)})`}
             </button>
           </div>
         </div>
@@ -306,14 +327,17 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
       </div>
       <div className="data-list">
         {activeLoads.length === 0 && <p className="status-note">No hay recorridos activos pendientes de cálculo inicial.</p>}
-        {activeLoads.map(load => (
-          <div className="data-row" key={load.id}>
-            <span>Carga {load.loadNumber} · {load.routeCode} · {load.routeName}</span>
-            <button className="primary" disabled={calculate.isPending} onClick={() => calculate.mutate(load.id)}>
-              {calculate.isPending ? 'Calculando...' : 'Calcular con fuentes oficiales'}
-            </button>
-          </div>
-        ))}
+        {activeLoads.map(load => {
+          const isCalculatingThis = calculatingLoadId === load.id || (calculate.isPending && calculate.variables === load.id);
+          return (
+            <div className="data-row" key={load.id}>
+              <span>Carga {load.loadNumber} · {load.routeCode} · {load.routeName}</span>
+              <button className="primary" disabled={isCalculatingThis} onClick={() => calculate.mutate(load.id)}>
+                {isCalculatingThis ? 'Calculando...' : 'Calcular con fuentes oficiales'}
+              </button>
+            </div>
+          );
+        })}
       </div>
     </section>
 
@@ -334,6 +358,8 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
           const salesCashValue = item.salesCash ?? (item.expectedCash - (item.creditCollectionsCash ?? 0));
           const creditCollectionsCashValue = item.creditCollectionsCash ?? 0;
           const isClosed = item.loadStatus !== 'STARTED' || item.status === 'CLOSED';
+          const isDeliveringThis = deliveringLoadId === item.routeLoadId || (deliver.isPending && deliver.variables === item.routeLoadId);
+          const isClosingThis = closingLoadId === item.routeLoadId || (close.isPending && close.variables === item.routeLoadId);
 
           return (
             <article className="panel sale-card" key={item.id} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -586,11 +612,11 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
                       </label>
                       <button
                         className="secondary"
-                        disabled={deliver.isPending || !Number(cash[item.routeLoadId])}
+                        disabled={isDeliveringThis || !Number(cash[item.routeLoadId])}
                         onClick={() => deliver.mutate(item.routeLoadId)}
                         style={{ background: '#0284c7', color: '#ffffff', borderColor: '#0284c7' }}
                       >
-                        {deliver.isPending ? 'Registrando...' : 'Registrar efectivo contado'}
+                        {isDeliveringThis ? 'Registrando...' : 'Registrar efectivo contado'}
                       </button>
                     </div>
                   )}
@@ -615,10 +641,10 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
                       </label>
                       <button
                         className="primary"
-                        disabled={close.isPending || pendingLocalOperations > 0 || item.blockingReasons.length > 0 || !closeNotes[item.routeLoadId]}
+                        disabled={isClosingThis || pendingLocalOperations > 0 || item.blockingReasons.length > 0 || !closeNotes[item.routeLoadId]}
                         onClick={() => handleRequestClose(item)}
                       >
-                        {close.isPending ? 'Cerrando...' : 'Cerrar liquidación'}
+                        {isClosingThis ? 'Cerrando...' : 'Cerrar liquidación'}
                       </button>
                     </div>
                   )}
@@ -670,11 +696,11 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
                     <button
                       type="button"
                       className="primary"
-                      disabled={deliver.isPending || !Number(cash[item.routeLoadId])}
+                      disabled={isDeliveringThis || !Number(cash[item.routeLoadId])}
                       onClick={() => deliver.mutate(item.routeLoadId)}
                       style={{ padding: '0.45rem 1rem', background: '#059669', borderColor: '#059669', color: '#ffffff' }}
                     >
-                      {deliver.isPending ? 'Asentando...' : 'Asentar efectivo y cuadrar'}
+                      {isDeliveringThis ? 'Asentando...' : 'Asentar efectivo y cuadrar'}
                     </button>
                   </div>
                 </div>
