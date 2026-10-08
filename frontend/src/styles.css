@@ -1292,6 +1292,96 @@ table {
   min-width: 800px;
 }
 
+/* ── Libro de movimientos Responsivo ── */
+.movement-cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+}
+.movement-card {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 0.65rem;
+  padding: 0.75rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+.movement-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.movement-card-type-date {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.movement-card-date {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+.movement-card-delta {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+.movement-card-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.movement-card-product strong {
+  display: block;
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+.movement-card-reason {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+}
+.movement-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px dashed var(--line);
+  padding-top: 0.45rem;
+  margin-top: 0.2rem;
+  font-size: 0.8rem;
+}
+.movement-card-actor {
+  color: var(--muted);
+}
+.movement-card-actor strong {
+  color: var(--ink);
+}
+.movement-card-balance {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
+@media (max-width: 768px) {
+  .movement-table-wrap {
+    display: none;
+  }
+  .movement-cards-list {
+    display: flex;
+  }
+}
+@media (min-width: 769px) {
+  .movement-cards-list {
+    display: none;
+  }
+  .movement-table-wrap {
+    display: block;
+  }
+}
+
 /* ── Cargas en Lista Compacta Profesional ── */
 .loads-table-wrap table {
   min-width: 1020px;
