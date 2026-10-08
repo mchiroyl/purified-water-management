@@ -51,6 +51,14 @@ class CustomerRouteApplicationServiceTest {
                 LocalDate.of(2026, 8, 11), actor));
     }
 
+    @Test
+    void delegatesCustomerDeletion() {
+        UUID customer = UUID.randomUUID();
+        UUID actor = UUID.randomUUID();
+        service.deleteCustomer(customer, actor);
+        assertThat(persistence.deletedCustomerId).isEqualTo(customer);
+    }
+
     private static final class FakeCustomerRoutePort implements CustomerRoutePort {
         private NewCustomer createdCustomer;
         private boolean duplicate;
@@ -64,6 +72,8 @@ class CustomerRouteApplicationServiceTest {
                     customer.status(), customer.creditAllowed(), customer.creditLimit(), BigDecimal.ZERO, null, null,
                     null, null, null, "ACTIVE", java.time.Instant.now());
         }
+        private UUID deletedCustomerId;
+        @Override public void deleteCustomer(UUID id) { deletedCustomerId = id; }
         @Override public List<CustomerView> findCustomers(Optional<UUID> sellerId) { return new ArrayList<>(); }
         @Override public RouteView assignCustomerRoute(NewCustomerRoute item) { assignment = item; return routeView(item.routeId()); }
         @Override public boolean routeCodeExists(String code) { return false; }

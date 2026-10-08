@@ -46,6 +46,10 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
   });
   const [showUpdateSuccessModal, setShowUpdateSuccessModal] = useState(false);
   const [updatedCustomerName, setUpdatedCustomerName] = useState('');
+  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
+  const [deleteErrorMessage, setDeleteErrorMessage] = useState<string | null>(null);
+  const [showDeleteSuccessModal, setShowDeleteSuccessModal] = useState(false);
+  const [deletedCustomerName, setDeletedCustomerName] = useState('');
   const [assignmentSuccess, setAssignmentSuccess] = useState<{
     customerName: string;
     customerCode?: string;
@@ -82,6 +86,44 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
       setShowUpdateSuccessModal(true);
       void queryClient.invalidateQueries({ queryKey: ['customers'] });
     }
+  });
+  const deleteCustomerMutation = useMutation({
+    mutationFn: (id: string) => apiRequest<void>(`/customers/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      const name = customerToDelete?.name ?? 'Cliente';
+      setCustomerToDelete(null);
+      setDeleteErrorMessage(null);
+      setDeletedCustomerName(name);
+      setShowDeleteSuccessModal(true);
+      void queryClient.invalidateQueries({ queryKey: ['customers'] });
+    },
+    onError: (err: Error) => {
+      setDeleteErrorMessage(err.message || 'No fue posible eliminar el cliente.');
+    },
+  });
+  const inactivateInsteadMutation = useMutation({
+    mutationFn: (customer: Customer) =>
+      apiRequest<Customer>(`/customers/${customer.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: customer.name,
+          contactName: customer.contactName || '',
+          phone: customer.phone || '',
+          whatsapp: customer.whatsapp || '',
+          addressReference: customer.addressReference || '',
+          creditAllowed: customer.creditAllowed,
+          creditLimit: customer.creditLimit || 0,
+          status: 'INACTIVE',
+        }),
+      }),
+    onSuccess: (data) => {
+      const name = data?.name || customerToDelete?.name || 'Cliente';
+      setCustomerToDelete(null);
+      setDeleteErrorMessage(null);
+      setUpdatedCustomerName(name);
+      setShowUpdateSuccessModal(true);
+      void queryClient.invalidateQueries({ queryKey: ['customers'] });
+    },
   });
   const assign = useMutation({
     mutationFn: ({ customerId, routeId, validFrom }: { customerId: string; routeId: string; validFrom: string }) =>
@@ -312,6 +354,25 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
                             }}
                           >
                             ✏️ Modificar
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary"
+                            style={{
+                              padding: '0.2rem 0.6rem',
+                              fontSize: '0.85rem',
+                              color: '#b91c1c',
+                              borderColor: '#fca5a5',
+                              backgroundColor: '#fef2f2',
+                              fontWeight: 600,
+                            }}
+                            title="Eliminar cliente del sistema"
+                            onClick={() => {
+                              setCustomerToDelete(customer);
+                              setDeleteErrorMessage(null);
+                            }}
+                          >
+                            🗑️ Eliminar
                           </button>
                         </>
                       )}
@@ -802,15 +863,139 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
               </div>
             )}
 
-            <div className="form-actions" style={{ marginTop: '1.25rem', display: 'flex', justifyContent: 'flex-end', gap: '0.6rem' }}>
-              <button type="button" className="secondary" onClick={() => setEditingCustomer(null)}>
-                Cancelar
+            <div className="form-actions" style={{ marginTop: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <button
+                type="button"
+                className="secondary"
+                style={{ color: '#b91c1c', borderColor: '#fca5a5', backgroundColor: '#fef2f2', fontWeight: 600 }}
+                onClick={() => {
+                  const target = editingCustomer;
+                  setEditingCustomer(null);
+                  setCustomerToDelete(target);
+                  setDeleteErrorMessage(null);
+                }}
+              >
+                🗑️ Eliminar cliente
               </button>
-              <button className="primary" disabled={updateCustomer.isPending || !editForm.name.trim()}>
-                {updateCustomer.isPending ? 'Guardando cambios…' : 'Guardar cambios'}
-              </button>
+              <div style={{ display: 'flex', gap: '0.6rem' }}>
+                <button type="button" className="secondary" onClick={() => setEditingCustomer(null)}>
+                  Cancelar
+                </button>
+                <button className="primary" disabled={updateCustomer.isPending || !editForm.name.trim()}>
+                  {updateCustomer.isPending ? 'Guardando cambios…' : 'Guardar cambios'}
+                </button>
+              </div>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* ── Modal de confirmación / advertencia de eliminación de cliente ── */}
+      {customerToDelete && (
+        <div className="modal-backdrop" role="presentation">
+          <div
+            className="modal-panel"
+            role="dialog"
+            aria-modal="true"
+            style={{ maxWidth: '520px', width: '92%' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+              <span style={{ fontSize: '1.75rem' }}>{deleteErrorMessage ? '⚠️' : '🗑️'}</span>
+              <div>
+                <h2 style={{ margin: 0, fontSize: '1.25rem', color: deleteErrorMessage ? '#b45309' : '#b91c1c' }}>
+                  {deleteErrorMessage ? 'No es posible eliminar el cliente' : 'Eliminar cliente'}
+                </h2>
+                <span className="muted" style={{ fontSize: '0.85rem' }}>
+                  {customerToDelete.code} · {customerToDelete.name}
+                </span>
+              </div>
+            </div>
+
+            {deleteErrorMessage ? (
+              <div>
+                <div className="alert error" style={{ marginBottom: '1rem', fontSize: '0.9rem', lineHeight: '1.4' }}>
+                  {deleteErrorMessage}
+                </div>
+                <p style={{ fontSize: '0.88rem', color: 'var(--muted)', marginBottom: '1.25rem' }}>
+                  Para evitar que los vendedores sigan viendo o vendiendo a este cliente en la ruta sin romper el historial contable ni las auditorías, puede <strong>darlo de baja cambiando su estado a Inactivo</strong>.
+                </p>
+                <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem' }}>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => {
+                      setCustomerToDelete(null);
+                      setDeleteErrorMessage(null);
+                    }}
+                  >
+                    Cerrar
+                  </button>
+                  <button
+                    type="button"
+                    className="primary"
+                    style={{ backgroundColor: '#0f766e', borderColor: '#0f766e' }}
+                    disabled={inactivateInsteadMutation.isPending}
+                    onClick={() => inactivateInsteadMutation.mutate(customerToDelete)}
+                  >
+                    {inactivateInsteadMutation.isPending ? 'Inactivando…' : '🚫 Dar de baja (Inactivar)'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <p style={{ fontSize: '0.92rem', marginBottom: '0.75rem' }}>
+                  ¿Está seguro de que desea eliminar permanentemente al cliente <strong>{customerToDelete.name}</strong>?
+                </p>
+                <p className="muted" style={{ fontSize: '0.82rem', background: '#f8fafc', padding: '0.6rem 0.8rem', borderRadius: '0.4rem', border: '1px solid #e2e8f0', marginBottom: '1.25rem' }}>
+                  ℹ️ Si el cliente fue registrado por error y <strong>no tiene ventas, pagos ni créditos</strong>, se eliminará por completo junto con su asignación de ruta. Si ya tiene operaciones, el sistema protegerá la contabilidad.
+                </p>
+                <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem' }}>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={deleteCustomerMutation.isPending}
+                    onClick={() => setCustomerToDelete(null)}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    className="primary"
+                    style={{ backgroundColor: '#dc2626', borderColor: '#dc2626' }}
+                    disabled={deleteCustomerMutation.isPending}
+                    onClick={() => deleteCustomerMutation.mutate(customerToDelete.id)}
+                  >
+                    {deleteCustomerMutation.isPending ? 'Eliminando…' : 'Sí, eliminar cliente'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Ventana flotante: Cliente eliminado ── */}
+      {showDeleteSuccessModal && (
+        <div className="floating-toast-overlay" role="dialog" aria-modal="true">
+          <div className="floating-toast-card">
+            <div className="floating-toast-icon">🗑️</div>
+            <div className="floating-toast-body">
+              <h3>Cliente eliminado</h3>
+              <p>
+                El cliente <strong>{deletedCustomerName}</strong> fue eliminado exitosamente del catálogo y de la ruta.
+              </p>
+            </div>
+            <div className="floating-toast-actions">
+              <button
+                type="button"
+                className="primary"
+                onClick={() => setShowDeleteSuccessModal(false)}
+                autoFocus
+              >
+                Aceptar
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

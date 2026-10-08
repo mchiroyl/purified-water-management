@@ -73,6 +73,11 @@ public class CustomerRouteApplicationService {
         return customer(updated);
     }
 
+    @Transactional
+    public void deleteCustomer(UUID id, UUID actorId) {
+        persistence.deleteCustomer(id);
+    }
+
     @Transactional(readOnly = true)
     public List<CustomerResponse> findCustomers(UUID userId, boolean restrictedToSeller) {
         Optional<UUID> sellerId = restrictedToSeller ? Optional.of(resolveSeller(userId)) : Optional.empty();

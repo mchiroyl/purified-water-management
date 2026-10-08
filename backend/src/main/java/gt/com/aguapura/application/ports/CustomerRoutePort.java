@@ -12,6 +12,7 @@ public interface CustomerRoutePort {
     boolean hasPotentialDuplicate(String normalizedName, String normalizedPhone, String normalizedWhatsapp);
     CustomerView createCustomer(NewCustomer customer);
     CustomerView updateCustomer(UUID id, UpdateCustomer customer);
+    void deleteCustomer(UUID id);
     List<CustomerView> findCustomers(Optional<UUID> sellerId);
     RouteView assignCustomerRoute(NewCustomerRoute assignment);
     boolean routeCodeExists(String code);
