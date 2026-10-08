@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../app/PageHeader';
 import { apiRequest } from '../../services/apiClient';
 import { calendarOnlyProps, currentMonthDateBounds } from '../../utils/dateInput';
@@ -22,11 +23,36 @@ const dateInZone = (timezone = 'America/Guatemala') => {
 };
 const statusLabel: Record<string, string> = { PREPARED: 'Preparada', WAREHOUSE_CONFIRMED: 'Entregada por bodega', RECEIVED: 'Recibida', STARTED: 'Recorrido iniciado', SETTLED: 'Liquidada' };
 
-export function RouteLoadsPage({ canPrepare, canConfirmWarehouse, canReceive, canStart, canCorrect }: {
-  canPrepare: boolean; canConfirmWarehouse: boolean; canReceive: boolean; canStart: boolean; canCorrect: boolean;
-}) {
+type RouteLoadsPageProps = {
+  canPrepare: boolean;
+  canConfirmWarehouse: boolean;
+  canReceive: boolean;
+  canStart: boolean;
+  canCorrect: boolean;
+  view?: 'create' | 'list';
+};
+
+export function RouteLoadsPage({
+  canPrepare,
+  canConfirmWarehouse,
+  canReceive,
+  canStart,
+  canCorrect,
+  view = 'create',
+}: RouteLoadsPageProps) {
   const dateBounds = currentMonthDateBounds();
   const client = useQueryClient();
+
+  // Safe navigation fallback for isolated testing without Router
+  let navigate: (to: string) => void = () => {};
+  try {
+    navigate = useNavigate();
+  } catch {
+    navigate = (to: string) => {
+      window.location.pathname = to;
+    };
+  }
+
   const loads = useQuery({ queryKey: ['route-loads'], queryFn: () => apiRequest<RouteLoad[]>('/loads') });
   const company = useQuery({ queryKey: ['company-configuration'], queryFn: () => apiRequest<{ timezone: string }>('/company-configuration') });
   const locations = useQuery({ queryKey: ['inventory', 'locations'], queryFn: () => apiRequest<Location[]>('/inventory/locations'), enabled: canPrepare });
@@ -46,10 +72,17 @@ export function RouteLoadsPage({ canPrepare, canConfirmWarehouse, canReceive, ca
     queryFn: () => apiRequest<RouteMapData>(`/loads/${mapLoadId}/route-map`),
     enabled: !!mapLoadId,
   });
+
   const create = useMutation({
     mutationFn: () => apiRequest<RouteLoad>(form.loadType === 'REPLENISHMENT' ? '/loads/replenishments' : '/loads', { method: 'POST', body: JSON.stringify({ ...form, items }) }),
-    onSuccess: () => { setForm({ routeId: '', sourceLocationId: '', plannedDate: dateInZone(company.data?.timezone), loadType: 'INITIAL', notes: '' }); setItems([{ productId: '', quantityBaseUnits: 1 }]); refresh(); }
+    onSuccess: () => {
+      setForm({ routeId: '', sourceLocationId: '', plannedDate: dateInZone(company.data?.timezone), loadType: 'INITIAL', notes: '' });
+      setItems([{ productId: '', quantityBaseUnits: 1 }]);
+      refresh();
+      navigate('/loads/list');
+    }
   });
+
   const transition = useMutation({
     mutationFn: ({ id, action, body }: { id: string; action: string; body?: unknown }) => apiRequest<RouteLoad>(`/loads/${id}/${action}`, {
       method: 'POST', body: body === undefined ? undefined : JSON.stringify(body),
@@ -62,11 +95,14 @@ export function RouteLoadsPage({ canPrepare, canConfirmWarehouse, canReceive, ca
       refresh();
     }
   });
+
   const correct = useMutation({
     mutationFn: ({ id, value }: { id: string; value: CorrectionForm }) => apiRequest<RouteLoad>(`/loads/${id}/corrections`, { method: 'POST', body: JSON.stringify(value) }),
     onSuccess: (_data, variables) => { setCorrections({ ...corrections, [variables.id]: { productId: '', quantityDelta: 0, reason: '' } }); refresh(); }
   });
+
   const submit = (event: FormEvent) => { event.preventDefault(); create.mutate(); };
+
   const confirmReceipt = async (load: RouteLoad) => {
     setLocationError('');
     setActiveLoadId(load.id);
@@ -95,119 +131,266 @@ export function RouteLoadsPage({ canPrepare, canConfirmWarehouse, canReceive, ca
       setIsCapturingLocation(false);
     }
   };
+
   useEffect(() => {
     if (company.data?.timezone) setForm(current => ({ ...current, plannedDate: dateInZone(company.data.timezone) }));
   }, [company.data?.timezone]);
 
-  return <main>
-    <PageHeader eyebrow="Despacho y reparto" title="Cargas de ruta" description="Bodega confirma la entrega y el vendedor confirma la recepción desde su propio dispositivo." />
-    {canPrepare && <form className="panel section-panel" onSubmit={submit}>
-      <h2>{form.loadType === 'REPLENISHMENT' ? 'Nueva recarga de ruta' : 'Nueva carga inicial'}</h2>
-      <p className="muted">
-        {form.loadType === 'REPLENISHMENT'
-          ? 'Una recarga repone producto al vendedor durante el recorrido (requiere que la ruta ya tenga un recorrido iniciado).'
-          : 'Carga inicial con la que el camión o vendedor sale de bodega para iniciar su jornada de reparto.'}
-      </p>
-      <div className="form-grid compact-form">
-      <label>Tipo de operación<select value={form.loadType} onChange={event => setForm({ ...form, loadType: event.target.value as 'INITIAL' | 'REPLENISHMENT' })}><option value="INITIAL">Carga inicial</option><option value="REPLENISHMENT">Recarga de ruta</option></select></label>
-      <label>Ruta<select required value={form.routeId} onChange={event => setForm({ ...form, routeId: event.target.value })}><option value="">Seleccionar</option>{routes.data?.filter(route => route.status === 'ACTIVE').map(route => <option value={route.id} key={route.id}>{route.code} · {route.name}</option>)}</select></label>
-      <label>Bodega origen<select required value={form.sourceLocationId} onChange={event => setForm({ ...form, sourceLocationId: event.target.value })}><option value="">Seleccionar</option>{locations.data?.filter(item => item.active && item.locationType === 'WAREHOUSE').map(item => <option value={item.id} key={item.id}>{item.code} · {item.name}</option>)}</select></label>
-      <label>Fecha planificada<input required type="date" min={dateBounds.min} max={dateBounds.max} {...calendarOnlyProps()} value={form.plannedDate} onChange={event => setForm({ ...form, plannedDate: event.target.value })} /></label>
-      <label>Notas<input value={form.notes} onChange={event => setForm({ ...form, notes: event.target.value })} /></label>
-    </div><h3>Productos en unidades base</h3><div className="data-list">{items.map((item, index) => <div className="tier-editor" key={index}>
-      <label>Producto<select required value={item.productId} onChange={event => setItems(items.map((row, rowIndex) => rowIndex === index ? { ...row, productId: event.target.value } : row))}><option value="">Seleccionar</option>{products.data?.filter(product => product.active && product.controlsInventory).map(product => <option value={product.id} key={product.id}>{product.code} · {product.name}</option>)}</select></label>
-      <label>Cantidad<input required type="number" min="0.0001" step="0.0001" value={item.quantityBaseUnits} onChange={event => setItems(items.map((row, rowIndex) => rowIndex === index ? { ...row, quantityBaseUnits: Number(event.target.value) } : row))} /></label>
-      {items.length > 1 && <button type="button" className="secondary" onClick={() => setItems(items.filter((_row, rowIndex) => rowIndex !== index))}>Quitar</button>}
-    </div>)}</div><div className="form-actions"><button type="button" className="secondary" onClick={() => setItems([...items, { productId: '', quantityBaseUnits: 1 }])}>Agregar producto</button><button className="primary" disabled={create.isPending}>Preparar carga</button></div>
-      {create.error && (
-        <div className="alert error">
-          <div>{create.error.message}</div>
-          {create.error.message.includes('La recarga requiere una ruta con recorrido iniciado') && (
-            <div style={{ marginTop: '0.45rem', fontSize: '0.88rem', fontWeight: 500, color: '#991b1b' }}>
-              👉 <strong>Solución:</strong> En el campo <strong>&quot;Tipo de operación&quot;</strong>, cambie a <strong>&quot;Carga inicial&quot;</strong>. La &quot;Recarga de ruta&quot; solo se usa cuando el vendedor ya está en ruta y necesita reposición adicional durante el día.
-            </div>
-          )}
-        </div>
-      )}
-    </form>}
-    <section className="section-panel"><div className="section-heading"><h2>Cargas registradas</h2><span>{loads.data?.length ?? 0} cargas</span></div>
-      {loads.error && <div className="alert error">{loads.error.message}</div>}
-      <div className="load-grid">{loads.data?.map(load => {
-        const correction = corrections[load.id] ?? { productId: load.items[0]?.productId ?? '', quantityDelta: 0, reason: '' };
-        return <article className="panel load-card" key={load.id}><div className="section-heading"><div><strong>{load.loadNumber}</strong><span>{load.loadType === 'REPLENISHMENT' ? 'Recarga' : 'Carga inicial'} · {load.routeCode} · {load.routeName} · {load.plannedDate}</span></div><span className={`status ${load.status === 'STARTED' ? 'active' : ''}`}>{statusLabel[load.status] ?? load.status}</span></div>
-          <p>{load.sourceLocationName} → {load.targetLocationName}</p><div className="data-list">{load.items.map(item => <div className="data-row" key={item.id}><span>{item.productName}</span><strong>{Number(item.quantityBaseUnits).toLocaleString('es-GT')} {item.baseUnitCode}</strong></div>)}</div>
-          <p className="audit-line">Entrega: {load.warehouseConfirmedByUsername ?? 'pendiente'} · Recepción: {load.sellerReceivedByUsername ?? 'pendiente'} · Inicio: {load.startedByUsername ?? 'pendiente'}</p>
-          <div className="form-actions">
-            {load.status === 'PREPARED' && canConfirmWarehouse && <button className="primary" onClick={() => transition.mutate({ id: load.id, action: 'warehouse-confirmation' })}>Confirmar entrega de bodega</button>}
-            {load.status === 'PREPARED' && !canConfirmWarehouse && <span style={{ fontSize: '0.88rem', color: '#b45309', fontWeight: 600, padding: '0.4rem 0' }}>⏳ Esperando que Bodega confirme la entrega</span>}
-            {load.status === 'WAREHOUSE_CONFIRMED' && canReceive && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                <button className="primary" disabled={isCapturingLocation || transition.isPending} onClick={() => void confirmReceipt(load)}>
-                  {isCapturingLocation ? (locationProgress || 'Obteniendo ubicación…') : 'Confirmar recepción'}
-                </button>
-                {isCapturingLocation && (
-                  <span style={{ fontSize: '0.82rem', color: '#4b5563' }}>
-                    📡 Obteniendo coordenadas. Si está dentro de bodega con techo de lámina, acérquese a la puerta o salida.
-                  </span>
+  // Si el usuario no puede preparar cargas (ej. vendedor), ve directamente las cargas registradas
+  const effectiveView = canPrepare ? view : 'list';
+
+  return (
+    <main>
+      <PageHeader
+        eyebrow="Despacho y reparto"
+        title="Cargas de ruta"
+        description="Bodega confirma la entrega y el vendedor confirma la recepción desde su propio dispositivo."
+        actions={
+          canPrepare ? (
+            <button
+              type="button"
+              className="primary"
+              onClick={() => navigate(effectiveView === 'create' ? '/loads/list' : '/loads')}
+            >
+              {effectiveView === 'create' ? 'Ver Cargas registradas' : 'Preparar nueva carga'}
+            </button>
+          ) : undefined
+        }
+      />
+
+      {/* ── Vista de Creación: Formulario de Preparar Carga ── */}
+      {effectiveView === 'create' && canPrepare && (
+        <form className="panel section-panel" onSubmit={submit}>
+          <h2>{form.loadType === 'REPLENISHMENT' ? 'Nueva recarga de ruta' : 'Nueva carga inicial'}</h2>
+          <p className="muted">
+            {form.loadType === 'REPLENISHMENT'
+              ? 'Una recarga repone producto al vendedor durante el recorrido (requiere que la ruta ya tenga un recorrido iniciado).'
+              : 'Carga inicial con la que el camión o vendedor sale de bodega para iniciar su jornada de reparto.'}
+          </p>
+          <div className="form-grid compact-form">
+            <label>
+              Tipo de operación
+              <select value={form.loadType} onChange={event => setForm({ ...form, loadType: event.target.value as 'INITIAL' | 'REPLENISHMENT' })}>
+                <option value="INITIAL">Carga inicial</option>
+                <option value="REPLENISHMENT">Recarga de ruta</option>
+              </select>
+            </label>
+            <label>
+              Ruta
+              <select required value={form.routeId} onChange={event => setForm({ ...form, routeId: event.target.value })}>
+                <option value="">Seleccionar</option>
+                {routes.data?.filter(route => route.status === 'ACTIVE').map(route => (
+                  <option value={route.id} key={route.id}>{route.code} · {route.name}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Bodega origen
+              <select required value={form.sourceLocationId} onChange={event => setForm({ ...form, sourceLocationId: event.target.value })}>
+                <option value="">Seleccionar</option>
+                {locations.data?.filter(item => item.active && item.locationType === 'WAREHOUSE').map(item => (
+                  <option value={item.id} key={item.id}>{item.code} · {item.name}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Fecha planificada
+              <input required type="date" min={dateBounds.min} max={dateBounds.max} {...calendarOnlyProps()} value={form.plannedDate} onChange={event => setForm({ ...form, plannedDate: event.target.value })} />
+            </label>
+            <label>
+              Notas
+              <input value={form.notes} onChange={event => setForm({ ...form, notes: event.target.value })} />
+            </label>
+          </div>
+          <h3>Productos en unidades base</h3>
+          <div className="data-list">
+            {items.map((item, index) => (
+              <div className="tier-editor" key={index}>
+                <label>
+                  Producto
+                  <select required value={item.productId} onChange={event => setItems(items.map((row, rowIndex) => rowIndex === index ? { ...row, productId: event.target.value } : row))}>
+                    <option value="">Seleccionar</option>
+                    {products.data?.filter(product => product.active && product.controlsInventory).map(product => (
+                      <option value={product.id} key={product.id}>{product.code} · {product.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Cantidad
+                  <input required type="number" min="0.0001" step="0.0001" value={item.quantityBaseUnits} onChange={event => setItems(items.map((row, rowIndex) => rowIndex === index ? { ...row, quantityBaseUnits: Number(event.target.value) } : row))} />
+                </label>
+                {items.length > 1 && (
+                  <button type="button" className="secondary" onClick={() => setItems(items.filter((_row, rowIndex) => rowIndex !== index))}>
+                    Quitar
+                  </button>
                 )}
               </div>
-            )}
-            {load.status === 'RECEIVED' && canStart && load.loadType !== 'REPLENISHMENT' && (
-              <button
-                className="primary"
-                disabled={transition.isPending && activeLoadId === load.id}
-                onClick={() => {
-                  setLocationError('');
-                  setActiveLoadId(load.id);
-                  transition.mutate({ id: load.id, action: 'start' });
-                }}
-              >
-                {transition.isPending && activeLoadId === load.id ? 'Iniciando recorrido…' : 'Iniciar recorrido'}
-              </button>
-            )}
-            {load.status === 'STARTED' && <button type="button" className="secondary" onClick={() => setMapLoadId(prev => prev === load.id ? null : load.id)}>🗺 {mapLoadId === load.id ? 'Ocultar mi ruta' : 'Ver mi ruta'}</button>}
+            ))}
           </div>
-          {activeLoadId === load.id && (locationError || transition.error) && (
-            <div className="alert error" style={{ marginTop: '0.65rem', fontSize: '0.85rem' }}>
-              <div>❌ <strong>Error:</strong> {locationError || transition.error?.message}</div>
+          <div className="form-actions">
+            <button type="button" className="secondary" onClick={() => setItems([...items, { productId: '', quantityBaseUnits: 1 }])}>
+              Agregar producto
+            </button>
+            <button className="primary" disabled={create.isPending}>
+              Preparar carga
+            </button>
+          </div>
+          {create.error && (
+            <div className="alert error">
+              <div>{create.error.message}</div>
+              {create.error.message.includes('La recarga requiere una ruta con recorrido iniciado') && (
+                <div style={{ marginTop: '0.45rem', fontSize: '0.88rem', fontWeight: 500, color: '#991b1b' }}>
+                  👉 <strong>Solución:</strong> En el campo <strong>&quot;Tipo de operación&quot;</strong>, cambie a <strong>&quot;Carga inicial&quot;</strong>. La &quot;Recarga de ruta&quot; solo se usa cuando el vendedor ya está en ruta y necesita reposición adicional durante el día.
+                </div>
+              )}
+            </div>
+          )}
+        </form>
+      )}
+
+      {/* ── Vista de Lista: Cargas Registradas ── */}
+      {effectiveView === 'list' && (
+        <section className="section-panel">
+          <div className="section-heading">
+            <h2>Cargas registradas</h2>
+            <span>{loads.data?.length ?? 0} cargas</span>
+          </div>
+          {loads.error && <div className="alert error">{loads.error.message}</div>}
+          <div className="load-grid">
+            {loads.data?.map(load => {
+              const correction = corrections[load.id] ?? { productId: load.items[0]?.productId ?? '', quantityDelta: 0, reason: '' };
+              return (
+                <article className="panel load-card" key={load.id}>
+                  <div className="section-heading">
+                    <div>
+                      <strong>{load.loadNumber}</strong>
+                      <span>{load.loadType === 'REPLENISHMENT' ? 'Recarga' : 'Carga inicial'} · {load.routeCode} · {load.routeName} · {load.plannedDate}</span>
+                    </div>
+                    <span className={`status ${load.status === 'STARTED' ? 'active' : ''}`}>
+                      {statusLabel[load.status] ?? load.status}
+                    </span>
+                  </div>
+                  <p>{load.sourceLocationName} → {load.targetLocationName}</p>
+                  <div className="data-list">
+                    {load.items.map(item => (
+                      <div className="data-row" key={item.id}>
+                        <span>{item.productName}</span>
+                        <strong>{Number(item.quantityBaseUnits).toLocaleString('es-GT')} {item.baseUnitCode}</strong>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="audit-line">
+                    Entrega: {load.warehouseConfirmedByUsername ?? 'pendiente'} · Recepción: {load.sellerReceivedByUsername ?? 'pendiente'} · Inicio: {load.startedByUsername ?? 'pendiente'}
+                  </p>
+                  <div className="form-actions">
+                    {load.status === 'PREPARED' && canConfirmWarehouse && (
+                      <button className="primary" onClick={() => transition.mutate({ id: load.id, action: 'warehouse-confirmation' })}>
+                        Confirmar entrega de bodega
+                      </button>
+                    )}
+                    {load.status === 'PREPARED' && !canConfirmWarehouse && (
+                      <span style={{ fontSize: '0.88rem', color: '#b45309', fontWeight: 600, padding: '0.4rem 0' }}>
+                        ⏳ Esperando que Bodega confirme la entrega
+                      </span>
+                    )}
+                    {load.status === 'WAREHOUSE_CONFIRMED' && canReceive && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                        <button className="primary" disabled={isCapturingLocation || transition.isPending} onClick={() => void confirmReceipt(load)}>
+                          {isCapturingLocation ? (locationProgress || 'Obteniendo ubicación…') : 'Confirmar recepción'}
+                        </button>
+                        {isCapturingLocation && (
+                          <span style={{ fontSize: '0.82rem', color: '#4b5563' }}>
+                            📡 Obteniendo coordenadas. Si está dentro de bodega con techo de lámina, acérquese a la puerta o salida.
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {load.status === 'RECEIVED' && canStart && load.loadType !== 'REPLENISHMENT' && (
+                      <button
+                        className="primary"
+                        disabled={transition.isPending && activeLoadId === load.id}
+                        onClick={() => {
+                          setLocationError('');
+                          setActiveLoadId(load.id);
+                          transition.mutate({ id: load.id, action: 'start' });
+                        }}
+                      >
+                        {transition.isPending && activeLoadId === load.id ? 'Iniciando recorrido…' : 'Iniciar recorrido'}
+                      </button>
+                    )}
+                    {load.status === 'STARTED' && (
+                      <button type="button" className="secondary" onClick={() => setMapLoadId(prev => prev === load.id ? null : load.id)}>
+                        🗺 {mapLoadId === load.id ? 'Ocultar mi ruta' : 'Ver mi ruta'}
+                      </button>
+                    )}
+                  </div>
+                  {activeLoadId === load.id && (locationError || transition.error) && (
+                    <div className="alert error" style={{ marginTop: '0.65rem', fontSize: '0.85rem' }}>
+                      <div>❌ <strong>Error:</strong> {locationError || transition.error?.message}</div>
+                      {transition.error?.message?.includes('Stock insuficiente') && (
+                        <div style={{ marginTop: '0.4rem', fontSize: '0.82rem', color: '#991b1b', lineHeight: 1.4 }}>
+                          👉 <strong>Causa:</strong> No hay suficientes existencias en bodega física para despachar esta carga. Bodega debe registrar la producción o ajuste de entrada en el sistema antes de que el camión pueda salir.
+                        </div>
+                      )}
+                      {transition.error?.message?.includes('distinto de quien entregó') && (
+                        <div style={{ marginTop: '0.4rem', fontSize: '0.82rem', color: '#991b1b', lineHeight: 1.4 }}>
+                          👉 <strong>Doble confirmación obligatoria:</strong> La entrega física fue registrada por <strong>{load.warehouseConfirmedByUsername}</strong>. El vendedor de la ruta debe confirmar la recepción iniciando sesión con su propia cuenta.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {mapLoadId === load.id && (
+                    <div style={{ marginTop: '1rem' }}>
+                      {routeMapQuery.isLoading && <p className="muted">Cargando mapa…</p>}
+                      {routeMapQuery.error && <p className="alert error">{(routeMapQuery.error as Error).message}</p>}
+                      {routeMapQuery.data && <RouteMapPanel data={routeMapQuery.data} height="400px" />}
+                    </div>
+                  )}
+                  {canCorrect && ['RECEIVED', 'STARTED'].includes(load.status) && (
+                    <div className="correction-form">
+                      <h3>Corrección compensatoria</h3>
+                      <select aria-label={`Producto corrección ${load.loadNumber}`} value={correction.productId} onChange={event => setCorrections({ ...corrections, [load.id]: { ...correction, productId: event.target.value } })}>
+                        {load.items.map(item => <option value={item.productId} key={item.id}>{item.productName}</option>)}
+                      </select>
+                      <input aria-label={`Cantidad corrección ${load.loadNumber}`} type="number" step="0.0001" value={correction.quantityDelta} onChange={event => setCorrections({ ...corrections, [load.id]: { ...correction, quantityDelta: Number(event.target.value) } })} />
+                      <input aria-label={`Motivo corrección ${load.loadNumber}`} placeholder="Motivo obligatorio" value={correction.reason} onChange={event => setCorrections({ ...corrections, [load.id]: { ...correction, reason: event.target.value } })} />
+                      <button className="secondary" disabled={!correction.productId || correction.quantityDelta === 0 || !correction.reason} onClick={() => correct.mutate({ id: load.id, value: correction })}>
+                        Registrar corrección
+                      </button>
+                    </div>
+                  )}
+                  {load.corrections.length > 0 && (
+                    <div className="data-list">
+                      <h3>Correcciones</h3>
+                      {load.corrections.map(item => (
+                        <div className="data-row" key={item.id}>
+                          <span>{item.productName} · {item.reason} · {item.actorUsername}</span>
+                          <strong>{Number(item.quantityDelta) > 0 ? '+' : ''}{Number(item.quantityDelta).toLocaleString('es-GT')}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+          {!activeLoadId && (locationError || transition.error || correct.error) && (
+            <div className="alert error">
+              <div>{locationError || (transition.error ?? correct.error)?.message}</div>
               {transition.error?.message?.includes('Stock insuficiente') && (
-                <div style={{ marginTop: '0.4rem', fontSize: '0.82rem', color: '#991b1b', lineHeight: 1.4 }}>
+                <div style={{ marginTop: '0.45rem', fontSize: '0.88rem', fontWeight: 500, color: '#991b1b' }}>
                   👉 <strong>Causa:</strong> No hay suficientes existencias en bodega física para despachar esta carga. Bodega debe registrar la producción o ajuste de entrada en el sistema antes de que el camión pueda salir.
                 </div>
               )}
               {transition.error?.message?.includes('distinto de quien entregó') && (
-                <div style={{ marginTop: '0.4rem', fontSize: '0.82rem', color: '#991b1b', lineHeight: 1.4 }}>
-                  👉 <strong>Doble confirmación obligatoria:</strong> La entrega física fue registrada por <strong>{load.warehouseConfirmedByUsername}</strong>. El vendedor de la ruta debe confirmar la recepción iniciando sesión con su propia cuenta.
+                <div style={{ marginTop: '0.45rem', fontSize: '0.88rem', fontWeight: 500, color: '#991b1b' }}>
+                  👉 <strong>Aviso de Doble Confirmación:</strong> La entrega física fue registrada por el usuario que despachó en bodega. Por regla de control y auditoría, la recepción debe ser confirmada por el <strong>vendedor asignado a la ruta</strong> iniciando sesión con su propia cuenta en su dispositivo.
                 </div>
               )}
             </div>
           )}
-          {mapLoadId === load.id && (
-            <div style={{ marginTop: '1rem' }}>
-              {routeMapQuery.isLoading && <p className="muted">Cargando mapa…</p>}
-              {routeMapQuery.error && <p className="alert error">{(routeMapQuery.error as Error).message}</p>}
-              {routeMapQuery.data && <RouteMapPanel data={routeMapQuery.data} height="400px" />}
-            </div>
-          )}
-          {canCorrect && ['RECEIVED', 'STARTED'].includes(load.status) && <div className="correction-form"><h3>Corrección compensatoria</h3><select aria-label={`Producto corrección ${load.loadNumber}`} value={correction.productId} onChange={event => setCorrections({ ...corrections, [load.id]: { ...correction, productId: event.target.value } })}>{load.items.map(item => <option value={item.productId} key={item.id}>{item.productName}</option>)}</select><input aria-label={`Cantidad corrección ${load.loadNumber}`} type="number" step="0.0001" value={correction.quantityDelta} onChange={event => setCorrections({ ...corrections, [load.id]: { ...correction, quantityDelta: Number(event.target.value) } })} /><input aria-label={`Motivo corrección ${load.loadNumber}`} placeholder="Motivo obligatorio" value={correction.reason} onChange={event => setCorrections({ ...corrections, [load.id]: { ...correction, reason: event.target.value } })} /><button className="secondary" disabled={!correction.productId || correction.quantityDelta === 0 || !correction.reason} onClick={() => correct.mutate({ id: load.id, value: correction })}>Registrar corrección</button></div>}
-          {load.corrections.length > 0 && <div className="data-list"><h3>Correcciones</h3>{load.corrections.map(item => <div className="data-row" key={item.id}><span>{item.productName} · {item.reason} · {item.actorUsername}</span><strong>{Number(item.quantityDelta) > 0 ? '+' : ''}{Number(item.quantityDelta).toLocaleString('es-GT')}</strong></div>)}</div>}
-        </article>;
-      })}</div>
-      {!activeLoadId && (locationError || transition.error || correct.error) && (
-        <div className="alert error">
-          <div>{locationError || (transition.error ?? correct.error)?.message}</div>
-          {transition.error?.message?.includes('Stock insuficiente') && (
-            <div style={{ marginTop: '0.45rem', fontSize: '0.88rem', fontWeight: 500, color: '#991b1b' }}>
-              👉 <strong>Causa:</strong> No hay suficientes existencias en bodega física para despachar esta carga. Bodega debe registrar la producción o ajuste de entrada en el sistema antes de que el camión pueda salir.
-            </div>
-          )}
-          {transition.error?.message?.includes('distinto de quien entregó') && (
-            <div style={{ marginTop: '0.45rem', fontSize: '0.88rem', fontWeight: 500, color: '#991b1b' }}>
-              👉 <strong>Aviso de Doble Confirmación:</strong> La entrega física fue registrada por el usuario que despachó en bodega. Por regla de control y auditoría, la recepción debe ser confirmada por el <strong>vendedor asignado a la ruta</strong> iniciando sesión con su propia cuenta en su dispositivo.
-            </div>
-          )}
-        </div>
+        </section>
       )}
-    </section>
-  </main>;
+    </main>
+  );
 }

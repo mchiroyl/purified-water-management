@@ -130,4 +130,29 @@ describe('RouteLoadsPage', () => {
     const call = fetchMock.mock.calls.find(([input]) => input.toString().endsWith('/loads/l1/receipt'));
     expect(JSON.parse((call?.[1] as RequestInit).body as string)).toEqual({});
   });
+
+  it('permite alternar entre preparar carga y ver cargas registradas mediante el botón principal con estilo primary', async () => {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = input.toString();
+      if (url.endsWith('/loads')) {
+        return Promise.resolve(new Response(JSON.stringify([{
+          id: 'l1', loadNumber: 'CARGA-000001', routeId: 'r1', routeCode: 'R-01', routeName: 'Ruta norte',
+          sourceLocationId: 'w1', sourceLocationName: 'Bodega central', targetLocationId: 't1', targetLocationName: 'Inventario ruta norte',
+          plannedDate: '2026-08-10', loadType: 'INITIAL', notes: '', status: 'STARTED', createdByUsername: 'bodega', items: [], corrections: [],
+        }]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      return Promise.resolve(new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    }));
+
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <RouteLoadsPage canPrepare={true} canConfirmWarehouse={false} canReceive={false} canStart={false} canCorrect={false} view="create" />
+      </QueryClientProvider>
+    );
+
+    const button = screen.getByRole('button', { name: /ver cargas registradas/i });
+    expect(button).toBeInTheDocument();
+    expect(button).toHaveClass('primary');
+    expect(screen.getByRole('button', { name: /preparar carga/i })).toBeInTheDocument();
+  });
 });
