@@ -21,6 +21,8 @@ import {
   Sparkles,
   Droplets,
   Percent,
+  Calendar,
+  Search,
 } from 'lucide-react';
 import { PageHeader } from '../PageHeader';
 import { SalesRankingChart, DebtorChart, LoanedGarrafonsChart } from './GerentialCharts';
@@ -119,7 +121,23 @@ export function AdminDashboard({
   isRefreshing,
   onRefresh,
 }: AdminDashboardProps) {
-  const [periodFilter, setPeriodFilter] = useState<'Día' | 'Semana' | 'Mes'>('Día');
+  // Función para obtener fecha local en formato YYYY-MM-DD
+  const toLocalDateStr = (d: Date): string => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const now = new Date();
+  const todayStr = toLocalDateStr(now);
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const yesterdayStr = toLocalDateStr(yesterday);
+
+  const [periodFilter, setPeriodFilter] = useState<'Día' | 'Ayer' | 'Semana' | 'Mes' | 'Personalizado'>('Día');
+  const [customDate, setCustomDate] = useState<string>(yesterdayStr);
+  const [sellerSearch, setSellerSearch] = useState<string>('');
 
   // 1. Catálogo de precios para valorización de inventarios
   const getProductPrice = (productId: string): number => {
@@ -165,44 +183,49 @@ export function AdminDashboard({
   }, 0);
   const companyTotalValue = centralWarehouseValue + streetStockValue;
 
-  // 3. Ventas filtradas dinámicamente por período (Día, Semana, Mes)
+  // 3. Ventas filtradas dinámicamente por período (Día, Ayer, Semana, Mes, Personalizado)
   const periodFilteredSales = useMemo(() => {
-    const now = new Date();
-    const todayStr = now.toISOString().slice(0, 10);
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
     const startOfWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     startOfWeek.setHours(0, 0, 0, 0);
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    thirtyDaysAgo.setHours(0, 0, 0, 0);
 
     return sales.filter(s => {
       if (!s.createdAt) return false;
       const d = new Date(s.createdAt);
       if (isNaN(d.getTime())) return false;
+      const sDateLocal = toLocalDateStr(d);
+      const sDateRaw = s.createdAt.slice(0, 10);
 
       if (periodFilter === 'Día') {
-        const dateStr = s.createdAt.slice(0, 10);
-        return d >= startOfToday || dateStr === todayStr;
+        return d >= startOfToday || sDateLocal === todayStr || sDateRaw === todayStr;
+      }
+      if (periodFilter === 'Ayer') {
+        return sDateLocal === yesterdayStr || sDateRaw === yesterdayStr;
+      }
+      if (periodFilter === 'Personalizado') {
+        return sDateLocal === customDate || sDateRaw === customDate;
       }
       if (periodFilter === 'Semana') {
         return d >= startOfWeek;
       }
       if (periodFilter === 'Mes') {
-        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        thirtyDaysAgo.setHours(0, 0, 0, 0);
         return d >= startOfMonth || d >= thirtyDaysAgo;
       }
       return true;
     });
-  }, [sales, periodFilter]);
+  }, [sales, periodFilter, customDate, todayStr, yesterdayStr]);
 
   const periodSalesCount = periodFilteredSales.length;
 
   const periodSalesTotal = useMemo(() => {
-    if (periodFilter === 'Día') {
-      const sum = periodFilteredSales.reduce((acc, s) => acc + Number(s.total || 0), 0);
-      return sum > 0 ? sum : data.salesToday;
+    const sum = periodFilteredSales.reduce((acc, s) => acc + Number(s.total || 0), 0);
+    if (periodFilter === 'Día' && sum === 0 && data.salesToday > 0) {
+      return data.salesToday;
     }
-    return periodFilteredSales.reduce((acc, s) => acc + Number(s.total || 0), 0);
+    return sum;
   }, [periodFilteredSales, periodFilter, data.salesToday]);
 
   const displaySalesCount = periodFilter === 'Día' && periodSalesCount === 0 && data.salesToday > 0
@@ -237,13 +260,91 @@ export function AdminDashboard({
     });
   }, [safeSettlements]);
 
-  // Rutas activas o del día
-  const activeOrTodayLoads = loads.filter(l => 
-    l.status === 'STARTED' || l.status === 'RECEIVED' || l.status === 'PREPARED' || l.status === 'WAREHOUSE_CONFIRMED'
-  );
+  // Rutas / Cargas filtradas dinámicamente según el período y búsqueda
+  const periodFilteredLoads = useMemo(() => {
+    const startOfWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    startOfWeek.setHours(0, 0, 0, 0);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    thirtyDaysAgo.setHours(0, 0, 0, 0);
+
+    let result = loads.filter(l => {
+      const planned = l.plannedDate?.slice(0, 10);
+      const isActive = l.status === 'STARTED' || l.status === 'RECEIVED' || l.status === 'PREPARED' || l.status === 'WAREHOUSE_CONFIRMED';
+
+      if (periodFilter === 'Día') {
+        return planned === todayStr || isActive;
+      }
+      if (periodFilter === 'Ayer') {
+        return planned === yesterdayStr;
+      }
+      if (periodFilter === 'Personalizado') {
+        return planned === customDate;
+      }
+      if (periodFilter === 'Semana') {
+        if (!planned) return isActive;
+        const pd = new Date(planned);
+        return (!isNaN(pd.getTime()) && pd >= startOfWeek) || isActive;
+      }
+      if (periodFilter === 'Mes') {
+        if (!planned) return isActive;
+        const pd = new Date(planned);
+        return (!isNaN(pd.getTime()) && pd >= thirtyDaysAgo) || isActive;
+      }
+      return true;
+    });
+
+    if (sellerSearch.trim()) {
+      const q = sellerSearch.toLowerCase().trim();
+      result = result.filter(l => {
+        const seller = (l.sellerReceivedByUsername || l.createdByUsername || '').toLowerCase();
+        const route = (l.routeName || l.routeCode || '').toLowerCase();
+        const num = String(l.loadNumber).toLowerCase();
+        return seller.includes(q) || route.includes(q) || num.includes(q);
+      });
+    }
+
+    return result;
+  }, [loads, periodFilter, customDate, sellerSearch, todayStr, yesterdayStr]);
+
+  // Métricas de rutas para el período seleccionado
+  const periodActiveRoutes = useMemo(() => {
+    if (periodFilter === 'Día' && periodFilteredLoads.length === 0) {
+      return data.activeRoutes;
+    }
+    return periodFilteredLoads.filter(l => l.status !== 'SETTLED' && l.status !== 'CLOSED').length;
+  }, [periodFilter, periodFilteredLoads, data.activeRoutes]);
+
+  const periodCompletedRoutes = useMemo(() => {
+    if (periodFilter === 'Día' && periodFilteredLoads.length === 0) {
+      return data.completedRoutes;
+    }
+    return periodFilteredLoads.filter(l => l.status === 'SETTLED' || l.status === 'CLOSED').length;
+  }, [periodFilter, periodFilteredLoads, data.completedRoutes]);
+
+  const totalPeriodRoutes = periodActiveRoutes + periodCompletedRoutes;
 
   // 5. Métricas de efectividad de recaudación
   const cashRecPct = data.expectedCash > 0 ? Math.min(100, Math.round((data.deliveredCash / data.expectedCash) * 100)) : 100;
+
+  const periodCashRecPct = useMemo(() => {
+    if (periodFilter === 'Día' && periodFilteredLoads.length === 0) {
+      return cashRecPct;
+    }
+    let totalExp = 0;
+    let totalDel = 0;
+    periodFilteredLoads.forEach(load => {
+      const loadNumClean = String(load.loadNumber).replace(/\D/g, '');
+      const s = safeSettlements.find(sett => sett.routeLoadId === load.id || sett.loadNumber === load.loadNumber || (loadNumClean && String(sett.loadNumber).replace(/\D/g, '') === loadNumClean));
+      if (s) {
+        totalExp += Number(s.expectedCash || s.salesCash || s.salesTotal || 0);
+        totalDel += Number(s.deliveredCash || 0);
+      }
+    });
+    if (totalExp > 0) {
+      return Math.min(100, Math.round((totalDel / totalExp) * 100));
+    }
+    return periodCompletedRoutes > 0 ? 100 : cashRecPct;
+  }, [periodFilter, periodFilteredLoads, safeSettlements, cashRecPct, periodCompletedRoutes]);
 
   // Top vendedores calculados a partir de las ventas reales del período
   const sellerSalesList = useMemo(() => {
@@ -344,34 +445,78 @@ export function AdminDashboard({
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
           {/* Selector de período */}
-          <div style={{
-            display: 'inline-flex',
-            background: '#ffffff',
-            border: '1px solid #e2e8f0',
-            borderRadius: '0.5rem',
-            padding: '2px',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-          }}>
-            {(['Día', 'Semana', 'Mes'] as const).map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setPeriodFilter(p)}
-                style={{
-                  padding: '0.35rem 0.85rem',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                  border: 'none',
-                  borderRadius: '0.375rem',
-                  cursor: 'pointer',
-                  background: periodFilter === p ? '#2563eb' : 'transparent',
-                  color: periodFilter === p ? '#ffffff' : '#64748b',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                {p}
-              </button>
-            ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <div style={{
+              display: 'inline-flex',
+              background: '#ffffff',
+              border: '1px solid #cbd5e1',
+              borderRadius: '0.5rem',
+              padding: '2px',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+            }}>
+              {(['Día', 'Ayer', 'Semana', 'Mes', 'Personalizado'] as const).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPeriodFilter(p)}
+                  style={{
+                    padding: '0.35rem 0.75rem',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    border: 'none',
+                    borderRadius: '0.375rem',
+                    cursor: 'pointer',
+                    background: periodFilter === p ? '#2563eb' : 'transparent',
+                    color: periodFilter === p ? '#ffffff' : '#64748b',
+                    transition: 'all 0.15s ease',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                  }}
+                >
+                  {p === 'Personalizado' && <Calendar size={13} />}
+                  {p}
+                </button>
+              ))}
+            </div>
+
+            {/* Selector de fecha para opción Personalizado */}
+            {periodFilter === 'Personalizado' && (
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                background: '#ffffff',
+                border: '1px solid #3b82f6',
+                borderRadius: '0.5rem',
+                padding: '0.2rem 0.55rem',
+                boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.1)',
+              }}>
+                <Calendar size={14} color="#2563eb" />
+                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#475569' }}>Fecha:</span>
+                <input
+                  type="date"
+                  value={customDate}
+                  max={todayStr}
+                  onChange={(e) => setCustomDate(e.target.value)}
+                  style={{
+                    border: 'none',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    color: '#0f172a',
+                    outline: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                  }}
+                />
+              </div>
+            )}
+
+            <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 500 }}>
+              {periodFilter === 'Día' && `(Hoy: ${todayStr})`}
+              {periodFilter === 'Ayer' && `(Ayer: ${yesterdayStr})`}
+              {periodFilter === 'Personalizado' && `(Fecha: ${customDate})`}
+            </span>
           </div>
 
           {/* Botón Sincronizar */}
@@ -511,7 +656,7 @@ export function AdminDashboard({
               padding: '0.2rem 0.55rem',
               borderRadius: '9999px',
             }}>
-              {data.activeRoutes} rutas activas
+              {periodActiveRoutes} {periodActiveRoutes === 1 ? 'ruta en operación' : 'rutas en operación'}
             </span>
           </div>
 
@@ -530,7 +675,15 @@ export function AdminDashboard({
               {periodUnits.toLocaleString('es-GT')}
             </div>
             <span style={{ fontSize: '0.73rem', color: '#94a3b8' }}>
-              {periodFilter === 'Día' ? 'Unidades comercializadas hoy' : periodFilter === 'Semana' ? 'Unidades comercializadas en la semana' : 'Unidades comercializadas en el mes'}
+              {periodFilter === 'Día' 
+                ? 'Unidades comercializadas hoy' 
+                : periodFilter === 'Ayer' 
+                ? 'Unidades comercializadas ayer' 
+                : periodFilter === 'Personalizado' 
+                ? `Unidades comercializadas el ${customDate}` 
+                : periodFilter === 'Semana' 
+                ? 'Unidades comercializadas en la semana' 
+                : 'Unidades comercializadas en el mes'}
             </span>
           </div>
         </div>
@@ -584,7 +737,15 @@ export function AdminDashboard({
               {money(periodCredit > 0 ? periodCredit : (periodFilter === 'Día' ? data.credit : 0), data.currencyCode)}
             </div>
             <span style={{ fontSize: '0.73rem', color: '#94a3b8' }}>
-              {periodFilter === 'Día' ? 'Crédito colocado en la jornada' : periodFilter === 'Semana' ? 'Crédito colocado en la semana' : 'Crédito colocado en el mes'}
+              {periodFilter === 'Día' 
+                ? 'Crédito colocado en la jornada' 
+                : periodFilter === 'Ayer' 
+                ? 'Crédito colocado ayer' 
+                : periodFilter === 'Personalizado' 
+                ? `Crédito colocado el ${customDate}` 
+                : periodFilter === 'Semana' 
+                ? 'Crédito colocado en la semana' 
+                : 'Crédito colocado en el mes'}
             </span>
           </div>
         </div>
@@ -619,7 +780,7 @@ export function AdminDashboard({
               padding: '0.2rem 0.55rem',
               borderRadius: '9999px',
             }}>
-              {data.completedRoutes} de {data.activeRoutes + data.completedRoutes} finalizadas
+              {periodCompletedRoutes} de {totalPeriodRoutes} finalizadas
             </span>
           </div>
 
@@ -635,10 +796,10 @@ export function AdminDashboard({
               fontFeatureSettings: '"tnum"',
               margin: '0.2rem 0 0.1rem',
             }}>
-              {data.activeRoutes}
+              {periodActiveRoutes}
             </div>
             <span style={{ fontSize: '0.73rem', color: '#94a3b8' }}>
-              {data.completedRoutes} finalizadas · {cashRecPct}% recaudado
+              {periodCompletedRoutes} finalizadas · {periodCashRecPct}% recaudado
             </span>
           </div>
         </div>
@@ -859,7 +1020,7 @@ export function AdminDashboard({
             justifyContent: 'space-between',
             alignItems: 'center',
             flexWrap: 'wrap',
-            gap: '0.5rem',
+            gap: '0.75rem',
             marginBottom: '1rem',
           }}>
             <div>
@@ -867,24 +1028,63 @@ export function AdminDashboard({
                 Cuadre Diario y Liquidación
               </h2>
               <p style={{ fontSize: '0.76rem', color: '#64748b', margin: '2px 0 0' }}>
-                Monitoreo de ingresos de ruta y liquidación de vehículos
+                Monitoreo de ingresos de ruta y liquidación de vehículos · {periodFilter === 'Personalizado' ? `Fecha ${customDate}` : periodFilter}
               </p>
             </div>
 
-            <Link
-              to="/settlements"
-              style={{
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                color: '#2563eb',
-                textDecoration: 'none',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.25rem',
-              }}
-            >
-              Ver Historial de Cuadres <ArrowRight size={13} />
-            </Link>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+              {/* Buscador rápido por vendedor o ruta */}
+              <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                <Search size={13} style={{ position: 'absolute', left: '0.55rem', color: '#94a3b8' }} />
+                <input
+                  type="text"
+                  placeholder="Buscar vendedor o ruta..."
+                  value={sellerSearch}
+                  onChange={(e) => setSellerSearch(e.target.value)}
+                  style={{
+                    padding: '0.35rem 1.6rem 0.35rem 1.7rem',
+                    fontSize: '0.78rem',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '0.375rem',
+                    outline: 'none',
+                    minWidth: '210px',
+                    background: '#ffffff',
+                  }}
+                />
+                {sellerSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setSellerSearch('')}
+                    style={{
+                      position: 'absolute',
+                      right: '0.4rem',
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      color: '#94a3b8',
+                      fontSize: '0.75rem',
+                    }}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              <Link
+                to="/settlements"
+                style={{
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  color: '#2563eb',
+                  textDecoration: 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.25rem',
+                }}
+              >
+                Ver Historial de Cuadres <ArrowRight size={13} />
+              </Link>
+            </div>
           </div>
 
           <div style={{ overflowX: 'auto' }}>
@@ -897,29 +1097,68 @@ export function AdminDashboard({
                   <th style={{ padding: '0.7rem 0.85rem', textAlign: 'right' }}>Efectivo Entregado</th>
                   <th style={{ padding: '0.7rem 0.85rem', textAlign: 'right' }}>Diferencia</th>
                   <th style={{ padding: '0.7rem 0.85rem', textAlign: 'center' }}>Estado</th>
+                  <th style={{ padding: '0.7rem 0.85rem', textAlign: 'center' }}>Acción</th>
                 </tr>
               </thead>
               <tbody>
-                {activeOrTodayLoads.length > 0 ? (
-                  activeOrTodayLoads.map((load, i) => {
-                    const routeSales = sales.filter(s => s.routeId === load.routeId || s.routeCode === load.routeCode);
-                    const totalSalesQ = routeSales.reduce((acc, s) => acc + Number(s.total || 0), 0);
-                    const itemsBreakdown = load.items.map(it => {
-                      const loaded = Number(it.quantityBaseUnits || 0);
-                      const soldForProduct = routeSales.reduce((acc, s) => {
-                        const matching = s.items?.filter(si => si.productName?.toLowerCase().trim() === it.productName?.toLowerCase().trim()) ?? [];
-                        return acc + matching.reduce((mAcc, mi) => mAcc + Number(mi.quantityBaseUnits || 0), 0);
-                      }, 0);
-                      const sold = Math.min(loaded, soldForProduct);
-                      const remaining = Math.max(0, loaded - sold);
-                      return { id: it.id, loaded, sold, remaining, label: it.baseUnitCode || 'GARRAFON' };
+                {periodFilteredLoads.length > 0 ? (
+                  periodFilteredLoads.map((load, i) => {
+                    const loadNumClean = String(load.loadNumber).replace(/\D/g, '');
+                    const settlement = safeSettlements.find(s => 
+                      s.routeLoadId === load.id || 
+                      s.loadNumber === load.loadNumber || 
+                      (loadNumClean && String(s.loadNumber).replace(/\D/g, '') === loadNumClean)
+                    );
+
+                    // Ventas asociadas a la ruta y fecha de la carga
+                    const loadDateStr = load.plannedDate?.slice(0, 10);
+                    const routeSales = sales.filter(s => {
+                      const matchRoute = s.routeId === load.routeId || s.routeCode === load.routeCode;
+                      if (!matchRoute) return false;
+                      if (!loadDateStr) return true;
+                      const sDate = s.createdAt ? toLocalDateStr(new Date(s.createdAt)) : '';
+                      const sDateRaw = s.createdAt?.slice(0, 10);
+                      return sDate === loadDateStr || sDateRaw === loadDateStr;
                     });
 
-                    const totalLoaded = itemsBreakdown.reduce((acc, it) => acc + it.loaded, 0);
-                    const totalSold = itemsBreakdown.reduce((acc, it) => acc + it.sold, 0);
-                    const remainingOnTruck = Math.max(0, totalLoaded - totalSold);
-                    const unitLabel = itemsBreakdown[0]?.label ?? 'GARRAFON';
-                    const seller = load.sellerReceivedByUsername || load.createdByUsername || 'amartinez';
+                    // Desglose de unidades
+                    let totalLoaded = 0;
+                    let totalSold = 0;
+                    let remainingOnTruck = 0;
+                    let unitLabel = 'u';
+
+                    if (settlement && settlement.items && settlement.items.length > 0) {
+                      totalLoaded = settlement.items.reduce((acc, it) => acc + Number(it.loadedUnits || 0), 0);
+                      totalSold = settlement.items.reduce((acc, it) => acc + Number(it.soldUnits || 0), 0);
+                      remainingOnTruck = settlement.items.reduce((acc, it) => acc + Number(it.physicalDifference != null ? it.physicalDifference : (Number(it.loadedUnits || 0) - Number(it.soldUnits || 0))), 0);
+                      unitLabel = settlement.items.length === 1 ? 'Garrafón' : 'unid';
+                    } else {
+                      const itemsBreakdown = load.items.map(it => {
+                        const loaded = Number(it.quantityBaseUnits || 0);
+                        const soldForProduct = routeSales.reduce((acc, s) => {
+                          const matching = s.items?.filter(si => si.productName?.toLowerCase().trim() === it.productName?.toLowerCase().trim()) ?? [];
+                          return acc + matching.reduce((mAcc, mi) => mAcc + Number(mi.quantityBaseUnits || 0), 0);
+                        }, 0);
+                        const sold = Math.min(loaded, soldForProduct);
+                        const remaining = Math.max(0, loaded - sold);
+                        return { id: it.id, loaded, sold, remaining, label: it.baseUnitCode || 'GARRAFON' };
+                      });
+                      totalLoaded = itemsBreakdown.reduce((acc, it) => acc + it.loaded, 0);
+                      totalSold = itemsBreakdown.reduce((acc, it) => acc + it.sold, 0);
+                      remainingOnTruck = Math.max(0, totalLoaded - totalSold);
+                      unitLabel = itemsBreakdown[0]?.label ?? 'GARRAFON';
+                    }
+
+                    const seller = settlement?.sellerName || load.sellerReceivedByUsername || load.createdByUsername || 'amartinez';
+
+                    // Valores monetarios
+                    const totalSalesQ = settlement?.salesTotal ?? routeSales.reduce((acc, s) => acc + Number(s.total || 0), 0);
+                    const totalDeliveredQ = settlement?.deliveredCash ?? 0;
+                    const monetaryDiff = settlement?.monetaryDifference ?? (totalSalesQ - totalDeliveredQ);
+
+                    // Estado
+                    const isSettled = load.status === 'SETTLED' || load.status === 'CLOSED' || settlement?.status === 'CLOSED';
+                    const isWithDiff = settlement?.status === 'WITH_DIFFERENCE' || (settlement && Math.abs(monetaryDiff) > 0.01);
 
                     return (
                       <tr key={load.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
@@ -941,7 +1180,9 @@ export function AdminDashboard({
                             </div>
                             <div>
                               <strong style={{ color: '#0f172a', display: 'block' }}>{seller}</strong>
-                              <span style={{ color: '#64748b', fontSize: '0.72rem' }}>Camión #0{i + 1} · Carga #{load.loadNumber}</span>
+                              <span style={{ color: '#64748b', fontSize: '0.72rem' }}>
+                                Camión #0{i + 1} · Carga #{load.loadNumber} {load.plannedDate ? `· ${load.plannedDate.slice(0, 10)}` : ''}
+                              </span>
                             </div>
                           </div>
                         </td>
@@ -957,40 +1198,128 @@ export function AdminDashboard({
                         </td>
 
                         <td style={{ padding: '0.75rem 0.85rem', textAlign: 'right', fontFeatureSettings: '"tnum"', fontWeight: 700, color: '#0f172a' }}>
-                          {money(totalSalesQ > 0 ? totalSalesQ : 3840)}
+                          {money(totalSalesQ)}
                         </td>
 
                         <td style={{ padding: '0.75rem 0.85rem', textAlign: 'right', fontFeatureSettings: '"tnum"', fontWeight: 700, color: '#047857' }}>
-                          {money(totalSalesQ > 0 ? totalSalesQ : 3840)}
+                          {money(totalDeliveredQ)}
                         </td>
 
-                        <td style={{ padding: '0.75rem 0.85rem', textAlign: 'right', fontFeatureSettings: '"tnum"', fontWeight: 700, color: '#059669' }}>
-                          Q. 0.00
+                        <td style={{ 
+                          padding: '0.75rem 0.85rem', 
+                          textAlign: 'right', 
+                          fontFeatureSettings: '"tnum"', 
+                          fontWeight: 700, 
+                          color: Math.abs(monetaryDiff) > 0.01 ? '#b91c1c' : '#059669' 
+                        }}>
+                          {money(monetaryDiff)}
                         </td>
 
                         <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
-                          <span style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.3rem',
-                            padding: '0.2rem 0.55rem',
-                            borderRadius: '9999px',
-                            fontSize: '0.72rem',
-                            fontWeight: 700,
-                            background: '#ecfdf5',
-                            color: '#059669',
-                          }}>
-                            <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#10b981' }} />
-                            CUADRADO
-                          </span>
+                          {isSettled ? (
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.3rem',
+                              padding: '0.2rem 0.55rem',
+                              borderRadius: '9999px',
+                              fontSize: '0.72rem',
+                              fontWeight: 700,
+                              background: '#ecfdf5',
+                              color: '#059669',
+                            }}>
+                              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#10b981' }} />
+                              CERRADA
+                            </span>
+                          ) : isWithDiff ? (
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.3rem',
+                              padding: '0.2rem 0.55rem',
+                              borderRadius: '9999px',
+                              fontSize: '0.72rem',
+                              fontWeight: 700,
+                              background: '#fffbeb',
+                              color: '#d97706',
+                            }}>
+                              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#f59e0b' }} />
+                              DIFERENCIA
+                            </span>
+                          ) : load.status === 'STARTED' ? (
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.3rem',
+                              padding: '0.2rem 0.55rem',
+                              borderRadius: '9999px',
+                              fontSize: '0.72rem',
+                              fontWeight: 700,
+                              background: '#eff6ff',
+                              color: '#2563eb',
+                            }}>
+                              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#3b82f6' }} />
+                              EN RUTA
+                            </span>
+                          ) : load.status === 'RECEIVED' ? (
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.3rem',
+                              padding: '0.2rem 0.55rem',
+                              borderRadius: '9999px',
+                              fontSize: '0.72rem',
+                              fontWeight: 700,
+                              background: '#f5f3ff',
+                              color: '#7c3aed',
+                            }}>
+                              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#8b5cf6' }} />
+                              RECIBIDA
+                            </span>
+                          ) : (
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.3rem',
+                              padding: '0.2rem 0.55rem',
+                              borderRadius: '9999px',
+                              fontSize: '0.72rem',
+                              fontWeight: 700,
+                              background: '#f1f5f9',
+                              color: '#475569',
+                            }}>
+                              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#94a3b8' }} />
+                              {load.status}
+                            </span>
+                          )}
+                        </td>
+
+                        <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
+                          <Link
+                            to="/settlements"
+                            style={{
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              color: '#2563eb',
+                              textDecoration: 'none',
+                              padding: '0.25rem 0.55rem',
+                              borderRadius: '0.375rem',
+                              background: '#eff6ff',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.2rem',
+                            }}
+                          >
+                            Cuadre →
+                          </Link>
                         </td>
                       </tr>
                     );
                   })
                 ) : (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', padding: '2rem 1rem', color: '#64748b' }}>
-                      No hay rutas activas para cuadre en este momento.
+                    <td colSpan={7} style={{ textAlign: 'center', padding: '2rem 1rem', color: '#64748b' }}>
+                      No se encontraron rutas para la fecha o filtro seleccionado ({periodFilter === 'Personalizado' ? customDate : periodFilter}).
                     </td>
                   </tr>
                 )}
@@ -1129,7 +1458,7 @@ export function AdminDashboard({
           routeId: loc.id,
           routeCode: loc.routeCode ?? loc.code,
           routeName: loc.routeName ?? loc.name,
-          sellerName: activeOrTodayLoads.find(l => l.routeId === loc.routeId || l.routeCode === loc.routeCode)?.sellerReceivedByUsername,
+          sellerName: periodFilteredLoads.find(l => l.routeId === loc.routeId || l.routeCode === loc.routeCode)?.sellerReceivedByUsername,
           products: (loc.balances ?? []).map(b => ({
             productName: b.productName,
             qty: Number(b.quantityBaseUnits || 0),
