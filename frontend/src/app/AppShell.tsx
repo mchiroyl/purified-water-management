@@ -240,7 +240,7 @@ export function AppShell() {
           <LayoutDashboard size={18} />
           <span>Inicio</span>
         </NavLink>
-        <NavLink to="/sales">
+        <NavLink to="/sales" end>
           <ShoppingCart size={18} />
           <span>Ventas</span>
         </NavLink>
@@ -250,9 +250,9 @@ export function AppShell() {
               <Package size={18} />
               <span>Mi Carga</span>
             </NavLink>
-            <NavLink to="/returns">
-              <Undo2 size={18} />
-              <span>Devoluciones</span>
+            <NavLink to="/sales/list">
+              <Receipt size={18} />
+              <span>Mis Ventas</span>
             </NavLink>
           </>
         ) : (
