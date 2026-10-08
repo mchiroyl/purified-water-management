@@ -274,7 +274,7 @@ export function InventoryPage({ canManage, view = 'create' }: InventoryPageProps
           canManage ? (
             <button
               type="button"
-              className="secondary"
+              className="primary"
               onClick={() => navigate(effectiveView === 'create' ? '/inventory/list' : '/inventory')}
             >
               {effectiveView === 'create' ? 'Ver inventario' : 'Nueva bodega / Ajuste'}
