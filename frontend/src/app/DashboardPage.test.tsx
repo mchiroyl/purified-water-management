@@ -150,7 +150,7 @@ describe('DashboardPage', () => {
 
     expect(await screen.findByText(/¡hola, carlos vendedor!/i)).toBeInTheDocument();
     expect(screen.getByText(/vendedor en ruta/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /nueva venta/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /ver cargas/i })).toBeInTheDocument();
     expect(screen.getByText('Efectivo en mano (A entregar)')).toBeInTheDocument();
     expect(screen.getAllByText('Q400.00').length).toBeGreaterThan(0);
     expect(screen.getAllByText('30').length).toBeGreaterThan(0); // 30 restantes en camion
