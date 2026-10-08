@@ -37,7 +37,7 @@ describe('SalesPage', () => {
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const path = input.toString();
       if (path.endsWith('/sales/sale-1/receipt')) {
-        return Promise.resolve(new Response(new Blob(['%PDF receipt'], { type: 'application/pdf' }), {
+        return Promise.resolve(new Response('%PDF receipt', {
           status: 200, headers: { 'Content-Type': 'application/pdf', 'X-Document-Type': 'INTERNAL_RECEIPT' }
         }));
       }
