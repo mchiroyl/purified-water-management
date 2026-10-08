@@ -65,7 +65,7 @@ export function AppShell() {
   const isCreditAdmin = user?.roles.includes('ADMINISTRADOR_CREDITO');
   const canSeeAudit = isAdmin || user?.roles.includes('SUPERVISOR');
   const canCatalog = user?.roles.some(role => ['ADMINISTRADOR', 'BODEGA', 'SUPERVISOR'].includes(role));
-  const canSeeCustomers = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'VENDEDOR'].includes(role));
+  const canSeeCustomers = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR'].includes(role));
   const canSeeRoutes = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA'].includes(role));
   const canSeeVehicles = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR', 'BODEGA'].includes(role));
   const canSeePricing = user?.roles.some(role => ['ADMINISTRADOR', 'SUPERVISOR'].includes(role));
