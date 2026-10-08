@@ -227,10 +227,17 @@ export function AppShell() {
           <ShoppingCart size={18} />
           <span>Ventas</span>
         </NavLink>
-        <NavLink to="/routes">
-          <Truck size={18} />
-          <span>Rutas</span>
-        </NavLink>
+        {canSeeRoutes ? (
+          <NavLink to="/routes">
+            <Truck size={18} />
+            <span>Rutas</span>
+          </NavLink>
+        ) : (
+          <NavLink to="/loads">
+            <Package size={18} />
+            <span>Mi Carga</span>
+          </NavLink>
+        )}
         <NavLink to="/inventory">
           <Warehouse size={18} />
           <span>Stock</span>
