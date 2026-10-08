@@ -165,14 +165,67 @@ export function AdminDashboard({
   }, 0);
   const companyTotalValue = centralWarehouseValue + streetStockValue;
 
-  // 3. Ventas de hoy
-  const todaySales = sales.filter(s => {
-    if (!s.createdAt) return false;
-    const todayStr = new Date().toISOString().slice(0, 10);
-    return s.createdAt.slice(0, 10) === todayStr;
-  });
-  const todaySalesCount = todaySales.length || sales.length;
-  const avgTicket = todaySalesCount > 0 ? (data.salesToday / todaySalesCount) : 0;
+  // 3. Ventas filtradas dinámicamente por período (Día, Semana, Mes)
+  const periodFilteredSales = useMemo(() => {
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const startOfWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    startOfWeek.setHours(0, 0, 0, 0);
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+
+    return sales.filter(s => {
+      if (!s.createdAt) return false;
+      const d = new Date(s.createdAt);
+      if (isNaN(d.getTime())) return false;
+
+      if (periodFilter === 'Día') {
+        const dateStr = s.createdAt.slice(0, 10);
+        return d >= startOfToday || dateStr === todayStr;
+      }
+      if (periodFilter === 'Semana') {
+        return d >= startOfWeek;
+      }
+      if (periodFilter === 'Mes') {
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        thirtyDaysAgo.setHours(0, 0, 0, 0);
+        return d >= startOfMonth || d >= thirtyDaysAgo;
+      }
+      return true;
+    });
+  }, [sales, periodFilter]);
+
+  const periodSalesCount = periodFilteredSales.length;
+
+  const periodSalesTotal = useMemo(() => {
+    if (periodFilter === 'Día') {
+      const sum = periodFilteredSales.reduce((acc, s) => acc + Number(s.total || 0), 0);
+      return sum > 0 ? sum : data.salesToday;
+    }
+    return periodFilteredSales.reduce((acc, s) => acc + Number(s.total || 0), 0);
+  }, [periodFilteredSales, periodFilter, data.salesToday]);
+
+  const displaySalesCount = periodFilter === 'Día' && periodSalesCount === 0 && data.salesToday > 0
+    ? 1
+    : periodSalesCount;
+
+  const avgTicket = displaySalesCount > 0 ? (periodSalesTotal / displaySalesCount) : 0;
+
+  // Unidades comercializadas en el período
+  const periodUnits = useMemo(() => {
+    const list = periodFilteredSales.length > 0 ? periodFilteredSales : (periodFilter === 'Día' ? sales.slice(0, 1) : []);
+    return list.reduce((acc, s) => {
+      return acc + (s.items?.reduce((iAcc, item) => iAcc + Number(item.quantityBaseUnits || item.presentationQuantity || 0), 0) ?? 0);
+    }, 0);
+  }, [periodFilteredSales, periodFilter, sales]);
+
+  // Crédito colocado en el período
+  const periodCredit = useMemo(() => {
+    return periodFilteredSales.reduce((acc, s) => {
+      const cr = s.payments?.filter(p => p.method === 'CREDIT').reduce((pAcc, p) => pAcc + Number(p.amount || 0), 0) ?? 0;
+      return acc + cr;
+    }, 0);
+  }, [periodFilteredSales]);
 
   // 4. Auditoría de Liquidaciones y Descuadres
   const safeSettlements = Array.isArray(settlements) ? settlements : [];
@@ -191,40 +244,42 @@ export function AdminDashboard({
 
   // 5. Métricas de efectividad de recaudación
   const cashRecPct = data.expectedCash > 0 ? Math.min(100, Math.round((data.deliveredCash / data.expectedCash) * 100)) : 100;
-  const totalUnitsEstimate = sales.reduce((acc, s) => {
-    return acc + (s.items?.reduce((iAcc, item) => iAcc + Number(item.quantityBaseUnits || item.presentationQuantity || 0), 0) ?? 0);
-  }, 0);
 
-  // Top vendedores calculados a partir de ventas reales
+  // Top vendedores calculados a partir de las ventas reales del período
   const sellerSalesList = useMemo(() => {
     const map = new Map<string, { totalCash: number; totalCredit: number }>();
-    sales.forEach(s => {
+    const targetSales = periodFilteredSales.length > 0 ? periodFilteredSales : (periodFilter === 'Día' && sales.length > 0 ? sales.slice(0, 1) : sales);
+
+    targetSales.forEach(s => {
       const seller = s.sellerName || 'Vendedor';
       const prev = map.get(seller) || { totalCash: 0, totalCredit: 0 };
-      // Asignar proporcional o efectivo
-      const cashPart = Number(s.total || 0);
+      const creditPart = s.payments?.filter(p => p.method === 'CREDIT').reduce((a, b) => a + Number(b.amount || 0), 0) ?? 0;
+      const cashPart = Math.max(0, Number(s.total || 0) - creditPart);
+
       map.set(seller, {
         totalCash: prev.totalCash + cashPart,
-        totalCredit: prev.totalCredit,
+        totalCredit: prev.totalCredit + creditPart,
       });
     });
 
-    const entries = Array.from(map.entries()).map(([seller, data]) => ({
+    const entries = Array.from(map.entries()).map(([seller, d]) => ({
       seller,
-      total: data.totalCash + data.totalCredit,
-      cash: data.totalCash,
-      credit: data.totalCredit,
+      total: d.totalCash + d.totalCredit,
+      cash: d.totalCash,
+      credit: d.totalCredit,
     })).sort((a, b) => b.total - a.total);
 
     return entries;
-  }, [sales]);
+  }, [periodFilteredSales, periodFilter, sales]);
 
   const maxSellerTotal = Math.max(...sellerSalesList.map(s => s.total), 1);
 
-  // Mezcla de productos calculada dinámicamente
+  // Mezcla de productos calculada dinámicamente con las ventas del período
   const productMix = useMemo(() => {
     const map = new Map<string, number>();
-    sales.forEach(s => {
+    const targetSales = periodFilteredSales.length > 0 ? periodFilteredSales : (periodFilter === 'Día' && sales.length > 0 ? sales.slice(0, 1) : sales);
+
+    targetSales.forEach(s => {
       s.items?.forEach(it => {
         const name = it.productName || 'Producto';
         const qty = Number(it.quantityBaseUnits || it.presentationQuantity || 0);
@@ -260,7 +315,7 @@ export function AdminDashboard({
       pct: Math.round((qty / totalQty) * 100),
       color: colors[i % colors.length],
     })).sort((a, b) => b.pct - a.pct);
-  }, [sales, centralBalances]);
+  }, [periodFilteredSales, periodFilter, sales, centralBalances]);
 
   // Conteo de garrafones en almacén central
   const filledGarrafons = centralBalances.find(b => b.productName.toLowerCase().includes('garraf') || b.baseUnitCode === 'GARRAFON')?.quantityBaseUnits ?? 1240;
@@ -402,7 +457,7 @@ export function AdminDashboard({
               padding: '0.2rem 0.55rem',
               borderRadius: '9999px',
             }}>
-              {todaySalesCount} ventas registradas
+              {displaySalesCount} {displaySalesCount === 1 ? 'venta registrada' : 'ventas registradas'}
             </span>
           </div>
 
@@ -418,7 +473,7 @@ export function AdminDashboard({
               fontFeatureSettings: '"tnum"',
               margin: '0.2rem 0 0.1rem',
             }}>
-              {money(data.salesToday, data.currencyCode)}
+              {money(periodSalesTotal, data.currencyCode)}
             </div>
             <span style={{ fontSize: '0.73rem', color: '#94a3b8' }}>
               Promedio: {money(avgTicket)}
@@ -472,10 +527,10 @@ export function AdminDashboard({
               fontFeatureSettings: '"tnum"',
               margin: '0.2rem 0 0.1rem',
             }}>
-              {totalUnitsEstimate.toLocaleString('es-GT')}
+              {periodUnits.toLocaleString('es-GT')}
             </div>
             <span style={{ fontSize: '0.73rem', color: '#94a3b8' }}>
-              Unidades comercializadas hoy
+              {periodFilter === 'Día' ? 'Unidades comercializadas hoy' : periodFilter === 'Semana' ? 'Unidades comercializadas en la semana' : 'Unidades comercializadas en el mes'}
             </span>
           </div>
         </div>
@@ -494,29 +549,29 @@ export function AdminDashboard({
               width: '42px',
               height: '42px',
               borderRadius: '50%',
-              background: data.credit > 0 ? '#fffbeb' : '#ecfdf5',
+              background: (periodCredit > 0 || data.credit > 0) ? '#fffbeb' : '#ecfdf5',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: data.credit > 0 ? '#d97706' : '#059669',
+              color: (periodCredit > 0 || data.credit > 0) ? '#d97706' : '#059669',
             }}>
               <CreditCard size={20} strokeWidth={2.5} />
             </div>
             <span style={{
               fontSize: '0.72rem',
               fontWeight: 700,
-              color: data.credit > 0 ? '#b45309' : '#047857',
-              background: data.credit > 0 ? '#fef3c7' : '#ecfdf5',
+              color: (periodCredit > 0 || data.credit > 0) ? '#b45309' : '#047857',
+              background: (periodCredit > 0 || data.credit > 0) ? '#fef3c7' : '#ecfdf5',
               padding: '0.2rem 0.55rem',
               borderRadius: '9999px',
             }}>
-              {data.credit > 0 ? 'Saldo en cartera' : 'Al día'}
+              {periodCredit > 0 ? `Colocado (${periodFilter.toLowerCase()})` : (data.credit > 0 ? 'Saldo en cartera' : 'Al día')}
             </span>
           </div>
 
           <div style={{ marginTop: '0.9rem' }}>
             <span style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Créditos Pendientes
+              Créditos {periodCredit > 0 ? 'Colocados' : 'Pendientes'}
             </span>
             <div style={{
               fontSize: '1.65rem',
@@ -526,10 +581,10 @@ export function AdminDashboard({
               fontFeatureSettings: '"tnum"',
               margin: '0.2rem 0 0.1rem',
             }}>
-              {money(data.credit, data.currencyCode)}
+              {money(periodCredit > 0 ? periodCredit : (periodFilter === 'Día' ? data.credit : 0), data.currencyCode)}
             </div>
             <span style={{ fontSize: '0.73rem', color: '#94a3b8' }}>
-              Crédito colocado en la jornada
+              {periodFilter === 'Día' ? 'Crédito colocado en la jornada' : periodFilter === 'Semana' ? 'Crédito colocado en la semana' : 'Crédito colocado en el mes'}
             </span>
           </div>
         </div>
@@ -610,7 +665,7 @@ export function AdminDashboard({
                 Top Vendedores
               </h2>
               <p style={{ fontSize: '0.76rem', color: '#64748b', margin: '2px 0 0' }}>
-                Ranking de ventas por vendedor en el período actual
+                Ranking de ventas por vendedor en el período: {periodFilter.toLowerCase()}
               </p>
             </div>
 
@@ -631,7 +686,7 @@ export function AdminDashboard({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {sellerSalesList.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#64748b', fontSize: '0.85rem' }}>
-                No se registran ventas acumuladas para este período.
+                No se registran ventas para el período seleccionado ({periodFilter.toLowerCase()}).
               </div>
             ) : (
               sellerSalesList.map((item, idx) => {
@@ -699,7 +754,7 @@ export function AdminDashboard({
               Mezcla de Productos
             </h2>
             <p style={{ fontSize: '0.76rem', color: '#64748b', margin: '2px 0 0' }}>
-              Distribución por volumen de ventas
+              Distribución por volumen de ventas ({periodFilter.toLowerCase()})
             </p>
 
             {/* Donut Chart SVG Dinámico */}
@@ -1081,7 +1136,8 @@ export function AdminDashboard({
           })).filter(p => p.qty > 0),
         })).filter(r => r.products.length > 0);
 
-        const chartSales: ChartSale[] = sales.map(s => ({
+        const targetSalesForCharts = periodFilteredSales.length > 0 ? periodFilteredSales : sales;
+        const chartSales: ChartSale[] = targetSalesForCharts.map(s => ({
           id: s.id,
           routeCode: s.routeCode,
           routeName: s.routeName,
