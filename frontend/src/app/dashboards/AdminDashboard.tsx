@@ -136,8 +136,16 @@ export function AdminDashboard({
   const yesterdayStr = toLocalDateStr(yesterday);
 
   const [periodFilter, setPeriodFilter] = useState<'Día' | 'Ayer' | 'Semana' | 'Mes' | 'Personalizado'>('Día');
-  const [customDate, setCustomDate] = useState<string>(yesterdayStr);
+  const [customStartDate, setCustomStartDate] = useState<string>(yesterdayStr);
+  const [customEndDate, setCustomEndDate] = useState<string>('');
   const [sellerSearch, setSellerSearch] = useState<string>('');
+
+  const customRangeLabel = useMemo(() => {
+    if (customEndDate && customEndDate !== customStartDate) {
+      return `del ${customStartDate} al ${customEndDate}`;
+    }
+    return `el ${customStartDate}`;
+  }, [customStartDate, customEndDate]);
 
   // 1. Catálogo de precios para valorización de inventarios
   const getProductPrice = (productId: string): number => {
@@ -206,7 +214,11 @@ export function AdminDashboard({
         return sDateLocal === yesterdayStr || sDateRaw === yesterdayStr;
       }
       if (periodFilter === 'Personalizado') {
-        return sDateLocal === customDate || sDateRaw === customDate;
+        const targetDate = sDateLocal || sDateRaw;
+        if (customEndDate && customEndDate !== customStartDate) {
+          return targetDate >= customStartDate && targetDate <= customEndDate;
+        }
+        return sDateLocal === customStartDate || sDateRaw === customStartDate;
       }
       if (periodFilter === 'Semana') {
         return d >= startOfWeek;
@@ -216,7 +228,7 @@ export function AdminDashboard({
       }
       return true;
     });
-  }, [sales, periodFilter, customDate, todayStr, yesterdayStr]);
+  }, [sales, periodFilter, customStartDate, customEndDate, todayStr, yesterdayStr]);
 
   const periodSalesCount = periodFilteredSales.length;
 
@@ -278,7 +290,11 @@ export function AdminDashboard({
         return planned === yesterdayStr;
       }
       if (periodFilter === 'Personalizado') {
-        return planned === customDate;
+        if (!planned) return false;
+        if (customEndDate && customEndDate !== customStartDate) {
+          return planned >= customStartDate && planned <= customEndDate;
+        }
+        return planned === customStartDate;
       }
       if (periodFilter === 'Semana') {
         if (!planned) return isActive;
@@ -304,7 +320,7 @@ export function AdminDashboard({
     }
 
     return result;
-  }, [loads, periodFilter, customDate, sellerSearch, todayStr, yesterdayStr]);
+  }, [loads, periodFilter, customStartDate, customEndDate, sellerSearch, todayStr, yesterdayStr]);
 
   // Métricas de rutas para el período seleccionado
   const periodActiveRoutes = useMemo(() => {
@@ -480,42 +496,99 @@ export function AdminDashboard({
               ))}
             </div>
 
-            {/* Selector de fecha para opción Personalizado */}
+            {/* Selector de fecha para opción Personalizado (Desde y Hasta) */}
             {periodFilter === 'Personalizado' && (
               <div style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '0.4rem',
+                gap: '0.55rem',
                 background: '#ffffff',
                 border: '1px solid #3b82f6',
                 borderRadius: '0.5rem',
-                padding: '0.2rem 0.55rem',
+                padding: '0.25rem 0.65rem',
                 boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.1)',
+                flexWrap: 'wrap',
               }}>
                 <Calendar size={14} color="#2563eb" />
-                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#475569' }}>Fecha:</span>
-                <input
-                  type="date"
-                  value={customDate}
-                  max={todayStr}
-                  onChange={(e) => setCustomDate(e.target.value)}
-                  style={{
-                    border: 'none',
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
-                    color: '#0f172a',
-                    outline: 'none',
-                    background: 'transparent',
-                    cursor: 'pointer',
-                  }}
-                />
+                
+                {/* Campo Desde */}
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <label htmlFor="custom-dashboard-date-start" style={{ fontSize: '0.74rem', fontWeight: 600, color: '#475569' }}>
+                    Desde:
+                  </label>
+                  <input
+                    id="custom-dashboard-date-start"
+                    type="date"
+                    value={customStartDate}
+                    max={todayStr}
+                    onChange={(e) => setCustomStartDate(e.target.value)}
+                    style={{
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '0.35rem',
+                      padding: '0.15rem 0.35rem',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      color: '#0f172a',
+                      outline: 'none',
+                      background: '#f8fafc',
+                      cursor: 'pointer',
+                    }}
+                  />
+                </div>
+
+                {/* Campo Hasta */}
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <label htmlFor="custom-dashboard-date-end" style={{ fontSize: '0.74rem', fontWeight: 600, color: '#475569' }}>
+                    Hasta:
+                  </label>
+                  <input
+                    id="custom-dashboard-date-end"
+                    type="date"
+                    value={customEndDate}
+                    min={customStartDate}
+                    max={todayStr}
+                    placeholder="Opcional"
+                    onChange={(e) => setCustomEndDate(e.target.value)}
+                    style={{
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '0.35rem',
+                      padding: '0.15rem 0.35rem',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      color: '#0f172a',
+                      outline: 'none',
+                      background: '#f8fafc',
+                      cursor: 'pointer',
+                    }}
+                  />
+                </div>
+
+                {customEndDate && customEndDate !== customStartDate && (
+                  <button
+                    type="button"
+                    onClick={() => setCustomEndDate('')}
+                    title="Buscar solo fecha Desde"
+                    style={{
+                      border: 'none',
+                      background: '#f1f5f9',
+                      borderRadius: '0.25rem',
+                      cursor: 'pointer',
+                      fontSize: '0.7rem',
+                      color: '#475569',
+                      padding: '0.15rem 0.4rem',
+                      fontWeight: 600,
+                    }}
+                  >
+                    ✕ Solo Desde
+                  </button>
+                )}
               </div>
             )}
 
             <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 500 }}>
               {periodFilter === 'Día' && `(Hoy: ${todayStr})`}
               {periodFilter === 'Ayer' && `(Ayer: ${yesterdayStr})`}
-              {periodFilter === 'Personalizado' && `(Fecha: ${customDate})`}
+              {periodFilter === 'Personalizado' && (customEndDate && customEndDate !== customStartDate ? `(Rango: ${customStartDate} al ${customEndDate})` : `(Fecha: ${customStartDate})`)}
             </span>
           </div>
 
@@ -680,7 +753,7 @@ export function AdminDashboard({
                 : periodFilter === 'Ayer' 
                 ? 'Unidades comercializadas ayer' 
                 : periodFilter === 'Personalizado' 
-                ? `Unidades comercializadas el ${customDate}` 
+                ? `Unidades comercializadas ${customRangeLabel}` 
                 : periodFilter === 'Semana' 
                 ? 'Unidades comercializadas en la semana' 
                 : 'Unidades comercializadas en el mes'}
@@ -742,7 +815,7 @@ export function AdminDashboard({
                 : periodFilter === 'Ayer' 
                 ? 'Crédito colocado ayer' 
                 : periodFilter === 'Personalizado' 
-                ? `Crédito colocado el ${customDate}` 
+                ? `Crédito colocado ${customRangeLabel}` 
                 : periodFilter === 'Semana' 
                 ? 'Crédito colocado en la semana' 
                 : 'Crédito colocado en el mes'}
@@ -1028,7 +1101,7 @@ export function AdminDashboard({
                 Cuadre Diario y Liquidación
               </h2>
               <p style={{ fontSize: '0.76rem', color: '#64748b', margin: '2px 0 0' }}>
-                Monitoreo de ingresos de ruta y liquidación de vehículos · {periodFilter === 'Personalizado' ? `Fecha ${customDate}` : periodFilter}
+                Monitoreo de ingresos de ruta y liquidación de vehículos · {periodFilter === 'Personalizado' ? `Fechas: ${customRangeLabel}` : periodFilter}
               </p>
             </div>
 
@@ -1319,7 +1392,7 @@ export function AdminDashboard({
                 ) : (
                   <tr>
                     <td colSpan={7} style={{ textAlign: 'center', padding: '2rem 1rem', color: '#64748b' }}>
-                      No se encontraron rutas para la fecha o filtro seleccionado ({periodFilter === 'Personalizado' ? customDate : periodFilter}).
+                      No se encontraron rutas para la fecha o filtro seleccionado ({periodFilter === 'Personalizado' ? customRangeLabel : periodFilter}).
                     </td>
                   </tr>
                 )}
