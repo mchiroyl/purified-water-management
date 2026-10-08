@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, Fragment, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../app/PageHeader';
 import { apiRequest } from '../../services/apiClient';
@@ -60,11 +60,13 @@ export function RouteLoadsPage({
   const products = useQuery({ queryKey: ['products'], queryFn: () => apiRequest<Product[]>('/products'), enabled: canPrepare || canCorrect });
   const [form, setForm] = useState({ routeId: '', sourceLocationId: '', plannedDate: dateInZone(), loadType: 'INITIAL' as 'INITIAL' | 'REPLENISHMENT', notes: '' });
   const [items, setItems] = useState<ItemForm[]>([{ productId: '', quantityBaseUnits: 1 }]);
-  const [corrections, setCorrections] = useState<Record<string, CorrectionForm>>({});
   const [locationError, setLocationError] = useState('');
   const [locationProgress, setLocationProgress] = useState('');
   const [isCapturingLocation, setIsCapturingLocation] = useState(false);
   const [activeLoadId, setActiveLoadId] = useState<string | null>(null);
+  const [correctingLoad, setCorrectingLoad] = useState<RouteLoad | null>(null);
+  const [correctionForm, setCorrectionForm] = useState<CorrectionForm>({ productId: '', quantityDelta: 0, reason: '' });
+
   const refresh = () => void client.invalidateQueries({ queryKey: ['route-loads'] });
   const [mapLoadId, setMapLoadId] = useState<string | null>(null);
   const routeMapQuery = useQuery({
@@ -98,10 +100,21 @@ export function RouteLoadsPage({
 
   const correct = useMutation({
     mutationFn: ({ id, value }: { id: string; value: CorrectionForm }) => apiRequest<RouteLoad>(`/loads/${id}/corrections`, { method: 'POST', body: JSON.stringify(value) }),
-    onSuccess: (_data, variables) => { setCorrections({ ...corrections, [variables.id]: { productId: '', quantityDelta: 0, reason: '' } }); refresh(); }
+    onSuccess: () => {
+      setCorrectingLoad(null);
+      setCorrectionForm({ productId: '', quantityDelta: 0, reason: '' });
+      refresh();
+    }
   });
 
   const submit = (event: FormEvent) => { event.preventDefault(); create.mutate(); };
+
+  const submitCorrection = (event: FormEvent) => {
+    event.preventDefault();
+    if (correctingLoad) {
+      correct.mutate({ id: correctingLoad.id, value: correctionForm });
+    }
+  };
 
   const confirmReceipt = async (load: RouteLoad) => {
     setLocationError('');
@@ -248,7 +261,7 @@ export function RouteLoadsPage({
         </form>
       )}
 
-      {/* ── Vista de Lista: Cargas Registradas ── */}
+      {/* ── Vista de Lista: Cargas Registradas en Tabla Compacta Profesional ── */}
       {effectiveView === 'list' && (
         <section className="section-panel">
           <div className="section-heading">
@@ -256,140 +269,252 @@ export function RouteLoadsPage({
             <span>{loads.data?.length ?? 0} cargas</span>
           </div>
           {loads.error && <div className="alert error">{loads.error.message}</div>}
-          <div className="load-grid">
-            {loads.data?.map(load => {
-              const correction = corrections[load.id] ?? { productId: load.items[0]?.productId ?? '', quantityDelta: 0, reason: '' };
-              return (
-                <article className="panel load-card" key={load.id}>
-                  <div className="section-heading">
-                    <div>
-                      <strong>{load.loadNumber}</strong>
-                      <span>{load.loadType === 'REPLENISHMENT' ? 'Recarga' : 'Carga inicial'} · {load.routeCode} · {load.routeName} · {load.plannedDate}</span>
-                    </div>
-                    <span className={`status ${load.status === 'STARTED' ? 'active' : ''}`}>
-                      {statusLabel[load.status] ?? load.status}
-                    </span>
-                  </div>
-                  <p>{load.sourceLocationName} → {load.targetLocationName}</p>
-                  <div className="data-list">
-                    {load.items.map(item => (
-                      <div className="data-row" key={item.id}>
-                        <span>{item.productName}</span>
-                        <strong>{Number(item.quantityBaseUnits).toLocaleString('es-GT')} {item.baseUnitCode}</strong>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="audit-line">
-                    Entrega: {load.warehouseConfirmedByUsername ?? 'pendiente'} · Recepción: {load.sellerReceivedByUsername ?? 'pendiente'} · Inicio: {load.startedByUsername ?? 'pendiente'}
-                  </p>
-                  <div className="form-actions">
-                    {load.status === 'PREPARED' && canConfirmWarehouse && (
-                      <button className="primary" onClick={() => transition.mutate({ id: load.id, action: 'warehouse-confirmation' })}>
-                        Confirmar entrega de bodega
-                      </button>
-                    )}
-                    {load.status === 'PREPARED' && !canConfirmWarehouse && (
-                      <span style={{ fontSize: '0.88rem', color: '#b45309', fontWeight: 600, padding: '0.4rem 0' }}>
-                        ⏳ Esperando que Bodega confirme la entrega
-                      </span>
-                    )}
-                    {load.status === 'WAREHOUSE_CONFIRMED' && canReceive && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                        <button className="primary" disabled={isCapturingLocation || transition.isPending} onClick={() => void confirmReceipt(load)}>
-                          {isCapturingLocation ? (locationProgress || 'Obteniendo ubicación…') : 'Confirmar recepción'}
-                        </button>
-                        {isCapturingLocation && (
-                          <span style={{ fontSize: '0.82rem', color: '#4b5563' }}>
-                            📡 Obteniendo coordenadas. Si está dentro de bodega con techo de lámina, acérquese a la puerta o salida.
+
+          {loads.data && loads.data.length > 0 ? (
+            <div className="table-wrap loads-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{ width: '170px' }}>No. Carga / Tipo</th>
+                    <th style={{ width: '220px' }}>Ruta y Trayecto</th>
+                    <th>Productos Cargados</th>
+                    <th style={{ width: '240px' }}>Flujo y Auditoría</th>
+                    <th style={{ width: '130px' }}>Estado</th>
+                    <th style={{ width: '180px', textAlign: 'center' }}>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loads.data.map(load => (
+                    <Fragment key={load.id}>
+                      <tr>
+                        <td>
+                          <strong>{load.loadNumber}</strong>
+                          <small style={{ display: 'block', color: 'var(--muted)', marginTop: '0.2rem' }}>
+                            {load.loadType === 'REPLENISHMENT' ? 'Recarga' : 'Carga inicial'} · {load.plannedDate}
+                          </small>
+                        </td>
+                        <td>
+                          <strong>{load.routeCode} · {load.routeName}</strong>
+                          <small style={{ display: 'block', color: 'var(--muted)', marginTop: '0.2rem' }}>
+                            {load.sourceLocationName} → {load.targetLocationName}
+                          </small>
+                        </td>
+                        <td>
+                          <div className="inventory-balances-cell">
+                            {load.items.map(item => (
+                              <span className="inventory-balance-chip" key={item.id}>
+                                <span>{item.productName}:</span>
+                                <strong>
+                                  {Number(item.quantityBaseUnits).toLocaleString('es-GT')} {item.baseUnitCode}
+                                </strong>
+                              </span>
+                            ))}
+                          </div>
+                          {load.corrections.length > 0 && (
+                            <div style={{ marginTop: '0.35rem', fontSize: '0.78rem', color: '#b45309', display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+                              {load.corrections.map(c => (
+                                <span key={c.id} style={{ background: '#fef3c7', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
+                                  ⚠️ {c.productName}: {Number(c.quantityDelta) > 0 ? '+' : ''}{Number(c.quantityDelta).toLocaleString('es-GT')} ({c.reason})
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--muted)', lineHeight: 1.4 }}>
+                            <span>
+                              Entrega: {load.warehouseConfirmedByUsername ?? 'pendiente'} · Recepción: {load.sellerReceivedByUsername ?? 'pendiente'} · Inicio: {load.startedByUsername ?? 'pendiente'}
+                            </span>
+                          </div>
+                        </td>
+                        <td>
+                          <span className={`status ${load.status === 'STARTED' ? 'active' : ''}`}>
+                            {statusLabel[load.status] ?? load.status}
                           </span>
-                        )}
-                      </div>
-                    )}
-                    {load.status === 'RECEIVED' && canStart && load.loadType !== 'REPLENISHMENT' && (
-                      <button
-                        className="primary"
-                        disabled={transition.isPending && activeLoadId === load.id}
-                        onClick={() => {
-                          setLocationError('');
-                          setActiveLoadId(load.id);
-                          transition.mutate({ id: load.id, action: 'start' });
-                        }}
-                      >
-                        {transition.isPending && activeLoadId === load.id ? 'Iniciando recorrido…' : 'Iniciar recorrido'}
-                      </button>
-                    )}
-                    {load.status === 'STARTED' && (
-                      <button type="button" className="secondary" onClick={() => setMapLoadId(prev => prev === load.id ? null : load.id)}>
-                        🗺 {mapLoadId === load.id ? 'Ocultar mi ruta' : 'Ver mi ruta'}
-                      </button>
-                    )}
-                  </div>
-                  {activeLoadId === load.id && (locationError || transition.error) && (
-                    <div className="alert error" style={{ marginTop: '0.65rem', fontSize: '0.85rem' }}>
-                      <div>❌ <strong>Error:</strong> {locationError || transition.error?.message}</div>
-                      {transition.error?.message?.includes('Stock insuficiente') && (
-                        <div style={{ marginTop: '0.4rem', fontSize: '0.82rem', color: '#991b1b', lineHeight: 1.4 }}>
-                          👉 <strong>Causa:</strong> No hay suficientes existencias en bodega física para despachar esta carga. Bodega debe registrar la producción o ajuste de entrada en el sistema antes de que el camión pueda salir.
-                        </div>
+                        </td>
+                        <td>
+                          <div className="loads-actions-cell" style={{ alignItems: 'center' }}>
+                            {load.status === 'PREPARED' && canConfirmWarehouse && (
+                              <button
+                                type="button"
+                                className="primary"
+                                style={{ padding: '0.35rem 0.65rem', fontSize: '0.82rem', width: '100%' }}
+                                onClick={() => transition.mutate({ id: load.id, action: 'warehouse-confirmation' })}
+                              >
+                                Confirmar entrega
+                              </button>
+                            )}
+                            {load.status === 'PREPARED' && !canConfirmWarehouse && (
+                              <span style={{ fontSize: '0.8rem', color: '#b45309', fontWeight: 600 }}>
+                                ⏳ Espera entrega bodega
+                              </span>
+                            )}
+                            {load.status === 'WAREHOUSE_CONFIRMED' && canReceive && (
+                              <button
+                                type="button"
+                                className="primary"
+                                style={{ padding: '0.35rem 0.65rem', fontSize: '0.82rem', width: '100%' }}
+                                disabled={isCapturingLocation || transition.isPending}
+                                onClick={() => void confirmReceipt(load)}
+                              >
+                                {isCapturingLocation ? (locationProgress || 'Obteniendo GPS…') : 'Confirmar recepción'}
+                              </button>
+                            )}
+                            {load.status === 'RECEIVED' && canStart && load.loadType !== 'REPLENISHMENT' && (
+                              <button
+                                type="button"
+                                className="primary"
+                                style={{ padding: '0.35rem 0.65rem', fontSize: '0.82rem', width: '100%' }}
+                                disabled={transition.isPending && activeLoadId === load.id}
+                                onClick={() => {
+                                  setLocationError('');
+                                  setActiveLoadId(load.id);
+                                  transition.mutate({ id: load.id, action: 'start' });
+                                }}
+                              >
+                                {transition.isPending && activeLoadId === load.id ? 'Iniciando…' : 'Iniciar recorrido'}
+                              </button>
+                            )}
+                            {load.status === 'STARTED' && (
+                              <button
+                                type="button"
+                                className="secondary"
+                                style={{ padding: '0.35rem 0.65rem', fontSize: '0.82rem', width: '100%' }}
+                                onClick={() => setMapLoadId(prev => prev === load.id ? null : load.id)}
+                              >
+                                🗺 {mapLoadId === load.id ? 'Ocultar mi ruta' : 'Ver mi ruta'}
+                              </button>
+                            )}
+                            {canCorrect && ['RECEIVED', 'STARTED'].includes(load.status) && (
+                              <button
+                                type="button"
+                                className="secondary"
+                                style={{ padding: '0.25rem 0.55rem', fontSize: '0.78rem', width: '100%', marginTop: '0.2rem' }}
+                                onClick={() => {
+                                  setCorrectingLoad(load);
+                                  setCorrectionForm({ productId: load.items[0]?.productId ?? '', quantityDelta: 0, reason: '' });
+                                }}
+                              >
+                                ✏️ Corrección
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* Fila expandible de error para esta carga si aplica */}
+                      {activeLoadId === load.id && (locationError || transition.error) && (
+                        <tr key={`${load.id}-error`}>
+                          <td colSpan={6} style={{ padding: '0.5rem 0.85rem', background: '#fef2f2' }}>
+                            <div className="alert error" style={{ margin: 0, fontSize: '0.85rem' }}>
+                              <div>❌ <strong>Error:</strong> {locationError || transition.error?.message}</div>
+                              {transition.error?.message?.includes('Stock insuficiente') && (
+                                <div style={{ marginTop: '0.35rem', fontSize: '0.82rem', color: '#991b1b', lineHeight: 1.4 }}>
+                                  👉 <strong>Causa:</strong> No hay suficientes existencias en bodega física para despachar esta carga.
+                                </div>
+                              )}
+                              {transition.error?.message?.includes('distinto de quien entregó') && (
+                                <div style={{ marginTop: '0.35rem', fontSize: '0.82rem', color: '#991b1b', lineHeight: 1.4 }}>
+                                  👉 <strong>Doble confirmación obligatoria:</strong> La entrega física fue registrada por <strong>{load.warehouseConfirmedByUsername}</strong>. El vendedor de la ruta debe confirmar la recepción iniciando sesión con su propia cuenta.
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
                       )}
-                      {transition.error?.message?.includes('distinto de quien entregó') && (
-                        <div style={{ marginTop: '0.4rem', fontSize: '0.82rem', color: '#991b1b', lineHeight: 1.4 }}>
-                          👉 <strong>Doble confirmación obligatoria:</strong> La entrega física fue registrada por <strong>{load.warehouseConfirmedByUsername}</strong>. El vendedor de la ruta debe confirmar la recepción iniciando sesión con su propia cuenta.
-                        </div>
+
+                      {/* Fila expandible de mapa si está seleccionado */}
+                      {mapLoadId === load.id && (
+                        <tr key={`${load.id}-map`}>
+                          <td colSpan={6} style={{ padding: '1rem', background: '#f8fafc' }}>
+                            {routeMapQuery.isLoading && <p className="muted">Cargando mapa de ruta…</p>}
+                            {routeMapQuery.error && <p className="alert error">{(routeMapQuery.error as Error).message}</p>}
+                            {routeMapQuery.data && <RouteMapPanel data={routeMapQuery.data} height="360px" />}
+                          </td>
+                        </tr>
                       )}
-                    </div>
-                  )}
-                  {mapLoadId === load.id && (
-                    <div style={{ marginTop: '1rem' }}>
-                      {routeMapQuery.isLoading && <p className="muted">Cargando mapa…</p>}
-                      {routeMapQuery.error && <p className="alert error">{(routeMapQuery.error as Error).message}</p>}
-                      {routeMapQuery.data && <RouteMapPanel data={routeMapQuery.data} height="400px" />}
-                    </div>
-                  )}
-                  {canCorrect && ['RECEIVED', 'STARTED'].includes(load.status) && (
-                    <div className="correction-form">
-                      <h3>Corrección compensatoria</h3>
-                      <select aria-label={`Producto corrección ${load.loadNumber}`} value={correction.productId} onChange={event => setCorrections({ ...corrections, [load.id]: { ...correction, productId: event.target.value } })}>
-                        {load.items.map(item => <option value={item.productId} key={item.id}>{item.productName}</option>)}
-                      </select>
-                      <input aria-label={`Cantidad corrección ${load.loadNumber}`} type="number" step="0.0001" value={correction.quantityDelta} onChange={event => setCorrections({ ...corrections, [load.id]: { ...correction, quantityDelta: Number(event.target.value) } })} />
-                      <input aria-label={`Motivo corrección ${load.loadNumber}`} placeholder="Motivo obligatorio" value={correction.reason} onChange={event => setCorrections({ ...corrections, [load.id]: { ...correction, reason: event.target.value } })} />
-                      <button className="secondary" disabled={!correction.productId || correction.quantityDelta === 0 || !correction.reason} onClick={() => correct.mutate({ id: load.id, value: correction })}>
-                        Registrar corrección
-                      </button>
-                    </div>
-                  )}
-                  {load.corrections.length > 0 && (
-                    <div className="data-list">
-                      <h3>Correcciones</h3>
-                      {load.corrections.map(item => (
-                        <div className="data-row" key={item.id}>
-                          <span>{item.productName} · {item.reason} · {item.actorUsername}</span>
-                          <strong>{Number(item.quantityDelta) > 0 ? '+' : ''}{Number(item.quantityDelta).toLocaleString('es-GT')}</strong>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </article>
-              );
-            })}
-          </div>
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="muted">Aún no hay cargas registradas.</p>
+          )}
+
           {!activeLoadId && (locationError || transition.error || correct.error) && (
-            <div className="alert error">
+            <div className="alert error" style={{ marginTop: '1rem' }}>
               <div>{locationError || (transition.error ?? correct.error)?.message}</div>
               {transition.error?.message?.includes('Stock insuficiente') && (
                 <div style={{ marginTop: '0.45rem', fontSize: '0.88rem', fontWeight: 500, color: '#991b1b' }}>
                   👉 <strong>Causa:</strong> No hay suficientes existencias en bodega física para despachar esta carga. Bodega debe registrar la producción o ajuste de entrada en el sistema antes de que el camión pueda salir.
                 </div>
               )}
-              {transition.error?.message?.includes('distinto de quien entregó') && (
-                <div style={{ marginTop: '0.45rem', fontSize: '0.88rem', fontWeight: 500, color: '#991b1b' }}>
-                  👉 <strong>Aviso de Doble Confirmación:</strong> La entrega física fue registrada por el usuario que despachó en bodega. Por regla de control y auditoría, la recepción debe ser confirmada por el <strong>vendedor asignado a la ruta</strong> iniciando sesión con su propia cuenta en su dispositivo.
-                </div>
-              )}
             </div>
           )}
         </section>
+      )}
+
+      {/* ── Modal de Corrección Compensatoria ── */}
+      {correctingLoad && (
+        <div className="modal-backdrop" role="presentation">
+          <form className="modal-panel" onSubmit={submitCorrection} aria-modal="true" role="dialog">
+            <h2>Corrección compensatoria</h2>
+            <p className="muted" style={{ margin: '0 0 1rem' }}>
+              Carga <strong>{correctingLoad.loadNumber}</strong> · {correctingLoad.routeCode} ({correctingLoad.routeName})
+            </p>
+            <div className="form-grid compact-grid">
+              <label>
+                Producto
+                <select
+                  required
+                  aria-label={`Producto corrección ${correctingLoad.loadNumber}`}
+                  value={correctionForm.productId}
+                  onChange={e => setCorrectionForm({ ...correctionForm, productId: e.target.value })}
+                >
+                  <option value="">Seleccionar producto</option>
+                  {correctingLoad.items.map(item => (
+                    <option value={item.productId} key={item.id}>{item.productName}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Cantidad delta (+ entrada / − salida)
+                <input
+                  required
+                  aria-label={`Cantidad corrección ${correctingLoad.loadNumber}`}
+                  type="number"
+                  step="0.0001"
+                  value={correctionForm.quantityDelta}
+                  onChange={e => setCorrectionForm({ ...correctionForm, quantityDelta: Number(e.target.value) })}
+                />
+              </label>
+              <label className="wide">
+                Motivo obligatorio
+                <input
+                  required
+                  aria-label={`Motivo corrección ${correctingLoad.loadNumber}`}
+                  placeholder="Motivo obligatorio"
+                  value={correctionForm.reason}
+                  onChange={e => setCorrectionForm({ ...correctionForm, reason: e.target.value })}
+                />
+              </label>
+            </div>
+            {correct.error && <div className="alert error" style={{ marginTop: '0.75rem' }}>{correct.error.message}</div>}
+            <div className="form-actions" style={{ marginTop: '1.25rem' }}>
+              <button type="button" className="secondary" onClick={() => setCorrectingLoad(null)}>
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="primary"
+                disabled={correct.isPending || !correctionForm.productId || correctionForm.quantityDelta === 0 || !correctionForm.reason}
+              >
+                {correct.isPending ? 'Guardando…' : 'Registrar corrección'}
+              </button>
+            </div>
+          </form>
+        </div>
       )}
     </main>
   );
