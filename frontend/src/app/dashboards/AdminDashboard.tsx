@@ -221,6 +221,47 @@ export function AdminDashboard({
 
   const maxSellerTotal = Math.max(...sellerSalesList.map(s => s.total), 1);
 
+  // Mezcla de productos calculada dinámicamente
+  const productMix = useMemo(() => {
+    const map = new Map<string, number>();
+    sales.forEach(s => {
+      s.items?.forEach(it => {
+        const name = it.productName || 'Producto';
+        const qty = Number(it.quantityBaseUnits || it.presentationQuantity || 0);
+        map.set(name, (map.get(name) || 0) + qty);
+      });
+    });
+
+    const totalQty = Array.from(map.values()).reduce((a, b) => a + b, 0);
+    const colors = ['#2563eb', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4'];
+
+    if (totalQty === 0) {
+      const balMap = new Map<string, number>();
+      centralBalances.forEach(b => {
+        balMap.set(b.productName, (balMap.get(b.productName) || 0) + Number(b.quantityBaseUnits || 0));
+      });
+      const balTotal = Array.from(balMap.values()).reduce((a, b) => a + b, 0);
+      if (balTotal === 0) {
+        return [
+          { name: 'Garrafón 20L', qty: 0, pct: 100, color: '#2563eb' }
+        ];
+      }
+      return Array.from(balMap.entries()).map(([name, qty], i) => ({
+        name,
+        qty,
+        pct: Math.round((qty / balTotal) * 100),
+        color: colors[i % colors.length],
+      })).sort((a, b) => b.pct - a.pct);
+    }
+
+    return Array.from(map.entries()).map(([name, qty], i) => ({
+      name,
+      qty,
+      pct: Math.round((qty / totalQty) * 100),
+      color: colors[i % colors.length],
+    })).sort((a, b) => b.pct - a.pct);
+  }, [sales, centralBalances]);
+
   // Conteo de garrafones en almacén central
   const filledGarrafons = centralBalances.find(b => b.productName.toLowerCase().includes('garraf') || b.baseUnitCode === 'GARRAFON')?.quantityBaseUnits ?? 1240;
   const emptyGarrafons = 760; // Base estimativa de envases vacíos
@@ -661,106 +702,84 @@ export function AdminDashboard({
               Distribución por volumen de ventas
             </p>
 
-            {/* Donut Chart SVG Moderno */}
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '1.5rem 0 1rem',
-              position: 'relative',
-            }}>
-              <svg width="170" height="170" viewBox="0 0 170 170" style={{ transform: 'rotate(-90deg)' }}>
-                {/* Background Track */}
-                <circle
-                  cx="85"
-                  cy="85"
-                  r="65"
-                  fill="transparent"
-                  stroke="#f1f5f9"
-                  strokeWidth="18"
-                />
-                {/* Garrafón 20L: 78% (strokeDasharray: ~318 de 408) */}
-                <circle
-                  cx="85"
-                  cy="85"
-                  r="65"
-                  fill="transparent"
-                  stroke="#2563eb"
-                  strokeWidth="18"
-                  strokeDasharray="318 408"
-                  strokeDashoffset="0"
-                  strokeLinecap="round"
-                />
-                {/* Fardos: 14% (strokeDasharray: ~57) */}
-                <circle
-                  cx="85"
-                  cy="85"
-                  r="65"
-                  fill="transparent"
-                  stroke="#10b981"
-                  strokeWidth="18"
-                  strokeDasharray="57 408"
-                  strokeDashoffset="-325"
-                  strokeLinecap="round"
-                />
-                {/* Otros: 8% (strokeDasharray: ~32) */}
-                <circle
-                  cx="85"
-                  cy="85"
-                  r="65"
-                  fill="transparent"
-                  stroke="#f59e0b"
-                  strokeWidth="18"
-                  strokeDasharray="32 408"
-                  strokeDashoffset="-386"
-                  strokeLinecap="round"
-                />
-              </svg>
+            {/* Donut Chart SVG Dinámico */}
+            {(() => {
+              const topMix = productMix[0];
+              const circumference = 408;
+              let accumulatedPct = 0;
 
-              {/* Centro de la dona */}
-              <div style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                textAlign: 'center',
-              }}>
-                <span style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0f172a', display: 'block', lineHeight: 1 }}>
-                  78%
-                </span>
-                <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}>
-                  Garrafón 20L
-                </span>
-              </div>
-            </div>
+              return (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '1.5rem 0 1rem',
+                  position: 'relative',
+                }}>
+                  <svg width="170" height="170" viewBox="0 0 170 170" style={{ transform: 'rotate(-90deg)' }}>
+                    {/* Background Track */}
+                    <circle
+                      cx="85"
+                      cy="85"
+                      r="65"
+                      fill="transparent"
+                      stroke="#f1f5f9"
+                      strokeWidth="18"
+                    />
+                    {productMix.map((p) => {
+                      const dashLength = (p.pct / 100) * circumference;
+                      const offset = -((accumulatedPct / 100) * circumference);
+                      accumulatedPct += p.pct;
+                      return (
+                        <circle
+                          key={p.name}
+                          cx="85"
+                          cy="85"
+                          r="65"
+                          fill="transparent"
+                          stroke={p.color}
+                          strokeWidth="18"
+                          strokeDasharray={`${dashLength} ${circumference}`}
+                          strokeDashoffset={offset}
+                          strokeLinecap="round"
+                        />
+                      );
+                    })}
+                  </svg>
+
+                  {/* Centro de la dona */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    textAlign: 'center',
+                    maxWidth: '100px',
+                  }}>
+                    <span style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0f172a', display: 'block', lineHeight: 1 }}>
+                      {topMix ? `${topMix.pct}%` : '0%'}
+                    </span>
+                    <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {topMix ? topMix.name : 'Sin ventas'}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Desglose de productos */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', fontSize: '0.78rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: '#334155' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#2563eb' }} />
-                Garrafón 20L
-              </span>
-              <strong style={{ color: '#0f172a' }}>78%</strong>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: '#334155' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }} />
-                Fardo 22 Unid
-              </span>
-              <strong style={{ color: '#0f172a' }}>14%</strong>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: '#334155' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f59e0b' }} />
-                Botella 1.5L
-              </span>
-              <strong style={{ color: '#0f172a' }}>8%</strong>
-            </div>
+            {productMix.slice(0, 4).map((p) => (
+              <div key={p.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: '#334155' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: p.color }} />
+                  {p.name}
+                </span>
+                <strong style={{ color: '#0f172a' }}>{p.pct}%</strong>
+              </div>
+            ))}
           </div>
         </section>
       </div>
