@@ -1292,7 +1292,18 @@ table {
   min-width: 800px;
 }
 
-
-
-
-
+/* ── Cargas en Lista Compacta Profesional ── */
+.loads-table-wrap table {
+  min-width: 1020px;
+}
+.loads-table-wrap th,
+.loads-table-wrap td {
+  padding: 0.65rem 0.85rem;
+  vertical-align: middle;
+}
+.loads-actions-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: flex-start;
+}
