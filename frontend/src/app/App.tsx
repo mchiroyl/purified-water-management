@@ -86,7 +86,8 @@ export function App() {
         <Route path="route-history" element={isAdmin || user.roles.includes('SUPERVISOR') ? <RouteHistoryPage /> : <Navigate to="/" replace />} />
         <Route path="pricing" element={canSeePricing ? <PricingPage canManage={isAdmin} canApprove={isAdmin || user.roles.includes('SUPERVISOR')} canRequestDiscount={user.roles.includes('VENDEDOR')} /> : <Navigate to="/" replace />} />
         <Route path="pricing/list" element={canSeePricing ? <PricingPage view="list" canManage={isAdmin} canApprove={isAdmin || user.roles.includes('SUPERVISOR')} canRequestDiscount={user.roles.includes('VENDEDOR')} /> : <Navigate to="/" replace />} />
-        <Route path="inventory" element={canSeeInventory ? <InventoryPage canManage={canManageInventory} /> : <Navigate to="/" replace />} />
+        <Route path="inventory" element={canSeeInventory ? <InventoryPage canManage={canManageInventory} view="create" /> : <Navigate to="/" replace />} />
+        <Route path="inventory/list" element={canSeeInventory ? <InventoryPage canManage={canManageInventory} view="list" /> : <Navigate to="/" replace />} />
         <Route path="loads" element={canSeeLoads ? <RouteLoadsPage canPrepare={isAdmin || isWarehouse} canConfirmWarehouse={isAdmin || isWarehouse} canReceive={isAdmin || isSeller} canStart={isAdmin || isSeller} canCorrect={isAdmin || isWarehouse} /> : <Navigate to="/" replace />} />
         <Route path="sales" element={canSeeSales ? <SalesPage canSell={isAdmin || isSeller} canViewLocation={isAdmin || user.roles.includes('SUPERVISOR')} view="create" /> : <Navigate to="/" replace />} />
         <Route path="sales/list" element={canSeeSales ? <SalesPage canSell={isAdmin || isSeller} canViewLocation={isAdmin || user.roles.includes('SUPERVISOR')} view="list" /> : <Navigate to="/" replace />} />
