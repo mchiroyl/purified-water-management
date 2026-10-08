@@ -101,6 +101,47 @@ public class JdbcCustomerRouteAdapter implements CustomerRoutePort {
     }
 
     @Override
+    public void deleteCustomer(UUID id) {
+        if (!Boolean.TRUE.equals(jdbc.sql("SELECT EXISTS(SELECT 1 FROM customer WHERE id = :id)")
+                .param("id", id).query(Boolean.class).single())) {
+            throw notFound("CUSTOMER_NOT_FOUND", "No se encontró el cliente.");
+        }
+
+        boolean hasOperations = Boolean.TRUE.equals(jdbc.sql("""
+                SELECT EXISTS(
+                    SELECT 1 FROM sale WHERE customer_id = :id
+                    UNION ALL
+                    SELECT 1 FROM customer_return WHERE customer_id = :id
+                    UNION ALL
+                    SELECT 1 FROM credit_payment WHERE customer_id = :id
+                    UNION ALL
+                    SELECT 1 FROM credit_account_entry WHERE customer_id = :id
+                    UNION ALL
+                    SELECT 1 FROM jug_loan_event WHERE customer_id = :id
+                    UNION ALL
+                    SELECT 1 FROM route_tracking_point WHERE customer_id = :id
+                    UNION ALL
+                    SELECT 1 FROM customer_merge WHERE source_customer_id = :id OR target_customer_id = :id
+                    UNION ALL
+                    SELECT 1 FROM customer_registration_review WHERE customer_id = :id OR target_customer_id = :id
+                    UNION ALL
+                    SELECT 1 FROM customer WHERE id = :id AND (current_balance > 0)
+                )
+                """).param("id", id).query(Boolean.class).single());
+
+        if (hasOperations) {
+            throw new BusinessException("CUSTOMER_HAS_OPERATIONS",
+                    "El cliente cuenta con operaciones registradas (ventas, pagos, visitas o préstamos) y no se puede eliminar físicamente. Cámbielo a estado Inactivo para darlo de baja de la ruta.",
+                    ErrorCategory.CONFLICT);
+        }
+
+        jdbc.sql("DELETE FROM customer_route WHERE customer_id = :id").param("id", id).update();
+        jdbc.sql("DELETE FROM customer_special_price WHERE customer_id = :id").param("id", id).update();
+        jdbc.sql("DELETE FROM customer_discount_rule WHERE customer_id = :id").param("id", id).update();
+        jdbc.sql("DELETE FROM customer WHERE id = :id").param("id", id).update();
+    }
+
+    @Override
     public List<CustomerView> findCustomers(Optional<UUID> sellerId) {
         String filter = sellerId.isPresent() ? " AND ra.seller_id = :sellerId" : "";
         var statement = jdbc.sql(customerSelect() + filter + " ORDER BY c.name, c.code");

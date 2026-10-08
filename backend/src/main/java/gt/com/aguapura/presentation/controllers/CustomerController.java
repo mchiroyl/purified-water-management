@@ -65,6 +65,15 @@ public class CustomerController {
         return result;
     }
 
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    public void delete(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
+        service.deleteCustomer(id, actor(jwt));
+        audit.record(actor(jwt), device(jwt), "DELETE_CUSTOMER", "CUSTOMER", id, Map.of(),
+                Map.of("deleted", true));
+    }
+
     @PostMapping("/occasional")
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','VENDEDOR')")
