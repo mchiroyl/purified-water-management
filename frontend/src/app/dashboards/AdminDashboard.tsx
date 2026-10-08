@@ -248,8 +248,8 @@ export function AdminDashboard({
       }}>
         <div>
           <PageHeader 
-            eyebrow="AquaFresh ERP · Inteligencia de Negocio"
-            title="Panel Operativo: AquaPuris" 
+            eyebrow="Centro de control gerencial"
+            title="Panel operativo" 
             description={`Control Contable, Tesorería, Cartera y Rentabilidad de Operaciones · ${data?.timezone ?? 'America/Guatemala'}`} 
           />
         </div>

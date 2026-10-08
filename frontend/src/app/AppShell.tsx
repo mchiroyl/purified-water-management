@@ -188,7 +188,7 @@ export function AppShell() {
             </div>
           )}
           <div>
-            <strong>{company.data?.commercialName ?? 'AquaFresh'}</strong>
+            <strong>{company.data?.commercialName ?? 'Fresh Water'}</strong>
             <span className="user-name">{user?.displayName} · {user?.roles?.[0] ?? 'Operativo'}</span>
           </div>
         </div>
@@ -196,35 +196,8 @@ export function AppShell() {
       </header>
 
       <aside>
-        <div className="sidebar-brand">
-          <div className="sidebar-logo-icon">
-            {company.data?.logoUrl ? (
-              <img src={`${resolveApiUrl(company.data.logoUrl)}?v=${company.data.version}`} alt="" />
-            ) : (
-              <Droplets size={22} color="#ffffff" strokeWidth={2.5} />
-            )}
-          </div>
-          <div>
-            <strong>{company.data?.commercialName ?? 'AquaFresh'}</strong>
-            <span className="sidebar-sub">Panel de Control</span>
-          </div>
-        </div>
-
         <div className="sidebar-nav-scroll">
           <nav aria-label="Principal">{renderNavigation('desktop')}</nav>
-        </div>
-
-        <div className="sidebar-goal-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span className="sidebar-goal-title">Objetivo Mensual</span>
-            <span className="sidebar-goal-pct" style={{ fontWeight: 700 }}>78%</span>
-          </div>
-          <div className="sidebar-goal-progress">
-            <div className="sidebar-goal-bar" style={{ width: '78%' }} />
-          </div>
-          <div style={{ fontSize: '0.72rem', opacity: 0.9, marginTop: '0.35rem' }}>
-            Meta de ventas y volumen
-          </div>
         </div>
 
         <div className="sidebar-footer">
