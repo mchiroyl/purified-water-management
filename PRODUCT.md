@@ -5,6 +5,7 @@ Fresh Water es un sistema ERP operativo, logístico y de punto de venta (POS) m�
 
 ## Plataforma
 - **Tipo:** Web / PWA Responsive (Mobile-First para vendedores en calle; Desktop para administradores y bodega).
+- **Adaptación obligatoria:** Todas las pantallas y funciones autorizadas por rol deben adaptarse automáticamente a computadoras de escritorio, laptops, tabletas y teléfonos, tanto en orientación vertical como horizontal, sin configuración manual. Ver requisitos de validación en el prompt maestro y en `DESIGN.md`.
 - **Moneda:** Quetzales (GTQ - Q).
 - **Zona Horaria:** `America/Guatemala` (GMT-6).
 
