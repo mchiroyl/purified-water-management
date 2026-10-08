@@ -216,15 +216,7 @@ export function AdminDashboard({
       credit: data.totalCredit,
     })).sort((a, b) => b.total - a.total);
 
-    if (entries.length > 0) return entries;
-
-    // Datos por defecto representativos idénticos al mockup si no hay ventas
-    return [
-      { seller: 'Juan Carlos Morales', total: 14250, cash: 12100, credit: 2150 },
-      { seller: 'Roberto Gómez (Ruta 02)', total: 11840, cash: 9800, credit: 2040 },
-      { seller: 'Marcos Aurelio Soto', total: 9420, cash: 8900, credit: 520 },
-      { seller: 'Esteban Villanueva', total: 7850, cash: 7000, credit: 850 },
-    ];
+    return entries;
   }, [sales]);
 
   const maxSellerTotal = Math.max(...sellerSalesList.map(s => s.total), 1);
@@ -369,7 +361,7 @@ export function AdminDashboard({
               padding: '0.2rem 0.55rem',
               borderRadius: '9999px',
             }}>
-              +12.4% hoy
+              {todaySalesCount} ventas registradas
             </span>
           </div>
 
@@ -388,7 +380,7 @@ export function AdminDashboard({
               {money(data.salesToday, data.currencyCode)}
             </div>
             <span style={{ fontSize: '0.73rem', color: '#94a3b8' }}>
-              vs. período anterior
+              Promedio: {money(avgTicket)}
             </span>
           </div>
         </div>
@@ -423,7 +415,7 @@ export function AdminDashboard({
               padding: '0.2rem 0.55rem',
               borderRadius: '9999px',
             }}>
-              842 esta mañana
+              {data.activeRoutes} rutas activas
             </span>
           </div>
 
@@ -439,10 +431,10 @@ export function AdminDashboard({
               fontFeatureSettings: '"tnum"',
               margin: '0.2rem 0 0.1rem',
             }}>
-              {totalUnitsEstimate > 0 ? totalUnitsEstimate.toLocaleString('es-GT') : '3,420'}
+              {totalUnitsEstimate.toLocaleString('es-GT')}
             </div>
             <span style={{ fontSize: '0.73rem', color: '#94a3b8' }}>
-              {data.activeRoutes} rutas activas en calle
+              Unidades comercializadas hoy
             </span>
           </div>
         </div>
@@ -461,23 +453,23 @@ export function AdminDashboard({
               width: '42px',
               height: '42px',
               borderRadius: '50%',
-              background: '#fef2f2',
+              background: data.credit > 0 ? '#fffbeb' : '#ecfdf5',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#ef4444',
+              color: data.credit > 0 ? '#d97706' : '#059669',
             }}>
               <CreditCard size={20} strokeWidth={2.5} />
             </div>
             <span style={{
               fontSize: '0.72rem',
               fontWeight: 700,
-              color: '#dc2626',
-              background: '#fee2e2',
+              color: data.credit > 0 ? '#b45309' : '#047857',
+              background: data.credit > 0 ? '#fef3c7' : '#ecfdf5',
               padding: '0.2rem 0.55rem',
               borderRadius: '9999px',
             }}>
-              14 clientes en mora
+              {data.credit > 0 ? 'Saldo en cartera' : 'Al día'}
             </span>
           </div>
 
@@ -493,10 +485,10 @@ export function AdminDashboard({
               fontFeatureSettings: '"tnum"',
               margin: '0.2rem 0 0.1rem',
             }}>
-              {data.credit > 0 ? money(data.credit, data.currencyCode) : 'Q. 6,420.00'}
+              {money(data.credit, data.currencyCode)}
             </div>
             <span style={{ fontSize: '0.73rem', color: '#94a3b8' }}>
-              Cobro proyectado esta semana
+              Crédito colocado en la jornada
             </span>
           </div>
         </div>
@@ -531,13 +523,13 @@ export function AdminDashboard({
               padding: '0.2rem 0.55rem',
               borderRadius: '9999px',
             }}>
-              {data.activeRoutes}/3 rutas completadas
+              {data.completedRoutes} de {data.activeRoutes + data.completedRoutes} finalizadas
             </span>
           </div>
 
           <div style={{ marginTop: '0.9rem' }}>
             <span style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Rendimiento Rutas
+              Rutas en Operación
             </span>
             <div style={{
               fontSize: '1.65rem',
@@ -547,10 +539,10 @@ export function AdminDashboard({
               fontFeatureSettings: '"tnum"',
               margin: '0.2rem 0 0.1rem',
             }}>
-              {cashRecPct}%
+              {data.activeRoutes}
             </div>
             <span style={{ fontSize: '0.73rem', color: '#94a3b8' }}>
-              Efectividad de entrega y cobro
+              {data.completedRoutes} finalizadas · {cashRecPct}% recaudado
             </span>
           </div>
         </div>
@@ -596,7 +588,12 @@ export function AdminDashboard({
 
           {/* Lista de barras horizontales */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {sellerSalesList.map((item, idx) => {
+            {sellerSalesList.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#64748b', fontSize: '0.85rem' }}>
+                No se registran ventas acumuladas para este período.
+              </div>
+            ) : (
+              sellerSalesList.map((item, idx) => {
               const widthPct = Math.min(100, Math.max(12, Math.round((item.total / maxSellerTotal) * 100)));
               return (
                 <div key={item.seller || idx} style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
@@ -641,7 +638,7 @@ export function AdminDashboard({
                   </div>
                 </div>
               );
-            })}
+            }))}
           </div>
         </section>
 
@@ -917,54 +914,11 @@ export function AdminDashboard({
                     );
                   })
                 ) : (
-                  <>
-                    <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '0.75rem 0.85rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                          <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.78rem' }}>
-                            JM
-                          </div>
-                          <div>
-                            <strong style={{ color: '#0f172a', display: 'block' }}>Juan Carlos Morales</strong>
-                            <span style={{ color: '#64748b', fontSize: '0.72rem' }}>Camión #04 (Placa C-491B)</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td style={{ padding: '0.75rem 0.85rem', color: '#334155', fontWeight: 600 }}>Ruta Norte - Zona 1</td>
-                      <td style={{ padding: '0.75rem 0.85rem', textAlign: 'right', fontFeatureSettings: '"tnum"', fontWeight: 700 }}>Q. 3,840.00</td>
-                      <td style={{ padding: '0.75rem 0.85rem', textAlign: 'right', fontFeatureSettings: '"tnum"', fontWeight: 700, color: '#047857' }}>Q. 3,840.00</td>
-                      <td style={{ padding: '0.75rem 0.85rem', textAlign: 'right', fontFeatureSettings: '"tnum"', fontWeight: 700, color: '#059669' }}>Q. 0.00</td>
-                      <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontSize: '0.72rem', fontWeight: 700, background: '#ecfdf5', color: '#059669' }}>
-                          <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#10b981' }} />
-                          CUADRADO
-                        </span>
-                      </td>
-                    </tr>
-                    <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '0.75rem 0.85rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                          <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#fef3c7', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.78rem' }}>
-                            RG
-                          </div>
-                          <div>
-                            <strong style={{ color: '#0f172a', display: 'block' }}>Roberto Gómez</strong>
-                            <span style={{ color: '#64748b', fontSize: '0.72rem' }}>Camión #02 (Placa C-112A)</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td style={{ padding: '0.75rem 0.85rem', color: '#334155', fontWeight: 600 }}>Ruta Sur - Zona 11</td>
-                      <td style={{ padding: '0.75rem 0.85rem', textAlign: 'right', fontFeatureSettings: '"tnum"', fontWeight: 700 }}>Q. 2,950.00</td>
-                      <td style={{ padding: '0.75rem 0.85rem', textAlign: 'right', fontFeatureSettings: '"tnum"', fontWeight: 700, color: '#047857' }}>Q. 2,900.00</td>
-                      <td style={{ padding: '0.75rem 0.85rem', textAlign: 'right', fontFeatureSettings: '"tnum"', fontWeight: 700, color: '#dc2626' }}>-Q. 50.00</td>
-                      <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontSize: '0.72rem', fontWeight: 700, background: '#fffbeb', color: '#d97706' }}>
-                          <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#f59e0b' }} />
-                          PENDIENTE
-                        </span>
-                      </td>
-                    </tr>
-                  </>
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '2rem 1rem', color: '#64748b' }}>
+                      No hay rutas activas para cuadre en este momento.
+                    </td>
+                  </tr>
                 )}
               </tbody>
             </table>
@@ -1056,7 +1010,7 @@ export function AdminDashboard({
             </div>
           </div>
 
-          {/* Tarjeta de Próximo Reabastecimiento */}
+          {/* Resumen de Valoración Real en Almacén */}
           <div style={{
             background: '#f8fafc',
             border: '1px solid #e2e8f0',
@@ -1076,19 +1030,19 @@ export function AdminDashboard({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#2563eb',
+              color: '#059669',
             }}>
-              <Clock size={18} strokeWidth={2.2} />
+              <Warehouse size={18} strokeWidth={2.2} />
             </div>
             <div>
               <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
-                Próximo Reabastecimiento
+                Valoración en Almacén
               </span>
-              <strong style={{ display: 'block', fontSize: '0.86rem', color: '#0f172a' }}>
-                Mañana, 08:00 AM
+              <strong style={{ display: 'block', fontSize: '0.92rem', color: '#0f172a' }}>
+                {money(centralWarehouseValue, data.currencyCode)}
               </strong>
-              <small style={{ color: '#94a3b8', fontSize: '0.7rem' }}>
-                Orden programada #OD-8942
+              <small style={{ color: '#64748b', fontSize: '0.72rem' }}>
+                {centralBalances.length} productos con existencia
               </small>
             </div>
           </div>
