@@ -131,7 +131,7 @@ export function AppShell() {
     {
       label: 'Control y seguimiento',
       items: [
-        { to: '/operations-control', label: 'Cierre de operaciones', icon: <CheckSquare size={17} strokeWidth={2} />, visible: canSeeOperationsControl },
+        { to: '/operations-control', label: 'Autorizaciones e incidencias', icon: <CheckSquare size={17} strokeWidth={2} />, visible: canSeeOperationsControl },
         { to: '/annulments', label: 'Anulaciones', icon: <XCircle size={17} strokeWidth={2} />, visible: canSeeAnnulments },
         { to: '/pending', label: 'Pendientes', icon: <Clock size={17} strokeWidth={2} />, visible: true },
         { to: '/reports', label: 'Reportes', icon: <BarChart3 size={17} strokeWidth={2} />, visible: true },
