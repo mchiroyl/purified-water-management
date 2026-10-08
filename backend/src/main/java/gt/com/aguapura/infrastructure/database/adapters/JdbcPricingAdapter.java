@@ -27,8 +27,9 @@ public class JdbcPricingAdapter implements PricingPort {
     @Override public boolean presentationExists(UUID id) { return exists("SELECT EXISTS(SELECT 1 FROM product_presentation WHERE id=:value AND active)", id); }
     @Override public boolean customerEligibleForBenefits(UUID id) {
         return exists("""
-                SELECT EXISTS(SELECT 1 FROM customer WHERE id=:value AND customer_type='PERMANENT'
-                    AND status='ACTIVE' AND registration_state='ACTIVE')
+                SELECT EXISTS(SELECT 1 FROM customer WHERE id=:value
+                    AND status='ACTIVE'
+                    AND registration_state NOT IN ('REJECTED_FOR_REGISTRATION', 'MERGED'))
                 """, id);
     }
 
@@ -99,6 +100,25 @@ public class JdbcPricingAdapter implements PricingPort {
 
     @Override
     public SpecialPriceView createSpecialPrice(NewSpecialPrice item) {
+        // Al asignar precio especial por el administrador, se valida y promueve al cliente a PERMANENT y ACTIVE
+        jdbc.sql("""
+                UPDATE customer
+                SET customer_type = 'PERMANENT',
+                    registration_state = 'ACTIVE',
+                    updated_at = now()
+                WHERE id = :customerId AND status = 'ACTIVE'
+                  AND (customer_type <> 'PERMANENT' OR registration_state <> 'ACTIVE')
+                """).param("customerId", item.customerId()).update();
+
+        // Registrar aprobación en auditoría de revisiones si el cliente provenía de registro provisional en ruta
+        jdbc.sql("""
+                INSERT INTO customer_registration_review(id, customer_id, decision, reviewed_by, reason)
+                VALUES (:id, :customerId, 'APPROVED', :approvedBy, 'Aprobado automáticamente al asignar precio especial por el administrador')
+                ON CONFLICT (customer_id) DO NOTHING
+                """).param("id", UUID.randomUUID())
+                .param("customerId", item.customerId())
+                .param("approvedBy", item.approvedBy()).update();
+
         jdbc.sql("""
                 UPDATE customer_special_price SET valid_to=:validFrom,
                     status=CASE WHEN :validFrom <= now() THEN 'INACTIVE' ELSE status END
@@ -128,8 +148,8 @@ public class JdbcPricingAdapter implements PricingPort {
     public Optional<PricePolicy.SpecialPrice> findSpecialPrice(UUID customerId, UUID presentationId, Instant at) {
         return jdbc.sql("""
                 SELECT sp.id,sp.unit_price FROM customer_special_price sp
-                JOIN customer c ON c.id=sp.customer_id AND c.customer_type='PERMANENT'
-                  AND c.status='ACTIVE' AND c.registration_state='ACTIVE'
+                JOIN customer c ON c.id=sp.customer_id
+                  AND c.status='ACTIVE' AND c.registration_state NOT IN ('REJECTED_FOR_REGISTRATION', 'MERGED')
                 WHERE sp.customer_id=:customerId AND sp.product_presentation_id=:presentationId AND sp.status='ACTIVE'
                   AND sp.valid_from<=:at AND (sp.valid_to IS NULL OR sp.valid_to>:at)
                 ORDER BY sp.valid_from DESC LIMIT 1

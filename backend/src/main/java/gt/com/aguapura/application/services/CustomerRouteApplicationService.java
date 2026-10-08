@@ -56,7 +56,8 @@ public class CustomerRouteApplicationService {
         String normalizedWhatsapp = CustomerIdentityNormalizer.phone(request.whatsapp());
         boolean creditAllowed = request.creditAllowed();
         BigDecimal limit = creditAllowed ? request.creditLimit() : BigDecimal.ZERO;
-        String status = (request.status() != null && !request.status().isBlank()) ? request.status().toUpperCase(Locale.ROOT) : "ACTIVE";
+        String customerType = (request.customerType() != null && !request.customerType().isBlank())
+                ? request.customerType().toUpperCase(Locale.ROOT) : null;
         var updated = persistence.updateCustomer(id, new CustomerRoutePort.UpdateCustomer(
                 request.name().trim(),
                 normalizedName,
@@ -68,7 +69,8 @@ public class CustomerRouteApplicationService {
                 request.addressReference().trim(),
                 creditAllowed,
                 limit,
-                status
+                status,
+                customerType
         ));
         return customer(updated);
     }

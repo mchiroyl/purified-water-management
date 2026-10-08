@@ -9,7 +9,16 @@ type Tier = { id: string; presentationId: string; presentationCode: string; pres
 type Version = { id: string; versionNumber: number; validFrom: string; validTo?: string; status: string; tiers: Tier[] };
 type PriceList = { id: string; code: string; name: string; status: string; currencyCode: string; versions: Version[] };
 type Product = { id: string; name: string; presentations: Array<{ id: string; code: string; name: string; active: boolean }> };
-type Customer = { id: string; code: string; name: string };
+type Customer = {
+  id: string;
+  code: string;
+  name: string;
+  customerType?: string;
+  registrationState?: string;
+  routeName?: string;
+  sellerName?: string;
+  status?: string;
+};
 type Special = { id: string; customerName: string; presentationName: string; unitPrice: number; validFrom: string; validTo?: string; status: string };
 type Discount = { id: string; requesterUsername: string; customerName: string; presentationName: string; normalPrice: number; requestedPrice: number; reason: string; status: string; expiresAt: string; createdAt: string };
 type DraftTier = { presentationId: string; minimumBaseUnits: number | ''; maximumBaseUnits: string; unitPrice: number | '' };
@@ -44,6 +53,11 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
   const [specialCustomerSearch, setSpecialCustomerSearch] = useState('');
   const [isSpecialCustomerOpen, setIsSpecialCustomerOpen] = useState(false);
   const specialCustomerPickerRef = useRef<HTMLDivElement>(null);
+
+  const selectedCustomer = useMemo(
+    () => customers.data?.find(c => c.id === special.customerId),
+    [customers.data, special.customerId]
+  );
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -133,8 +147,9 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
       setSpecial({ customerId: '', presentationId: '', unitPrice: 0, validFrom: localDateTime(), validTo: '' });
       setSpecialCustomerSearch('');
       setIsSpecialCustomerOpen(false);
-      setSpecialMessage('¡Precio especial por cliente guardado exitosamente!');
+      setSpecialMessage('¡Precio especial por cliente guardado exitosamente! El cliente quedó habilitado como cliente permanente.');
       refresh();
+      void client.invalidateQueries({ queryKey: ['customers'] });
     }
   });
   const requestDiscount = useMutation({
@@ -369,6 +384,7 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
             ) : (
               matchingCustomers.map(item => {
                 const isSelected = item.id === special.customerId;
+                const isRouteCustomer = item.customerType === 'PROVISIONAL' || item.customerType === 'OCCASIONAL' || item.registrationState === 'PENDING_REVIEW';
                 return (
                   <button
                     key={item.id}
@@ -382,15 +398,30 @@ export function PricingPage({ view = 'create', canManage, canApprove, canRequest
                       setIsSpecialCustomerOpen(false);
                     }}
                   >
-                    <span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
                       <span className="customer-match-badge">{item.code}</span>
                       <span>{item.name}</span>
+                      {item.routeName && (
+                        <span style={{ fontSize: '0.74rem', color: '#0369a1', background: '#e0f2fe', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
+                          🚚 {item.routeName}
+                        </span>
+                      )}
+                      {isRouteCustomer && (
+                        <span style={{ fontSize: '0.72rem', color: '#92400e', background: '#fef3c7', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 600 }}>
+                          Creado en ruta
+                        </span>
+                      )}
                     </span>
                     {isSelected && <span style={{ color: 'var(--primary)', fontWeight: 800 }}>✓</span>}
                   </button>
                 );
               })
             )}
+          </div>
+        )}
+        {selectedCustomer && (selectedCustomer.customerType === 'PROVISIONAL' || selectedCustomer.customerType === 'OCCASIONAL' || selectedCustomer.registrationState === 'PENDING_REVIEW') && (
+          <div style={{ marginTop: '0.45rem', fontSize: '0.82rem', color: '#065f46', background: '#ecfdf5', padding: '0.45rem 0.75rem', borderRadius: '0.45rem', border: '1px solid #a7f3d0' }}>
+            💡 <strong>Cliente registrado en ruta:</strong> Al guardar este precio especial, el sistema validará y promoverá automáticamente al cliente a <strong>Cliente Permanente Activo</strong>.
           </div>
         )}
       </div>

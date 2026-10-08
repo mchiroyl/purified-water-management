@@ -131,4 +131,35 @@ describe('PricingPage', () => {
     // El input debe reflejar el cliente seleccionado
     expect((searchInput as HTMLInputElement).value).toBe('CLI-002 · Comedor Doña Mary');
   });
+
+  it('muestra etiqueta Creado en ruta y nota explicativa cuando el cliente proviene de ruta', async () => {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = input.toString();
+      if (url.includes('/customers')) {
+        return Promise.resolve(new Response(JSON.stringify([
+          { id: 'c-route-1', code: 'O-100', name: 'Tienda Ruta El Carmen', customerType: 'OCCASIONAL', routeName: 'Ruta Sur' }
+        ]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      return Promise.resolve(new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    }));
+
+    render(<MemoryRouter><QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <PricingPage canManage canApprove canRequestDiscount />
+    </QueryClientProvider></MemoryRouter>);
+
+    const searchInput = await screen.findByPlaceholderText('Buscar por nombre o código...');
+    fireEvent.focus(searchInput);
+
+    const dropdown = await screen.findByRole('listbox');
+    expect(dropdown).toBeInTheDocument();
+    expect(within(dropdown).getByText('Creado en ruta')).toBeInTheDocument();
+    expect(within(dropdown).getByText(/🚚 Ruta Sur/i)).toBeInTheDocument();
+
+    const option = within(dropdown).getByRole('option', { name: /Tienda Ruta El Carmen/i });
+    fireEvent.click(option);
+
+    expect(await screen.findByText(/Cliente registrado en ruta:/i)).toBeInTheDocument();
+    expect(screen.getByText(/Cliente Permanente Activo/i)).toBeInTheDocument();
+  });
 });
+
