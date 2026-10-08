@@ -234,9 +234,9 @@ export function AppShell() {
               <Package size={18} />
               <span>Mi Carga</span>
             </NavLink>
-            <NavLink to="/settlements">
-              <Receipt size={18} />
-              <span>Liquidación</span>
+            <NavLink to="/returns">
+              <Undo2 size={18} />
+              <span>Devoluciones</span>
             </NavLink>
           </>
         ) : (
