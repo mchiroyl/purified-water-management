@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useMemo, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../app/PageHeader';
@@ -78,6 +78,16 @@ type PriceList = {
   versions: PriceVersion[];
 };
 
+type RouteLoad = {
+  id: string;
+  loadNumber: string;
+  routeId: string;
+  routeCode: string;
+  routeName: string;
+  targetLocationId: string;
+  status: string;
+};
+
 type InventoryPageProps = {
   canManage: boolean;
   view?: 'create' | 'list';
@@ -101,6 +111,11 @@ export function InventoryPage({ canManage, view = 'create' }: InventoryPageProps
     queryFn: () => apiRequest<Location[]>('/inventory/locations'),
   });
 
+  const loads = useQuery({
+    queryKey: ['route-loads'],
+    queryFn: () => apiRequest<RouteLoad[]>('/loads'),
+  });
+
   const products = useQuery({
     queryKey: ['products'],
     queryFn: () => apiRequest<Product[]>('/products'),
@@ -113,6 +128,8 @@ export function InventoryPage({ canManage, view = 'create' }: InventoryPageProps
   });
 
   const [selectedLocation, setSelectedLocation] = useState('');
+  const [showOnlyStreetActiveRoutes, setShowOnlyStreetActiveRoutes] = useState(true);
+
   const movements = useQuery({
     queryKey: ['inventory', 'movements', selectedLocation],
     queryFn: () => apiRequest<Movement[]>(`/inventory/locations/${selectedLocation}/movements`),
@@ -184,7 +201,65 @@ export function InventoryPage({ canManage, view = 'create' }: InventoryPageProps
   };
 
   const warehouseLocations = locations.data?.filter(item => item.locationType === 'WAREHOUSE') ?? [];
-  const routeLocations = locations.data?.filter(item => item.locationType === 'ROUTE') ?? [];
+
+  // Mapear estado operativo de la carga para cada ruta
+  const getRouteOperationalStatus = (location: Location): { code: string; label: string; isOnStreet: boolean } => {
+    if (!loads.data || loads.data.length === 0) {
+      const hasStock = location.balances.some(b => Number(b.quantityBaseUnits) > 0);
+      return {
+        code: hasStock ? 'STOCK_ON_STREET' : 'NO_STOCK',
+        label: hasStock ? 'En calle' : 'Sin stock',
+        isOnStreet: hasStock && location.active,
+      };
+    }
+
+    const matchingLoads = loads.data.filter(
+      l => (location.routeId && l.routeId === location.routeId) || l.targetLocationId === location.id
+    );
+
+    if (matchingLoads.length === 0) {
+      const hasStock = location.balances.some(b => Number(b.quantityBaseUnits) > 0);
+      return {
+        code: 'WITHOUT_LOAD',
+        label: hasStock ? 'En calle (Carga previa)' : 'Sin jornada hoy',
+        isOnStreet: hasStock && location.active,
+      };
+    }
+
+    // Priorizar estado activo en calle: STARTED > RECEIVED
+    const started = matchingLoads.find(l => l.status === 'STARTED');
+    if (started) {
+      return { code: 'STARTED', label: 'En recorrido', isOnStreet: true };
+    }
+
+    const received = matchingLoads.find(l => l.status === 'RECEIVED');
+    if (received) {
+      return { code: 'RECEIVED', label: 'Recibida (En calle)', isOnStreet: true };
+    }
+
+    const confirmed = matchingLoads.find(l => l.status === 'WAREHOUSE_CONFIRMED');
+    if (confirmed) {
+      return { code: 'WAREHOUSE_CONFIRMED', label: 'Despachada en planta', isOnStreet: false };
+    }
+
+    const settled = matchingLoads.find(l => l.status === 'SETTLED');
+    if (settled) {
+      return { code: 'SETTLED', label: 'Cerrada / Liquidada', isOnStreet: false };
+    }
+
+    return { code: matchingLoads[0].status, label: matchingLoads[0].status, isOnStreet: false };
+  };
+
+  // Filtrar rutas: por defecto SOLO las que están en la calle (no cerradas)
+  const routeLocations = useMemo(() => {
+    const allRoutes = locations.data?.filter(item => item.locationType === 'ROUTE') ?? [];
+    if (!showOnlyStreetActiveRoutes) return allRoutes;
+
+    return allRoutes.filter(location => {
+      const op = getRouteOperationalStatus(location);
+      return op.isOnStreet;
+    });
+  }, [locations.data, loads.data, showOnlyStreetActiveRoutes]);
 
   // Si el usuario no tiene permisos de gestión, siempre ve la lista de inventario
   const effectiveView = canManage ? view : 'list';
@@ -414,15 +489,42 @@ export function InventoryPage({ canManage, view = 'create' }: InventoryPageProps
           </section>
 
           {/* Inventario en Circulación (Rutas en calle) */}
-          {routeLocations.length > 0 && (
-            <section className="panel section-panel">
-              <div className="section-heading">
-                <div>
-                  <h2>Inventario en circulación (Rutas en calle)</h2>
-                  <span style={{ fontSize: '0.85rem' }}>Producto a bordo de los camiones de reparto en jornada</span>
-                </div>
-                <span>{routeLocations.length} rutas</span>
+          <section className="panel section-panel">
+            <div className="section-heading" style={{ flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div>
+                <h2>Inventario en circulación (Rutas en calle)</h2>
+                <span style={{ fontSize: '0.85rem' }}>
+                  {showOnlyStreetActiveRoutes
+                    ? 'Producto a bordo de camiones en recorrido activo en la calle'
+                    : 'Listado completo de rutas registradas'}
+                </span>
               </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.84rem', cursor: 'pointer', margin: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={showOnlyStreetActiveRoutes}
+                    onChange={e => setShowOnlyStreetActiveRoutes(e.target.checked)}
+                    style={{ width: '1rem', minHeight: 'auto', margin: 0 }}
+                  />
+                  <span>Solo rutas en la calle</span>
+                </label>
+                <span
+                  style={{
+                    background: routeLocations.length > 0 ? '#ecfdf3' : '#f2f4f7',
+                    color: routeLocations.length > 0 ? 'var(--success)' : 'var(--muted)',
+                    padding: '0.2rem 0.6rem',
+                    borderRadius: '999px',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                  }}
+                >
+                  {routeLocations.length} {showOnlyStreetActiveRoutes ? 'en calle' : 'rutas'}
+                </span>
+              </div>
+            </div>
+
+            {routeLocations.length > 0 ? (
               <div className="table-wrap inventory-table-wrap">
                 <table>
                   <thead>
@@ -431,7 +533,7 @@ export function InventoryPage({ canManage, view = 'create' }: InventoryPageProps
                       <th style={{ width: '240px' }}>Ruta de Reparto</th>
                       <th>Existencias a Bordo en Calle</th>
                       <th style={{ textAlign: 'right', width: '170px' }}>Valor en Ruta</th>
-                      <th style={{ width: '100px' }}>Estado</th>
+                      <th style={{ width: '130px' }}>Estado Operativo</th>
                       <th style={{ textAlign: 'center', width: '150px' }}>Opciones</th>
                     </tr>
                   </thead>
@@ -441,6 +543,7 @@ export function InventoryPage({ canManage, view = 'create' }: InventoryPageProps
                         (acc, b) => acc + Number(b.quantityBaseUnits) * getProductPrice(b.productId),
                         0,
                       );
+                      const op = getRouteOperationalStatus(location);
                       return (
                         <tr key={location.id}>
                           <td><strong>{location.code}</strong></td>
@@ -479,8 +582,11 @@ export function InventoryPage({ canManage, view = 'create' }: InventoryPageProps
                             </strong>
                           </td>
                           <td>
-                            <span className={`status ${location.active ? 'active' : 'inactive'}`}>
-                              {location.active ? 'Activa' : 'Inactiva'}
+                            <span
+                              className={`status ${op.isOnStreet ? 'active' : 'inactive'}`}
+                              title={`Estado: ${op.label}`}
+                            >
+                              {op.label}
                             </span>
                           </td>
                           <td style={{ textAlign: 'center' }}>
@@ -499,8 +605,27 @@ export function InventoryPage({ canManage, view = 'create' }: InventoryPageProps
                   </tbody>
                 </table>
               </div>
-            </section>
-          )}
+            ) : (
+              <div
+                style={{
+                  padding: '2rem 1.5rem',
+                  textAlign: 'center',
+                  color: 'var(--muted)',
+                  background: '#f8fafc',
+                  borderRadius: '0.75rem',
+                  border: '1px dashed var(--line)',
+                  marginTop: '0.75rem',
+                }}
+              >
+                <p style={{ margin: 0, fontWeight: 600, color: 'var(--ink)' }}>
+                  No hay rutas en circulación en la calle en este momento.
+                </p>
+                <small style={{ display: 'block', marginTop: '0.35rem' }}>
+                  Las rutas ya completaron su liquidación/cierre o aún no han iniciado su jornada diaria de reparto.
+                </small>
+              </div>
+            )}
+          </section>
 
           {/* Libro de movimientos */}
           {selectedLocation && (
