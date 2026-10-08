@@ -601,17 +601,19 @@ export function InventoryPage({ canManage, view = 'create' }: InventoryPageProps
                       <th style={{ width: '130px' }}>Código</th>
                       <th style={{ width: '240px' }}>Ruta de Reparto</th>
                       <th>Existencias a Bordo en Calle</th>
-                      <th style={{ textAlign: 'right', width: '170px' }}>Valor en Ruta</th>
+                      {canManage && <th style={{ textAlign: 'right', width: '170px' }}>Valor en Ruta</th>}
                       <th style={{ width: '130px' }}>Estado Operativo</th>
                       <th style={{ textAlign: 'center', width: '150px' }}>Opciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {routeLocations.map(location => {
-                      const totalRouteVal = location.balances.reduce(
-                        (acc, b) => acc + Number(b.quantityBaseUnits) * getProductPrice(b.productId),
-                        0,
-                      );
+                      const totalRouteVal = canManage
+                        ? location.balances.reduce(
+                            (acc, b) => acc + Number(b.quantityBaseUnits) * getProductPrice(b.productId),
+                            0,
+                          )
+                        : 0;
                       const op = getRouteOperationalStatus(location);
                       return (
                         <tr key={location.id}>
@@ -624,7 +626,7 @@ export function InventoryPage({ canManage, view = 'create' }: InventoryPageProps
                             {location.balances.length ? (
                               <div className="inventory-balances-cell">
                                 {location.balances.map(balance => {
-                                  const unitPrice = getProductPrice(balance.productId);
+                                  const unitPrice = canManage ? getProductPrice(balance.productId) : 0;
                                   const lineTotal = Number(balance.quantityBaseUnits) * unitPrice;
                                   return (
                                     <span className="inventory-balance-chip" key={balance.productId}>
@@ -632,7 +634,7 @@ export function InventoryPage({ canManage, view = 'create' }: InventoryPageProps
                                       <strong>
                                         {Number(balance.quantityBaseUnits).toLocaleString('es-GT')} {balance.baseUnitCode}
                                       </strong>
-                                      {unitPrice > 0 && (
+                                      {canManage && unitPrice > 0 && (
                                         <span className="chip-price">
                                           · Q{lineTotal.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </span>
@@ -645,11 +647,13 @@ export function InventoryPage({ canManage, view = 'create' }: InventoryPageProps
                               <span className="muted">Sin existencias a bordo en este momento</span>
                             )}
                           </td>
-                          <td style={{ textAlign: 'right' }}>
-                            <strong style={{ fontSize: '1rem', color: '#087a54' }}>
-                              Q{totalRouteVal.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </strong>
-                          </td>
+                          {canManage && (
+                            <td style={{ textAlign: 'right' }}>
+                              <strong style={{ fontSize: '1rem', color: '#087a54' }}>
+                                Q{totalRouteVal.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </strong>
+                            </td>
+                          )}
                           <td>
                             <span
                               className={`status ${op.isOnStreet ? 'active' : 'inactive'}`}
