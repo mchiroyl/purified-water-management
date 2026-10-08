@@ -895,7 +895,7 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
           : 'Ventas confirmadas registradas en el sistema.'
       }
       actions={
-        canSell ? (
+        canSell && !isSeller ? (
           <button 
             type="button" 
             className="secondary" 
