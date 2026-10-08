@@ -1,10 +1,13 @@
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { afterEach, vi } from 'vitest';
 import { DashboardPage } from './DashboardPage';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 describe('DashboardPage', () => {
   it('muestra los indicadores oficiales y los pendientes operativos', async () => {
@@ -155,5 +158,82 @@ describe('DashboardPage', () => {
     expect(screen.getAllByText('Q400.00').length).toBeGreaterThan(0);
     expect(screen.getAllByText('30').length).toBeGreaterThan(0); // 30 restantes en camion
     expect(screen.getByText('Restaurante El Mar')).toBeInTheDocument();
+  });
+
+  it('permite filtrar por Ayer y Personalizado mostrando la ruta histórica del vendedor', async () => {
+    const SessionModule = await import('../features/auth/SessionContext');
+    vi.spyOn(SessionModule, 'useOptionalSession').mockReturnValue({
+      user: { id: 'u-admin', username: 'admin', displayName: 'Administrador', deviceId: 'dev-1', roles: ['ADMINISTRADOR'], mustChangePassword: false },
+      busy: false,
+      initializing: false,
+      login: vi.fn(),
+      enroll: vi.fn(),
+      refresh: vi.fn(),
+      changePassword: vi.fn(),
+      logout: vi.fn(),
+    });
+
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = input.toString();
+      if (url.includes('/loads')) {
+        return Promise.resolve(new Response(JSON.stringify([{
+          id: 'load-amilcar-yesterday', loadNumber: 'CARGA-000010', routeId: 'r-retalhuleu', routeCode: 'RUT-01', routeName: 'Ruta Retalhuleu',
+          sourceLocationId: 'loc-1', sourceLocationName: 'Bodega Central', targetLocationId: 'loc-r1', targetLocationName: 'Inventario Ruta',
+          plannedDate: yStr, loadType: 'INITIAL', status: 'STARTED', sellerReceivedByUsername: 'amartinez',
+          createdByUsername: 'admin', items: [{ id: 'it-1', productId: 'p1', productCode: 'GAR-20', productName: 'Garrafon 20L', baseUnitCode: 'GARRAFON', quantityBaseUnits: 70 }]
+        }]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (url.includes('/settlements')) {
+        return Promise.resolve(new Response(JSON.stringify([{
+          id: 'sett-10', routeLoadId: 'load-amilcar-yesterday', loadNumber: 10, routeCode: 'RUT-01', routeName: 'Ruta Retalhuleu',
+          sellerName: 'Amilcar Israel Martinez Ageataz', status: 'WITH_DIFFERENCE', salesTotal: 1017, salesCash: 967, deliveredCash: 0,
+          monetaryDifference: 967, physicalDifferenceTotal: 14,
+          items: [{ id: 'si-1', productName: 'Garrafon 20L', loadedUnits: 70, soldUnits: 56, physicalDifference: 14 }]
+        }]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (url.includes('/sales')) {
+        return Promise.resolve(new Response(JSON.stringify([{
+          id: 's-amilcar', documentNumber: 'V-00000258', routeId: 'r-retalhuleu', routeCode: 'RUT-01', routeName: 'Ruta Retalhuleu',
+          sellerName: 'Amilcar Israel Martinez Ageataz', customerName: 'Cliente Retalhuleu', total: 1017, createdAt: `${yStr}T20:00:00Z`,
+          items: [{ id: 'si-1', productName: 'Garrafon 20L', presentationQuantity: 56, quantityBaseUnits: 56, unitPrice: 10, lineTotal: 1017 }]
+        }]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (url.includes('/inventory/locations') || url.includes('/products') || url.includes('/pricing/lists')) {
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({
+        generatedAt: `${yStr}T23:00:00Z`, timezone: 'America/Guatemala', currencyCode: 'GTQ',
+        salesToday: 50, expectedCash: 50, deliveredCash: 50, transfers: 0, credit: 0,
+        monetaryDifferences: 0, inventoryDifferences: 0, approvedWasteUnits: 0,
+        pendingWastes: 0, provisionalCustomers: 0, pendingTransfers: 0,
+        activeRoutes: 1, completedRoutes: 1, pendingOfflineOperations: 0,
+        pendingReturns: 0, pendingAuthorizations: 0, openIncidents: 0, alerts: []
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    }));
+
+    render(
+      <MemoryRouter>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <DashboardPage />
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+
+    // Esperar a que el panel operativo monte y cargue los datos iniciales
+    expect(await screen.findByText('Q50.00')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /ayer/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /personalizado/i })).toBeInTheDocument();
+
+    // Al hacer clic en "Ayer"
+    fireEvent.click(screen.getByRole('button', { name: /ayer/i }));
+
+    // Debe mostrar la ruta y liquidación de Amílcar de ayer
+    expect(await screen.findByText(/ruta retalhuleu/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/amartinez|amilcar/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Q1,017.00').length).toBeGreaterThanOrEqual(1);
   });
 });
