@@ -164,6 +164,7 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
         type: 'error',
         icon: '❌',
       });
+      void refresh();
     },
     onSettled: () => {
       setDeletingDeliveryId(null);
