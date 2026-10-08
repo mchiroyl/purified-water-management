@@ -52,6 +52,9 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
   const [calculatingLoadId, setCalculatingLoadId] = useState<string | null>(null);
   const [deliveringLoadId, setDeliveringLoadId] = useState<string | null>(null);
   const [closingLoadId, setClosingLoadId] = useState<string | null>(null);
+  const [deletingDeliveryId, setDeletingDeliveryId] = useState<string | null>(null);
+  const [cardSuccessMsg, setCardSuccessMsg] = useState<Record<string, string>>({});
+  const [showExtraCash, setShowExtraCash] = useState<Record<string, boolean>>({});
 
   const refresh = async () => {
     await client.invalidateQueries({ queryKey: ['settlements'] });
@@ -112,7 +115,12 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
         type: 'success',
         icon: '💵',
       });
+      setCardSuccessMsg(current => ({
+        ...current,
+        [loadId]: `✅ Efectivo de ${formattedAmount} registrado exitosamente a las ${new Date().toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })}. Total entregado: ${money(data.deliveredCash)}.`,
+      }));
       setCash(current => ({ ...current, [loadId]: '' }));
+      setCashNotes(current => ({ ...current, [loadId]: '' }));
       void refresh();
     },
     onError: (err: any) => {
@@ -128,12 +136,48 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
     },
   });
 
+  const deleteDelivery = useMutation({
+    mutationFn: ({ routeLoadId, deliveryId }: { routeLoadId: string; deliveryId: string }) =>
+      apiRequest<Settlement>(`/settlements/${routeLoadId}/cash-deliveries/${deliveryId}`, {
+        method: 'DELETE',
+      }),
+    onMutate: ({ deliveryId }) => {
+      setDeletingDeliveryId(deliveryId);
+    },
+    onSuccess: (data, { routeLoadId }) => {
+      setToast({
+        title: 'Entrega de efectivo anulada',
+        message: `Se anuló la entrega de efectivo de la Carga ${data.loadNumber}. La liquidación fue recalculada.`,
+        type: 'success',
+        icon: '🗑️',
+      });
+      setCardSuccessMsg(current => ({
+        ...current,
+        [routeLoadId]: `🗑️ Entrega anulada exitosamente. Total entregado recalculado a ${money(data.deliveredCash)}.`,
+      }));
+      void refresh();
+    },
+    onError: (err: any) => {
+      setToast({
+        title: 'Error al anular entrega',
+        message: err?.message || 'No se pudo anular la entrega de efectivo.',
+        type: 'error',
+        icon: '❌',
+      });
+    },
+    onSettled: () => {
+      setDeletingDeliveryId(null);
+    },
+  });
+
   const close = useMutation({
     mutationFn: (loadId: string) => apiRequest<Settlement>(`/settlements/${loadId}/close`, {
       method: 'POST',
       body: JSON.stringify({
         pendingLocalOperations,
-        notes: closeNotes[loadId] || 'Liquidación cerrada por administración',
+        notes: (closeNotes[loadId] && closeNotes[loadId].trim().length > 0)
+          ? closeNotes[loadId].trim()
+          : 'Revisado y conforme / Detalle de liquidación',
       }),
     }),
     onMutate: (loadId: string) => {
@@ -550,20 +594,87 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
                 </div>
               )}
 
-              {/* Historial de entregas de efectivo registradas (COMPACTO) */}
+              {/* Historial de entregas de efectivo registradas */}
               {item.cashDeliveries && item.cashDeliveries.length > 0 && (
-                <details style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.4rem 0.75rem', fontSize: '0.8rem' }}>
-                  <summary style={{ cursor: 'pointer', fontWeight: 600, color: '#334155' }}>
+                <details open style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0.6rem 0.85rem', fontSize: '0.82rem' }}>
+                  <summary style={{ cursor: 'pointer', fontWeight: 600, color: '#1e293b' }}>
                     💵 {item.cashDeliveries.length} entrega(s) de efectivo registrada(s) &mdash; Total recibido: {money(item.deliveredCash)}
                   </summary>
-                  <ul style={{ margin: '0.4rem 0 0', paddingLeft: '1.2rem', color: '#475569', fontSize: '0.78rem' }}>
+                  <ul style={{ margin: '0.5rem 0 0', paddingLeft: 0, listStyle: 'none', color: '#475569' }}>
                     {item.cashDeliveries.map(cd => (
-                      <li key={cd.id}>
-                        <strong>{money(cd.amount)}</strong> &mdash; {cd.notes} (Recibido por {cd.receivedByUsername || 'administrador'} a las {new Date(cd.deliveredAt).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })})
+                      <li
+                        key={cd.id}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '0.35rem 0',
+                          borderBottom: '1px dashed #e2e8f0',
+                          flexWrap: 'wrap',
+                          gap: '0.5rem',
+                        }}
+                      >
+                        <div>
+                          <strong>{money(cd.amount)}</strong> &mdash; {cd.notes}
+                          <span style={{ color: '#64748b', fontSize: '0.75rem' }}>
+                            {' '}(Recibido por {cd.receivedByUsername || 'administrador'} a las {new Date(cd.deliveredAt).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })})
+                          </span>
+                        </div>
+                        {!isClosed && canReceiveCash && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(`¿Desea anular esta entrega de efectivo de ${money(cd.amount)}?\n\nLa liquidación será recalculada automáticamente y el total recibido se actualizará.`)) {
+                                deleteDelivery.mutate({ routeLoadId: item.routeLoadId, deliveryId: cd.id });
+                              }
+                            }}
+                            disabled={deletingDeliveryId === cd.id}
+                            style={{
+                              background: '#fee2e2',
+                              color: '#b91c1c',
+                              border: '1px solid #fca5a5',
+                              borderRadius: '4px',
+                              padding: '0.2rem 0.55rem',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                            }}
+                            title="Anular entrega de efectivo duplicada o errónea"
+                          >
+                            {deletingDeliveryId === cd.id ? 'Anulando...' : '🗑️ Anular entrega'}
+                          </button>
+                        )}
                       </li>
                     ))}
                   </ul>
                 </details>
+              )}
+
+              {/* Mensaje de confirmación visible en tarjeta */}
+              {cardSuccessMsg[item.routeLoadId] && (
+                <div
+                  style={{
+                    background: '#ecfdf5',
+                    border: '1.5px solid #10b981',
+                    borderRadius: '8px',
+                    padding: '0.65rem 0.85rem',
+                    color: '#065f46',
+                    fontSize: '0.85rem',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                  }}
+                >
+                  <span>{cardSuccessMsg[item.routeLoadId]}</span>
+                  <button
+                    type="button"
+                    onClick={() => setCardSuccessMsg(current => ({ ...current, [item.routeLoadId]: '' }))}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#065f46', fontWeight: 'bold', fontSize: '1rem' }}
+                  >
+                    ✕
+                  </button>
+                </div>
               )}
 
               {item.blockingReasons.length > 0 && (
@@ -576,49 +687,117 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
               {!isClosed && (
                 <>
                   {canReceiveCash && (
-                    <div className="review-box" style={{ background: '#ffffff', border: '1.5px solid #0284c7', borderRadius: '8px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                        <strong style={{ color: '#0369a1', fontSize: '0.9rem' }}>Ingreso de Efectivo Recibido Físicamente</strong>
+                    item.deliveredCash >= item.expectedCash && item.expectedCash > 0 ? (
+                      <div
+                        style={{
+                          background: '#ecfdf5',
+                          border: '1.5px solid #10b981',
+                          borderRadius: '8px',
+                          padding: '0.75rem 1rem',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          <div>
+                            <strong style={{ color: '#065f46', fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                              ✅ Efectivo esperado completamente cubierto
+                            </strong>
+                            <p style={{ margin: '0.25rem 0 0', fontSize: '0.82rem', color: '#047857' }}>
+                              Se ha recibido un total de <strong>{money(item.deliveredCash)}</strong> (Esperado: {money(item.expectedCash)}).{' '}
+                              {item.monetaryDifference < 0
+                                ? `Hay un sobrante de ${money(Math.abs(item.monetaryDifference))}. Si se duplicó una entrega, puede anularla en la lista arriba.`
+                                : 'La carga se encuentra perfectamente cuadrada.'}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            className="secondary"
+                            style={{ fontSize: '0.75rem', padding: '0.25rem 0.55rem' }}
+                            onClick={() => setShowExtraCash(prev => ({ ...prev, [item.routeLoadId]: !prev[item.routeLoadId] }))}
+                          >
+                            {showExtraCash[item.routeLoadId] ? 'Ocultar formulario' : '+ Ingresar efectivo adicional'}
+                          </button>
+                        </div>
+
+                        {showExtraCash[item.routeLoadId] && (
+                          <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #a7f3d0' }}>
+                            <strong style={{ color: '#0369a1', fontSize: '0.85rem', display: 'block', marginBottom: '0.5rem' }}>
+                              Registro de efectivo adicional extraordinario
+                            </strong>
+                            <label>
+                              Monto en efectivo adicional (Q)
+                              <input
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                placeholder="0.00"
+                                value={cash[item.routeLoadId] ?? ''}
+                                onChange={event => setCash(current => ({ ...current, [item.routeLoadId]: event.target.value }))}
+                              />
+                            </label>
+                            <label>
+                              Notas de recepción
+                              <input
+                                placeholder="Motivo de entrega adicional de efectivo..."
+                                value={cashNotes[item.routeLoadId] ?? ''}
+                                onChange={event => setCashNotes(current => ({ ...current, [item.routeLoadId]: event.target.value }))}
+                              />
+                            </label>
+                            <button
+                              className="secondary"
+                              disabled={isDeliveringThis || !Number(cash[item.routeLoadId]) || Number(cash[item.routeLoadId]) <= 0}
+                              onClick={() => deliver.mutate(item.routeLoadId)}
+                              style={{ background: '#0284c7', color: '#ffffff', borderColor: '#0284c7' }}
+                            >
+                              {isDeliveringThis ? 'Registrando...' : 'Registrar efectivo adicional'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="review-box" style={{ background: '#ffffff', border: '1.5px solid #0284c7', borderRadius: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                          <strong style={{ color: '#0369a1', fontSize: '0.9rem' }}>Ingreso de Efectivo Recibido Físicamente</strong>
+                          <button
+                            type="button"
+                            className="secondary"
+                            style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}
+                            onClick={() => {
+                              const suggested = item.monetaryDifference > 0 ? item.monetaryDifference : item.expectedCash;
+                              setCash(current => ({ ...current, [item.routeLoadId]: suggested.toFixed(2) }));
+                            }}
+                          >
+                            Copiar esperado ({money(item.monetaryDifference > 0 ? item.monetaryDifference : item.expectedCash)})
+                          </button>
+                        </div>
+                        <label>
+                          Monto en efectivo recibido (Q)
+                          <input
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            placeholder={item.monetaryDifference > 0 ? item.monetaryDifference.toFixed(2) : item.expectedCash.toFixed(2)}
+                            value={cash[item.routeLoadId] ?? ''}
+                            onChange={event => setCash(current => ({ ...current, [item.routeLoadId]: event.target.value }))}
+                          />
+                        </label>
+                        <label>
+                          Notas de recepción
+                          <input
+                            placeholder="Efectivo contado y recibido"
+                            value={cashNotes[item.routeLoadId] ?? ''}
+                            onChange={event => setCashNotes(current => ({ ...current, [item.routeLoadId]: event.target.value }))}
+                          />
+                        </label>
                         <button
-                          type="button"
                           className="secondary"
-                          style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}
-                          onClick={() => {
-                            const suggested = item.monetaryDifference > 0 ? item.monetaryDifference : item.expectedCash;
-                            setCash(current => ({ ...current, [item.routeLoadId]: suggested.toFixed(2) }));
-                          }}
+                          disabled={isDeliveringThis || !Number(cash[item.routeLoadId]) || Number(cash[item.routeLoadId]) <= 0}
+                          onClick={() => deliver.mutate(item.routeLoadId)}
+                          style={{ background: '#0284c7', color: '#ffffff', borderColor: '#0284c7' }}
                         >
-                          Copiar esperado ({money(item.monetaryDifference > 0 ? item.monetaryDifference : item.expectedCash)})
+                          {isDeliveringThis ? 'Registrando...' : 'Registrar efectivo contado'}
                         </button>
                       </div>
-                      <label>
-                        Monto en efectivo recibido (Q)
-                        <input
-                          type="number"
-                          min="0.01"
-                          step="0.01"
-                          placeholder={item.monetaryDifference > 0 ? item.monetaryDifference.toFixed(2) : item.expectedCash.toFixed(2)}
-                          value={cash[item.routeLoadId] ?? ''}
-                          onChange={event => setCash(current => ({ ...current, [item.routeLoadId]: event.target.value }))}
-                        />
-                      </label>
-                      <label>
-                        Notas de recepción
-                        <input
-                          placeholder="Efectivo contado y recibido"
-                          value={cashNotes[item.routeLoadId] ?? ''}
-                          onChange={event => setCashNotes(current => ({ ...current, [item.routeLoadId]: event.target.value }))}
-                        />
-                      </label>
-                      <button
-                        className="secondary"
-                        disabled={isDeliveringThis || !Number(cash[item.routeLoadId])}
-                        onClick={() => deliver.mutate(item.routeLoadId)}
-                        style={{ background: '#0284c7', color: '#ffffff', borderColor: '#0284c7' }}
-                      >
-                        {isDeliveringThis ? 'Registrando...' : 'Registrar efectivo contado'}
-                      </button>
-                    </div>
+                    )
                   )}
 
                   {canClose && (
@@ -628,7 +807,22 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
                       </strong>
                       {item.monetaryDifference > 0 && (
                         <div style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', padding: '0.5rem', borderRadius: '6px', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
-                          ⚠️ Hay una diferencia de <strong>{money(item.monetaryDifference)}</strong> sin registrar. Por favor ingrese el efectivo antes de cerrar, o justifique el faltante en las notas.
+                          ⚠️ Hay una diferencia faltante de <strong>{money(item.monetaryDifference)}</strong> sin registrar. Por favor ingrese el efectivo antes de cerrar, o justifique el faltante en las notas.
+                        </div>
+                      )}
+                      {item.monetaryDifference < 0 && (
+                        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af', padding: '0.5rem', borderRadius: '6px', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                          ℹ️ La carga registra un sobrante de <strong>{money(Math.abs(item.monetaryDifference))}</strong>. Si se debió a un doble registro, puede anular la entrega duplicada arriba antes de cerrar.
+                        </div>
+                      )}
+                      {item.blockingReasons.length > 0 && (
+                        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', padding: '0.5rem', borderRadius: '6px', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                          🚫 <strong>Bloqueos pendientes:</strong> Debe resolver: {item.blockingReasons.join(', ')} para poder cerrar.
+                        </div>
+                      )}
+                      {pendingLocalOperations > 0 && (
+                        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', padding: '0.5rem', borderRadius: '6px', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                          ⏳ <strong>Sincronización pendiente:</strong> Debe sincronizar {pendingLocalOperations} operación(es) local(es) antes de cerrar.
                         </div>
                       )}
                       <label>
@@ -641,7 +835,7 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
                       </label>
                       <button
                         className="primary"
-                        disabled={isClosingThis || pendingLocalOperations > 0 || item.blockingReasons.length > 0 || !closeNotes[item.routeLoadId]}
+                        disabled={isClosingThis || pendingLocalOperations > 0 || item.blockingReasons.length > 0}
                         onClick={() => handleRequestClose(item)}
                       >
                         {isClosingThis ? 'Cerrando...' : 'Cerrar liquidación'}

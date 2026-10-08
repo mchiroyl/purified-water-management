@@ -13,6 +13,7 @@ public interface SettlementPort {
     SettlementView close(UUID routeLoadId, UUID actorId, UUID deviceId, String notes);
     CashDeliveryView addCashDelivery(UUID routeLoadId, UUID receivedBy, UUID deviceId,
                                      BigDecimal amount, String notes);
+    void deleteCashDelivery(UUID routeLoadId, UUID deliveryId);
     void reconcileClosedSettlementCash(UUID routeLoadId);
     SettlementView findSettlementByRouteLoadId(UUID routeLoadId);
     List<SettlementView> findAll(Optional<UUID> sellerUserId);

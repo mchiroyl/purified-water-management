@@ -72,6 +72,18 @@ public class SettlementApplicationService {
         }
     }
 
+    @Transactional
+    public SettlementResponse deleteCashDelivery(UUID loadId, UUID deliveryId, UUID actorId) {
+        var source = persistence.loadSource(loadId);
+        persistence.deleteCashDelivery(loadId, deliveryId);
+        if ("STARTED".equals(source.loadStatus())) {
+            return calculate(loadId, 0, actorId, false);
+        } else {
+            persistence.reconcileClosedSettlementCash(loadId);
+            return response(persistence.findSettlementByRouteLoadId(loadId));
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<SettlementResponse> findAll(UUID actorId, boolean restrictedToSeller) {
         return persistence.findAll(restrictedToSeller ? Optional.of(actorId) : Optional.empty())
