@@ -11,7 +11,10 @@ import java.sql.SQLException;
 import java.sql.Types;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -174,7 +177,81 @@ public class JdbcSalesAdapter implements SalesPort {
                 """ : "";
         var statement = jdbc.sql(saleSelect() + filter + " ORDER BY s.created_at DESC");
         if (sellerUserId.isPresent()) statement = statement.param("sellerUserId", sellerUserId.get());
-        return statement.query((rs, row) -> saleRow(rs)).list().stream().map(this::withItems).toList();
+        List<SaleView> sales = statement.query((rs, row) -> saleRow(rs)).list();
+        if (sales.isEmpty()) {
+            return List.of();
+        }
+
+        List<UUID> saleIds = sales.stream().map(SaleView::id).toList();
+        Map<UUID, List<SaleItemView>> itemsBySale = fetchItemsBatch(saleIds);
+        Map<UUID, List<PaymentView>> paymentsBySale = fetchPaymentsBatch(saleIds);
+
+        return sales.stream().map(s -> new SaleView(
+                s.id(), s.clientReference(), s.documentNumber(), s.routeId(),
+                s.routeCode(), s.routeName(), s.inventoryLocationId(), s.sellerId(), s.sellerName(),
+                s.customerId(), s.customerCode(), s.customerName(), s.status(), s.subtotal(),
+                s.total(), s.currencyCode(), s.companyName(), s.companyTaxId(), s.companyAddress(),
+                s.documentLegend(), s.createdBy(), s.createdByUsername(), s.deviceId(), s.createdAt(),
+                itemsBySale.getOrDefault(s.id(), List.of()),
+                paymentsBySale.getOrDefault(s.id(), List.of())
+        )).toList();
+    }
+
+    private Map<UUID, List<SaleItemView>> fetchItemsBatch(List<UUID> saleIds) {
+        if (saleIds.isEmpty()) return Map.of();
+        var rows = jdbc.sql("""
+                SELECT si.sale_id,si.id,si.product_id,p.code product_code,p.name product_name,si.presentation_id,
+                       pp.code presentation_code,pp.name presentation_name,si.presentation_quantity,
+                       si.quantity_base_units,si.unit_price,si.line_total,si.price_source,
+                       si.price_version_id,si.price_tier_id,si.special_price_id
+                FROM sale_item si JOIN product p ON p.id=si.product_id
+                JOIN product_presentation pp ON pp.id=si.presentation_id
+                WHERE si.sale_id IN (:ids) ORDER BY p.name,pp.name
+                """).param("ids", saleIds).query((rs, row) -> Map.entry(
+                rs.getObject("sale_id", UUID.class),
+                new SaleItemView(rs.getObject("id", UUID.class),
+                        rs.getObject("product_id", UUID.class), rs.getString("product_code"), rs.getString("product_name"),
+                        rs.getObject("presentation_id", UUID.class), rs.getString("presentation_code"),
+                        rs.getString("presentation_name"), rs.getBigDecimal("presentation_quantity"),
+                        rs.getBigDecimal("quantity_base_units"), rs.getBigDecimal("unit_price"),
+                        rs.getBigDecimal("line_total"), rs.getString("price_source"),
+                        rs.getObject("price_version_id", UUID.class), rs.getObject("price_tier_id", UUID.class),
+                        rs.getObject("special_price_id", UUID.class))
+        )).list();
+
+        Map<UUID, List<SaleItemView>> map = new HashMap<>();
+        for (var entry : rows) {
+            map.computeIfAbsent(entry.getKey(), k -> new ArrayList<>()).add(entry.getValue());
+        }
+        return map;
+    }
+
+    private Map<UUID, List<PaymentView>> fetchPaymentsBatch(List<UUID> saleIds) {
+        if (saleIds.isEmpty()) return Map.of();
+        var rows = jdbc.sql("""
+                SELECT pay.sale_id,pay.id,pay.payment_method,pay.amount,pay.status,pay.reference,pay.bank,
+                       pay.evidence_reference,pay.registered_by,registrar.username registered_by_username,
+                       pay.verified_by,verifier.username verifier_username,pay.verified_at,
+                       pay.rejection_reason,pay.created_at
+                FROM payment pay JOIN app_user registrar ON registrar.id=pay.registered_by
+                LEFT JOIN app_user verifier ON verifier.id=pay.verified_by
+                WHERE pay.sale_id IN (:ids) ORDER BY pay.created_at,pay.payment_method
+                """).param("ids", saleIds).query((rs, row) -> Map.entry(
+                rs.getObject("sale_id", UUID.class),
+                new PaymentView(
+                        rs.getObject("id", UUID.class), rs.getString("payment_method"), rs.getBigDecimal("amount"),
+                        rs.getString("status"), rs.getString("reference"), rs.getString("bank"),
+                        rs.getString("evidence_reference"), rs.getObject("registered_by", UUID.class),
+                        rs.getString("registered_by_username"), rs.getObject("verified_by", UUID.class),
+                        rs.getString("verifier_username"), instant(rs, "verified_at"),
+                        rs.getString("rejection_reason"), instant(rs, "created_at"))
+        )).list();
+
+        Map<UUID, List<PaymentView>> map = new HashMap<>();
+        for (var entry : rows) {
+            map.computeIfAbsent(entry.getKey(), k -> new ArrayList<>()).add(entry.getValue());
+        }
+        return map;
     }
 
     @Override

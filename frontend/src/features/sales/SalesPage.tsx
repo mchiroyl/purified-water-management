@@ -418,10 +418,10 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
   const currentView = view ?? (canSell ? 'create' : 'list');
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const sales = useQuery({ queryKey: ['sales'], queryFn: () => apiRequest<Sale[]>('/sales') });
-  const routes = useQuery({ queryKey: ['routes'], queryFn: () => apiRequest<Route[]>('/routes'), enabled: canSell });
-  const customers = useQuery({ queryKey: ['customers'], queryFn: () => apiRequest<Customer[]>('/customers'), enabled: canSell });
-  const products = useQuery({ queryKey: ['products'], queryFn: () => apiRequest<Product[]>('/products'), enabled: canSell });
+  const sales = useQuery({ queryKey: ['sales'], queryFn: () => apiRequest<Sale[]>('/sales'), staleTime: 60_000 });
+  const routes = useQuery({ queryKey: ['routes'], queryFn: () => apiRequest<Route[]>('/routes'), enabled: canSell, staleTime: 300_000 });
+  const customers = useQuery({ queryKey: ['customers'], queryFn: () => apiRequest<Customer[]>('/customers'), enabled: canSell, staleTime: 300_000 });
+  const products = useQuery({ queryKey: ['products'], queryFn: () => apiRequest<Product[]>('/products'), enabled: canSell, staleTime: 300_000 });
   const [searchParams] = useSearchParams();
   const [routeId, setRouteId] = useState('');
   const [customerId, setCustomerId] = useState('');

@@ -11,7 +11,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -139,43 +141,46 @@ public class JdbcSettlementAdapter implements SettlementPort {
     }
 
     private List<String> blockers(UUID loadId) {
-        var result = new ArrayList<String>();
-        addBlocker(result, loadId, "TRANSFER_PENDING", """
-                SELECT count(*) FROM payment p JOIN sale s ON s.id=p.sale_id JOIN route_load rl ON rl.route_id=s.route_id
-                WHERE rl.id=:id AND p.payment_method='TRANSFER' AND p.status='PENDING_VERIFICATION' AND s.created_at>=rl.started_at
-                AND NOT EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=s.id AND ar.status='APPROVED')
-                """);
-        addBlocker(result, loadId, "CREDIT_PAYMENT_TRANSFER_PENDING", """
-                SELECT count(*) FROM credit_payment cp JOIN route_load rl ON (cp.route_load_id=rl.id OR (cp.collected_by=rl.seller_received_by AND cp.created_at>=rl.started_at))
-                WHERE rl.id=:id AND cp.payment_method='TRANSFER' AND cp.status='PENDING_VERIFICATION'
-                """);
-        addBlocker(result, loadId, "WASTE_PENDING", """
-                SELECT count(*) FROM waste w JOIN route_load rl ON rl.route_id=w.route_id WHERE rl.id=:id
-                AND w.status IN ('PENDING_REVIEW','PENDING_SECOND_APPROVAL') AND w.received_at_server>=rl.started_at
-                """);
-        addBlocker(result, loadId, "RETURN_PENDING", """
-                SELECT count(*) FROM customer_return cr JOIN route_load rl ON rl.route_id=cr.route_id WHERE rl.id=:id
-                AND cr.status='PENDING_RECEIPT' AND cr.received_at_server>=rl.started_at
-                """);
-        addBlocker(result, loadId, "CUSTOMER_REVIEW_PENDING", """
-                SELECT count(*) FROM customer c JOIN route_load rl ON c.created_by=rl.seller_received_by WHERE rl.id=:id
-                AND c.registration_state='PENDING_REVIEW' AND c.created_at>=rl.started_at
-                """);
-        addBlocker(result, loadId, "SYNC_CONFLICT", """
-                SELECT count(*) FROM sync_operation so JOIN route_load rl ON so.user_id=rl.seller_received_by WHERE rl.id=:id
-                AND so.received_at_server>=rl.started_at AND (so.processing_status<>'COMPLETED' OR so.result_status IN ('CONFLICT','RETRY'))
-                """);
-        addBlocker(result, loadId, "REPLENISHMENT_PENDING", """
-                SELECT count(*) FROM route_load rec JOIN route_load initial ON initial.route_id=rec.route_id
-                WHERE initial.id=:id AND rec.load_type='REPLENISHMENT' AND rec.created_at>=initial.started_at
-                  AND rec.status IN ('PREPARED','WAREHOUSE_CONFIRMED')
-                """);
-        return result;
+        return jdbc.sql("""
+                SELECT
+                  (SELECT count(*) FROM payment p JOIN sale s ON s.id=p.sale_id JOIN route_load rl ON rl.route_id=s.route_id
+                   WHERE rl.id=:id AND p.payment_method='TRANSFER' AND p.status='PENDING_VERIFICATION' AND s.created_at>=rl.started_at
+                   AND NOT EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=s.id AND ar.status='APPROVED')
+                  ) AS transfer_pending,
+                  (SELECT count(*) FROM credit_payment cp JOIN route_load rl ON (cp.route_load_id=rl.id OR (cp.collected_by=rl.seller_received_by AND cp.created_at>=rl.started_at))
+                   WHERE rl.id=:id AND cp.payment_method='TRANSFER' AND cp.status='PENDING_VERIFICATION'
+                  ) AS credit_payment_transfer_pending,
+                  (SELECT count(*) FROM waste w JOIN route_load rl ON rl.route_id=w.route_id WHERE rl.id=:id
+                   AND w.status IN ('PENDING_REVIEW','PENDING_SECOND_APPROVAL') AND w.received_at_server>=rl.started_at
+                  ) AS waste_pending,
+                  (SELECT count(*) FROM customer_return cr JOIN route_load rl ON rl.route_id=cr.route_id WHERE rl.id=:id
+                   AND cr.status='PENDING_RECEIPT' AND cr.received_at_server>=rl.started_at
+                  ) AS return_pending,
+                  (SELECT count(*) FROM customer c JOIN route_load rl ON c.created_by=rl.seller_received_by WHERE rl.id=:id
+                   AND c.registration_state='PENDING_REVIEW' AND c.created_at>=rl.started_at
+                  ) AS customer_review_pending,
+                  (SELECT count(*) FROM sync_operation so JOIN route_load rl ON so.user_id=rl.seller_received_by WHERE rl.id=:id
+                   AND so.received_at_server>=rl.started_at AND (so.processing_status<>'COMPLETED' OR so.result_status IN ('CONFLICT','RETRY'))
+                  ) AS sync_conflict,
+                  (SELECT count(*) FROM route_load rec JOIN route_load initial ON initial.route_id=rec.route_id
+                   WHERE initial.id=:id AND rec.load_type='REPLENISHMENT' AND rec.created_at>=initial.started_at
+                     AND rec.status IN ('PREPARED','WAREHOUSE_CONFIRMED')
+                  ) AS replenishment_pending
+                """).param("id", loadId).query((rs, row) -> {
+                    var result = new ArrayList<String>();
+                    checkBlocker(result, "TRANSFER_PENDING", rs.getInt("transfer_pending"));
+                    checkBlocker(result, "CREDIT_PAYMENT_TRANSFER_PENDING", rs.getInt("credit_payment_transfer_pending"));
+                    checkBlocker(result, "WASTE_PENDING", rs.getInt("waste_pending"));
+                    checkBlocker(result, "RETURN_PENDING", rs.getInt("return_pending"));
+                    checkBlocker(result, "CUSTOMER_REVIEW_PENDING", rs.getInt("customer_review_pending"));
+                    checkBlocker(result, "SYNC_CONFLICT", rs.getInt("sync_conflict"));
+                    checkBlocker(result, "REPLENISHMENT_PENDING", rs.getInt("replenishment_pending"));
+                    return result;
+                }).single();
     }
 
-    private void addBlocker(List<String> target, UUID loadId, String code, String sql) {
-        Integer count = jdbc.sql(sql).param("id", loadId).query(Integer.class).single();
-        if (count != null && count > 0) target.add(code + ":" + count);
+    private void checkBlocker(List<String> target, String code, int count) {
+        if (count > 0) target.add(code + ":" + count);
     }
 
     @Override
@@ -309,7 +314,106 @@ public class JdbcSettlementAdapter implements SettlementPort {
         String filter = sellerUserId.isPresent() ? " AND EXISTS(SELECT 1 FROM route_assignment ra JOIN seller own ON own.id=ra.seller_id WHERE ra.route_id=s.route_id AND own.user_id=:userId AND ra.valid_from<=rl.planned_date AND (ra.valid_to IS NULL OR ra.valid_to>=rl.planned_date))" : "";
         var query = jdbc.sql(settlementSelect() + filter + " ORDER BY s.calculated_at DESC");
         if (sellerUserId.isPresent()) query = query.param("userId", sellerUserId.get());
-        return query.query((rs, row) -> settlementRow(rs)).list().stream().map(this::withDetails).toList();
+        List<SettlementView> settlements = query.query((rs, row) -> settlementRow(rs)).list();
+        if (settlements.isEmpty()) {
+            return List.of();
+        }
+
+        List<UUID> settlementIds = settlements.stream().map(SettlementView::id).toList();
+        List<UUID> loadIds = settlements.stream().map(SettlementView::routeLoadId).toList();
+
+        Map<UUID, List<ItemView>> itemsBySettlement = fetchSettlementItemsBatch(settlementIds);
+        Map<UUID, List<CashDeliveryView>> cashByLoad = fetchCashDeliveriesBatch(loadIds);
+        Map<UUID, List<SalePriceBreakdown>> breakdownByLoad = fetchSalePriceBreakdownBatch(loadIds);
+
+        return settlements.stream().map(s -> new SettlementView(
+                s.id(), s.routeLoadId(), s.loadNumber(), s.routeId(), s.routeCode(),
+                s.routeName(), s.sellerName(), s.loadStatus(), s.status(), s.salesTotal(),
+                s.salesCash(), s.creditCollectionsCash(),
+                s.expectedCash(), s.deliveredCash(), s.verifiedTransfers(), s.appliedCredit(),
+                s.monetaryDifference(), s.physicalDifferenceTotal(), s.blockingReasons(), s.calculatedAt(),
+                s.closedBy(), s.closedByUsername(), s.closedAt(), s.closeNotes(),
+                itemsBySettlement.getOrDefault(s.id(), List.of()),
+                cashByLoad.getOrDefault(s.routeLoadId(), List.of()),
+                breakdownByLoad.getOrDefault(s.routeLoadId(), List.of())
+        )).toList();
+    }
+
+    private Map<UUID, List<ItemView>> fetchSettlementItemsBatch(List<UUID> settlementIds) {
+        if (settlementIds.isEmpty()) return Map.of();
+        var rows = jdbc.sql("""
+                SELECT si.settlement_id,si.id,si.product_id,p.code product_code,p.name product_name,
+                       si.loaded_units,si.sold_units,si.returned_good_units,si.customer_return_units,
+                       si.approved_waste_units,si.physical_difference
+                FROM settlement_item si
+                JOIN product p ON p.id=si.product_id
+                WHERE si.settlement_id IN (:ids) ORDER BY p.name
+                """).param("ids", settlementIds).query((rs, row) -> Map.entry(
+                rs.getObject("settlement_id", UUID.class),
+                new ItemView(rs.getObject("id", UUID.class),
+                        rs.getObject("product_id", UUID.class), rs.getString("product_code"), rs.getString("product_name"),
+                        rs.getBigDecimal("loaded_units"), rs.getBigDecimal("sold_units"),
+                        rs.getBigDecimal("returned_good_units"), rs.getBigDecimal("customer_return_units"),
+                        rs.getBigDecimal("approved_waste_units"), rs.getBigDecimal("physical_difference"))
+        )).list();
+        Map<UUID, List<ItemView>> map = new HashMap<>();
+        for (var entry : rows) {
+            map.computeIfAbsent(entry.getKey(), k -> new ArrayList<>()).add(entry.getValue());
+        }
+        return map;
+    }
+
+    private Map<UUID, List<CashDeliveryView>> fetchCashDeliveriesBatch(List<UUID> loadIds) {
+        if (loadIds.isEmpty()) return Map.of();
+        var rows = jdbc.sql(cashSelect() + " WHERE cd.route_load_id IN (:ids) ORDER BY cd.delivered_at")
+                .param("ids", loadIds).query((rs, row) -> Map.entry(
+                        rs.getObject("route_load_id", UUID.class),
+                        cashRow(rs)
+                )).list();
+        Map<UUID, List<CashDeliveryView>> map = new HashMap<>();
+        for (var entry : rows) {
+            map.computeIfAbsent(entry.getKey(), k -> new ArrayList<>()).add(entry.getValue());
+        }
+        return map;
+    }
+
+    private Map<UUID, List<SalePriceBreakdown>> fetchSalePriceBreakdownBatch(List<UUID> loadIds) {
+        if (loadIds.isEmpty()) return Map.of();
+        var rows = jdbc.sql("""
+                SELECT rl.id route_load_id, p.id product_id, p.code product_code, p.name product_name,
+                       COALESCE(pp.name, p.name) presentation_name, si.unit_price,
+                       SUM(si.presentation_quantity) quantity_sold,
+                       SUM(si.line_total) total_amount
+                FROM route_load rl
+                JOIN sale s ON s.route_id = rl.route_id
+                JOIN sale_item si ON si.sale_id = s.id
+                JOIN product p ON p.id = si.product_id
+                LEFT JOIN product_presentation pp ON pp.id = si.presentation_id
+                WHERE rl.id IN (:ids)
+                  AND s.status = 'CONFIRMED'
+                  AND NOT EXISTS (SELECT 1 FROM annulment_request ar WHERE ar.sale_id = s.id AND ar.status = 'APPROVED')
+                  AND s.created_at >= rl.started_at
+                  AND s.created_at <= COALESCE((SELECT closed_at FROM settlement WHERE route_load_id = rl.id), now())
+                GROUP BY rl.id, p.id, p.code, p.name, COALESCE(pp.name, p.name), si.unit_price
+                ORDER BY p.name, si.unit_price DESC
+                """).param("ids", loadIds)
+                .query((rs, row) -> Map.entry(
+                        rs.getObject("route_load_id", UUID.class),
+                        new SalePriceBreakdown(
+                                rs.getObject("product_id", UUID.class),
+                                rs.getString("product_code"),
+                                rs.getString("product_name"),
+                                rs.getString("presentation_name"),
+                                rs.getBigDecimal("unit_price"),
+                                rs.getBigDecimal("quantity_sold"),
+                                rs.getBigDecimal("total_amount")
+                        )
+                )).list();
+        Map<UUID, List<SalePriceBreakdown>> map = new HashMap<>();
+        for (var entry : rows) {
+            map.computeIfAbsent(entry.getKey(), k -> new ArrayList<>()).add(entry.getValue());
+        }
+        return map;
     }
 
     private SettlementView findOne(UUID routeLoadId) {

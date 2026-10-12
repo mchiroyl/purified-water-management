@@ -6,9 +6,12 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:agua_pura_app}
     password: ${SPRING_DATASOURCE_PASSWORD}
     hikari:
-      maximum-pool-size: 10
-      minimum-idle: 2
-      connection-timeout: 5000
+      maximum-pool-size: 15
+      minimum-idle: 3
+      connection-timeout: 4000
+      idle-timeout: 30000
+      max-lifetime: 1800000
+      keepalive-time: 30000
   jpa:
     open-in-view: false
     hibernate:
@@ -32,6 +35,10 @@ spring:
 server:
   port: 8080
   forward-headers-strategy: framework
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+    min-response-size: 1024
   error:
     include-message: never
     include-stacktrace: never
@@ -65,7 +72,7 @@ app:
   traffic:
     enabled: ${TRAFFIC_GUARD_ENABLED:true}
     login-requests-per-minute: ${LOGIN_REQUESTS_PER_MINUTE:10}
-    api-requests-per-minute: ${API_REQUESTS_PER_MINUTE:600}
+    api-requests-per-minute: ${API_REQUESTS_PER_MINUTE:2400}
     max-json-bytes: ${MAX_JSON_BYTES:2097152}
   bootstrap:
     username: ${BOOTSTRAP_ADMIN_USERNAME:admin}

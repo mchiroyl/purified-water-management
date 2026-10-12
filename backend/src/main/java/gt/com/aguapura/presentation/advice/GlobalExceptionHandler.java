@@ -61,12 +61,20 @@ public class GlobalExceptionHandler {
                 "El método HTTP " + exception.getMethod() + " no está permitido para esta ruta.", request, null);
     }
 
+    @ExceptionHandler(org.springframework.dao.DataAccessResourceFailureException.class)
+    public ResponseEntity<ApiErrorResponse> resourceFailure(org.springframework.dao.DataAccessResourceFailureException exception,
+                                                            HttpServletRequest request) {
+        log.error("Fallo de conexión o agotamiento de pool de base de datos. correlationId={}, cause={}", correlation(request), exception.getMessage());
+        return response(HttpStatus.SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE",
+                "El servicio no se encuentra disponible temporalmente debido a alta carga. Intente nuevamente en unos momentos.",
+                request, null);
+    }
+
     @ExceptionHandler(org.springframework.dao.DataAccessException.class)
     public ResponseEntity<ApiErrorResponse> database(org.springframework.dao.DataAccessException exception,
                                                      HttpServletRequest request) {
         log.warn("Error en base de datos. correlationId={}, cause={}", correlation(request), exception.getMessage());
-        String msg = exception.getRootCause() != null ? exception.getRootCause().getMessage() : exception.getMessage();
-        return response(HttpStatus.CONFLICT, "DATABASE_ERROR", msg != null ? msg : "Error al procesar la operación en base de datos.", request, null);
+        return response(HttpStatus.CONFLICT, "DATABASE_ERROR", "Error al procesar la operación en base de datos.", request, null);
     }
 
     @ExceptionHandler(Exception.class)
