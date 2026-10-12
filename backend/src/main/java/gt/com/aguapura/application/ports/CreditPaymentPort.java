@@ -8,6 +8,7 @@ import gt.com.aguapura.application.dto.credit.CreditRoutePendingResponse;
 import gt.com.aguapura.application.dto.credit.CreditStatementResponse;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface CreditPaymentPort {
@@ -19,5 +20,5 @@ public interface CreditPaymentPort {
     CreditBalanceResponse getCustomerBalance(UUID customerId);
     CreditRoutePendingResponse getRoutePending(UUID routeId);
     List<CreditPaymentResponse> findPendingTransfers();
-    List<CreditPaymentResponse> findAllPayments(java.util.Optional<UUID> routeId, java.util.Optional<UUID> customerId, int limit);
+    List<CreditPaymentResponse> findAllPayments(Optional<UUID> routeId, Optional<UUID> customerId, int limit);
 }

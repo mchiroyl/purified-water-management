@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @RestController
@@ -86,7 +87,7 @@ public class CreditPaymentController {
             @RequestParam(required = false) UUID routeId,
             @RequestParam(required = false) UUID customerId,
             @RequestParam(defaultValue = "150") int limit) {
-        return service.findAllPayments(java.util.Optional.ofNullable(routeId), java.util.Optional.ofNullable(customerId), limit);
+        return service.findAllPayments(Optional.ofNullable(routeId), Optional.ofNullable(customerId), limit);
     }
 
     @GetMapping("/payments/transfers/pending")

@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -59,7 +60,7 @@ public class CreditPaymentApplicationService {
         return port.findPendingTransfers();
     }
 
-    public List<CreditPaymentResponse> findAllPayments(java.util.Optional<UUID> routeId, java.util.Optional<UUID> customerId, int limit) {
+    public List<CreditPaymentResponse> findAllPayments(Optional<UUID> routeId, Optional<UUID> customerId, int limit) {
         return port.findAllPayments(routeId, customerId, limit);
     }
 }

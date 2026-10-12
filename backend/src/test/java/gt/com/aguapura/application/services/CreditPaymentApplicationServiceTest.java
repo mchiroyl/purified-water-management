@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -165,13 +166,13 @@ class CreditPaymentApplicationServiceTest {
                 UUID.randomUUID(), "vendedor", UUID.randomUUID(), null, null, null, Instant.now()
         );
 
-        when(port.findAllPayments(java.util.Optional.empty(), java.util.Optional.empty(), 50))
+        when(port.findAllPayments(Optional.empty(), Optional.empty(), 50))
                 .thenReturn(List.of(payment));
 
-        var result = service.findAllPayments(java.util.Optional.empty(), java.util.Optional.empty(), 50);
+        var result = service.findAllPayments(Optional.empty(), Optional.empty(), 50);
 
         assertThat(result).hasSize(1);
         assertThat(result.getFirst().amount()).isEqualTo(new BigDecimal("80.00"));
-        verify(port).findAllPayments(java.util.Optional.empty(), java.util.Optional.empty(), 50);
+        verify(port).findAllPayments(Optional.empty(), Optional.empty(), 50);
     }
 }
