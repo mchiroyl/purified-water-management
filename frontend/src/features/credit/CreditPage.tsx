@@ -25,7 +25,7 @@ type CreditPageProps = {
 export function CreditPage({ canRecord = true, canVerify = false, currentUserId, isAdmin = false }: CreditPageProps) {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState<'statement' | 'payment' | 'transfers' | 'routes'>(
+  const [activeTab, setActiveTab] = useState<'routes' | 'history' | 'statement' | 'payment' | 'transfers'>(
     isAdmin ? 'routes' : 'statement'
   );
 
@@ -125,6 +125,86 @@ export function CreditPage({ canRecord = true, canVerify = false, currentUserId,
     queryFn: () => apiRequest<CreditPaymentResponse[]>('/credit/payments/transfers/pending'),
     enabled: canVerify,
   });
+
+  // ── Historial general de abonos (Auditoría y Control) ──
+  const [paymentSearch, setPaymentSearch] = useState('');
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState<'ALL' | CreditPaymentMethod>('ALL');
+  const [paymentRouteFilter, setPaymentRouteFilter] = useState<'ALL' | string>('ALL');
+
+  const creditPayments = useQuery({
+    queryKey: ['credit', 'payments'],
+    queryFn: () => apiRequest<CreditPaymentResponse[]>('/credit/payments'),
+  });
+
+  // Mapa de último abono por cliente (para mostrar en Cartera por Ruta)
+  const customerLastPaymentMap = useMemo(() => {
+    const map = new Map<string, { lastPayment: CreditPaymentResponse; totalPaid: number }>();
+    if (!creditPayments.data) return map;
+    for (const p of creditPayments.data) {
+      const existing = map.get(p.customerId);
+      if (!existing) {
+        map.set(p.customerId, {
+          lastPayment: p,
+          totalPaid: (p.status === 'CONFIRMED' || p.status === 'VERIFIED') ? p.amount : 0,
+        });
+      } else {
+        if (p.status === 'CONFIRMED' || p.status === 'VERIFIED') {
+          existing.totalPaid += p.amount;
+        }
+      }
+    }
+    return map;
+  }, [creditPayments.data]);
+
+  // Lista filtrada de abonos para la pestaña de Historial
+  const filteredPayments = useMemo(() => {
+    if (!creditPayments.data) return [];
+    return creditPayments.data.filter(p => {
+      if (paymentMethodFilter !== 'ALL' && p.paymentMethod !== paymentMethodFilter) {
+        return false;
+      }
+      if (paymentRouteFilter !== 'ALL') {
+        const cust = customers.data?.find(c => c.id === p.customerId);
+        const custRouteKey = cust?.routeId || 'UNASSIGNED';
+        if (custRouteKey !== paymentRouteFilter) return false;
+      }
+      if (paymentSearch.trim()) {
+        const q = paymentSearch.toLowerCase().trim();
+        const voucherCode = `ab-${p.id.slice(0, 8)}`.toLowerCase();
+        const matchCustomer = p.customerName?.toLowerCase().includes(q) || p.customerCode?.toLowerCase().includes(q);
+        const matchCollector = p.collectedByName?.toLowerCase().includes(q);
+        const matchRef = p.reference?.toLowerCase().includes(q) || p.bank?.toLowerCase().includes(q);
+        const matchNotes = p.notes?.toLowerCase().includes(q);
+        const matchVoucher = voucherCode.includes(q) || p.id.toLowerCase().includes(q);
+        if (!matchCustomer && !matchCollector && !matchRef && !matchNotes && !matchVoucher) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [creditPayments.data, paymentMethodFilter, paymentRouteFilter, paymentSearch, customers.data]);
+
+  // KPIs de abonos
+  const paymentKpis = useMemo(() => {
+    let totalCollected = 0;
+    let totalCash = 0;
+    let totalTransfers = 0;
+    let countTransactions = 0;
+
+    for (const p of filteredPayments) {
+      if (p.status === 'CONFIRMED' || p.status === 'VERIFIED') {
+        totalCollected += p.amount;
+        if (p.paymentMethod === 'CASH') {
+          totalCash += p.amount;
+        } else {
+          totalTransfers += p.amount;
+        }
+      }
+      countTransactions++;
+    }
+
+    return { totalCollected, totalCash, totalTransfers, countTransactions };
+  }, [filteredPayments]);
 
   const [rejectingPaymentId, setRejectingPaymentId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
@@ -358,6 +438,13 @@ export function CreditPage({ canRecord = true, canVerify = false, currentUserId,
                 </button>
                 <button
                   type="button"
+                  className={activeTab === 'history' ? 'primary' : 'secondary'}
+                  onClick={() => setActiveTab('history')}
+                >
+                  Historial de Abonos {creditPayments.data && creditPayments.data.length > 0 ? `(${creditPayments.data.length})` : ''}
+                </button>
+                <button
+                  type="button"
                   className={activeTab === 'statement' ? 'primary' : 'secondary'}
                   onClick={() => setActiveTab('statement')}
                 >
@@ -379,6 +466,13 @@ export function CreditPage({ canRecord = true, canVerify = false, currentUserId,
                   onClick={() => setActiveTab('routes')}
                 >
                   Cartera por Ruta {allDebtors.length > 0 ? `(${allDebtors.length})` : ''}
+                </button>
+                <button
+                  type="button"
+                  className={activeTab === 'history' ? 'primary' : 'secondary'}
+                  onClick={() => setActiveTab('history')}
+                >
+                  Historial de Abonos {creditPayments.data && creditPayments.data.length > 0 ? `(${creditPayments.data.length})` : ''}
                 </button>
               </>
             )}
@@ -723,6 +817,449 @@ export function CreditPage({ canRecord = true, canVerify = false, currentUserId,
         </section>
       )}
 
+      {/* ── TAB: HISTORIAL Y CONTROL DE ABONOS (AUDITORÍA ADMINISTRADOR) ── */}
+      {activeTab === 'history' && (
+        <section className="panel section-panel">
+          <div
+            className="section-heading"
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              flexWrap: 'wrap',
+              gap: '1rem',
+            }}
+          >
+            <div>
+              <h2>Historial y Control de Abonos</h2>
+              <p className="muted" style={{ margin: '0.25rem 0 0 0' }}>
+                Registro auditable de pagos recibidos por vendedores y clientes, métodos de cobro y comprobantes.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <select
+                value={paymentRouteFilter}
+                onChange={e => setPaymentRouteFilter(e.target.value)}
+                style={{ maxWidth: '280px' }}
+                aria-label="Filtrar abonos por ruta"
+              >
+                <option value="ALL">-- Todas las rutas --</option>
+                {debtorGroups.map(g => (
+                  <option key={g.key} value={g.key}>
+                    {g.routeCode ? `${g.routeCode} · ` : ''}{g.routeName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Tarjetas KPI de Abonos */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+              gap: '1rem',
+              margin: '1.25rem 0',
+            }}
+          >
+            <div
+              className="panel"
+              style={{
+                background: '#f0fdf4',
+                border: '1px solid #bbf7d0',
+                borderRadius: '10px',
+                padding: '1rem',
+              }}
+            >
+              <small
+                style={{
+                  color: '#166534',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  fontSize: '0.75rem',
+                  letterSpacing: '0.05em',
+                }}
+              >
+                Total Abonos Cobrados
+              </small>
+              <p
+                style={{
+                  fontSize: '1.75rem',
+                  fontWeight: 800,
+                  margin: '0.35rem 0 0.1rem 0',
+                  color: '#15803d',
+                }}
+              >
+                Q {paymentKpis.totalCollected.toLocaleString('es-GT', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </p>
+              <small style={{ color: '#14532d' }}>Cobros aplicados y validados</small>
+            </div>
+
+            <div
+              className="panel"
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '10px',
+                padding: '1rem',
+              }}
+            >
+              <small
+                style={{
+                  color: '#475569',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  fontSize: '0.75rem',
+                  letterSpacing: '0.05em',
+                }}
+              >
+                Efectivo Físico
+              </small>
+              <p
+                style={{
+                  fontSize: '1.75rem',
+                  fontWeight: 800,
+                  margin: '0.35rem 0 0.1rem 0',
+                  color: '#334155',
+                }}
+              >
+                Q {paymentKpis.totalCash.toLocaleString('es-GT', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </p>
+              <small style={{ color: '#64748b' }}>Cobrado en efectivo por vendedores</small>
+            </div>
+
+            <div
+              className="panel"
+              style={{
+                background: '#e0f2fe',
+                border: '1px solid #bae6fd',
+                borderRadius: '10px',
+                padding: '1rem',
+              }}
+            >
+              <small
+                style={{
+                  color: '#0369a1',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  fontSize: '0.75rem',
+                  letterSpacing: '0.05em',
+                }}
+              >
+                Transferencias Verificadas
+              </small>
+              <p
+                style={{
+                  fontSize: '1.75rem',
+                  fontWeight: 800,
+                  margin: '0.35rem 0 0.1rem 0',
+                  color: '#0284c7',
+                }}
+              >
+                Q {paymentKpis.totalTransfers.toLocaleString('es-GT', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </p>
+              <small style={{ color: '#075985' }}>Bancos y depósitos bancarios</small>
+            </div>
+
+            <div
+              className="panel"
+              style={{
+                background: '#faf5ff',
+                border: '1px solid #e9d5ff',
+                borderRadius: '10px',
+                padding: '1rem',
+              }}
+            >
+              <small
+                style={{
+                  color: '#6b21a8',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  fontSize: '0.75rem',
+                  letterSpacing: '0.05em',
+                }}
+              >
+                Total Transacciones
+              </small>
+              <p
+                style={{
+                  fontSize: '1.75rem',
+                  fontWeight: 800,
+                  margin: '0.35rem 0 0.1rem 0',
+                  color: '#7e22ce',
+                }}
+              >
+                {paymentKpis.countTransactions}
+              </p>
+              <small style={{ color: '#581c87' }}>Abonos en el registro</small>
+            </div>
+          </div>
+
+          {/* Filtros de Búsqueda y Método */}
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '1rem',
+              alignItems: 'center',
+              marginBottom: '1.25rem',
+            }}
+          >
+            <input
+              type="search"
+              placeholder="🔍 Buscar por cliente, código, cobrador, comprobante (AB-...), banco o ref..."
+              value={paymentSearch}
+              onChange={e => setPaymentSearch(e.target.value)}
+              style={{ flex: 1, minWidth: '280px', maxWidth: '500px' }}
+            />
+
+            <div className="customer-filter-pills" style={{ margin: 0 }}>
+              <button
+                type="button"
+                className={`customer-filter-pill ${paymentMethodFilter === 'ALL' ? 'active' : ''}`}
+                onClick={() => setPaymentMethodFilter('ALL')}
+              >
+                Todos los métodos
+              </button>
+              <button
+                type="button"
+                className={`customer-filter-pill ${paymentMethodFilter === 'CASH' ? 'active' : ''}`}
+                onClick={() => setPaymentMethodFilter('CASH')}
+              >
+                💵 Efectivo
+              </button>
+              <button
+                type="button"
+                className={`customer-filter-pill ${paymentMethodFilter === 'TRANSFER' ? 'active' : ''}`}
+                onClick={() => setPaymentMethodFilter('TRANSFER')}
+              >
+                🏦 Transferencia
+              </button>
+            </div>
+          </div>
+
+          {/* Carga y estados vacíos */}
+          {creditPayments.isLoading && <p>Cargando historial de abonos…</p>}
+
+          {!creditPayments.isLoading && filteredPayments.length === 0 && (
+            <div className="alert muted" style={{ textAlign: 'center', padding: '1.5rem' }}>
+              No se encontraron registros de abonos con los filtros seleccionados.
+            </div>
+          )}
+
+          {/* Tabla de Abonos */}
+          {!creditPayments.isLoading && filteredPayments.length > 0 && (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Fecha / Hora</th>
+                    <th>Comprobante</th>
+                    <th>Cliente</th>
+                    <th>Cobrado por</th>
+                    <th>Método / Referencia</th>
+                    <th>Monto</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredPayments.map(p => {
+                    const voucherCode = `AB-${p.id.slice(0, 8).toUpperCase()}`;
+                    const isCash = p.paymentMethod === 'CASH';
+                    const isVerified = p.status === 'CONFIRMED' || p.status === 'VERIFIED';
+                    const isPending = p.status === 'PENDING_VERIFICATION';
+                    const isRejected = p.status === 'REJECTED';
+
+                    return (
+                      <tr key={p.id}>
+                        <td>
+                          <span style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                            {new Date(p.createdAt).toLocaleDateString()}
+                          </span>
+                          <span
+                            style={{
+                              display: 'block',
+                              fontSize: '0.75rem',
+                              color: '#64748b',
+                            }}
+                          >
+                            {new Date(p.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </td>
+                        <td>
+                          <span
+                            style={{
+                              fontFamily: 'monospace',
+                              fontWeight: 700,
+                              fontSize: '0.88rem',
+                              background: '#f1f5f9',
+                              padding: '0.2rem 0.5rem',
+                              borderRadius: '4px',
+                              color: '#334155',
+                            }}
+                          >
+                            {voucherCode}
+                          </span>
+                        </td>
+                        <td>
+                          <strong>{p.customerName}</strong>
+                          {p.customerCode && (
+                            <span
+                              style={{
+                                display: 'block',
+                                fontSize: '0.75rem',
+                                color: '#64748b',
+                              }}
+                            >
+                              <code>{p.customerCode}</code>
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <span>👤</span>
+                            <span style={{ fontSize: '0.88rem' }}>{p.collectedByName || 'Sistema'}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.25rem',
+                                fontSize: '0.82rem',
+                                fontWeight: 600,
+                                color: isCash ? '#15803d' : '#0369a1',
+                              }}
+                            >
+                              {isCash ? '💵 Efectivo' : '🏦 Transferencia'}
+                            </span>
+                            {!isCash && (p.bank || p.reference) && (
+                              <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                {p.bank ? `${p.bank} ` : ''}{p.reference ? `#${p.reference}` : ''}
+                              </span>
+                            )}
+                            {p.notes && (
+                              <span style={{ fontSize: '0.73rem', color: '#888', fontStyle: 'italic' }}>
+                                "{p.notes}"
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <strong style={{ color: '#007680', fontSize: '1.05rem', whiteSpace: 'nowrap' }}>
+                            Q {p.amount.toFixed(2)}
+                          </strong>
+                        </td>
+                        <td>
+                          {isVerified && (
+                            <span
+                              className="status active"
+                              style={{
+                                background: '#dcfce7',
+                                color: '#166534',
+                                fontWeight: 700,
+                                fontSize: '0.75rem',
+                                padding: '0.2rem 0.55rem',
+                                borderRadius: '9999px',
+                              }}
+                            >
+                              ✓ {p.status === 'VERIFIED' ? 'Verificado' : 'Confirmado'}
+                            </span>
+                          )}
+                          {isPending && (
+                            <span
+                              className="status"
+                              style={{
+                                background: '#fef3c7',
+                                color: '#92400e',
+                                fontWeight: 700,
+                                fontSize: '0.75rem',
+                                padding: '0.2rem 0.55rem',
+                                borderRadius: '9999px',
+                              }}
+                            >
+                              ⏳ Por Verificar
+                            </span>
+                          )}
+                          {isRejected && (
+                            <span
+                              className="status inactive"
+                              style={{
+                                background: '#fee2e2',
+                                color: '#991b1b',
+                                fontWeight: 700,
+                                fontSize: '0.75rem',
+                                padding: '0.2rem 0.55rem',
+                                borderRadius: '9999px',
+                              }}
+                              title={p.rejectionReason || 'Rechazado'}
+                            >
+                              ✕ Rechazado
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          <div className="action-buttons" style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              className="secondary"
+                              style={{ padding: '0.3rem 0.55rem', fontSize: '0.78rem' }}
+                              onClick={() => fetchAndDownloadCreditVoucher(p.id)}
+                              title="Descargar Comprobante PDF"
+                            >
+                              📄 PDF
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary"
+                              style={{ padding: '0.3rem 0.55rem', fontSize: '0.78rem' }}
+                              onClick={() =>
+                                fetchAndShareCreditVoucher(p.id, {
+                                  customerName: p.customerName,
+                                  amount: p.amount,
+                                })
+                              }
+                              title="Compartir Comprobante por WhatsApp"
+                            >
+                              📲 Enviar
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary"
+                              style={{ padding: '0.3rem 0.55rem', fontSize: '0.78rem' }}
+                              onClick={() => {
+                                setStatementCustomerId(p.customerId);
+                                setActiveTab('statement');
+                              }}
+                              title="Ver Estado de Cuenta del cliente"
+                            >
+                              👁️ Saldo
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
       {/* ── TAB 3: ESTADO DE CUENTA ── */}
       {activeTab === 'statement' && (
         <section className="panel section-panel">
@@ -1057,6 +1594,7 @@ export function CreditPage({ canRecord = true, canVerify = false, currentUserId,
                           <th>Límite Crédito</th>
                           <th>Saldo Adeudado</th>
                           <th>Disponible</th>
+                          <th>Último Abono</th>
                           <th>Acciones</th>
                         </tr>
                       </thead>
@@ -1142,6 +1680,25 @@ export function CreditPage({ canRecord = true, canVerify = false, currentUserId,
                                 <span style={{ color: available > 0 ? '#16a34a' : '#dc2626', fontWeight: 500 }}>
                                   Q {available.toFixed(2)}
                                 </span>
+                              </td>
+                              <td>
+                                {(() => {
+                                  const info = customerLastPaymentMap.get(debtor.id);
+                                  if (!info) {
+                                    return <span className="muted" style={{ fontSize: '0.8rem' }}>Sin abonos</span>;
+                                  }
+                                  const p = info.lastPayment;
+                                  return (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                                      <strong style={{ color: '#007680', fontSize: '0.92rem' }}>
+                                        Q {p.amount.toFixed(2)}
+                                      </strong>
+                                      <span style={{ fontSize: '0.74rem', color: '#64748b' }}>
+                                        {new Date(p.createdAt).toLocaleDateString()} · {p.paymentMethod === 'CASH' ? 'Efectivo' : 'Transf.'}
+                                      </span>
+                                    </div>
+                                  );
+                                })()}
                               </td>
                               <td>
                                 <div className="action-buttons" style={{ display: 'flex', gap: '0.4rem' }}>

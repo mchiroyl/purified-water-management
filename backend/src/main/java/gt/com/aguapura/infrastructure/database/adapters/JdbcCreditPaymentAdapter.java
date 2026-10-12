@@ -477,6 +477,47 @@ public class JdbcCreditPaymentAdapter implements CreditPaymentPort {
                 .list();
     }
 
+    @Override
+    public List<CreditPaymentResponse> findAllPayments(Optional<UUID> routeId, Optional<UUID> customerId, int limit) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT cp.id, cp.customer_id, c.name as customer_name, c.code as customer_code,
+                       cp.route_load_id, cp.amount, cp.payment_method, cp.status,
+                       cp.reference, cp.bank, cp.rejection_reason, cp.notes,
+                       cp.collected_by, u_col.username as collected_by_name,
+                       cp.device_id, cp.verified_by, u_ver.username as verified_by_name,
+                       cp.verified_at, cp.created_at
+                FROM credit_payment cp
+                JOIN customer c ON c.id = cp.customer_id
+                JOIN app_user u_col ON u_col.id = cp.collected_by
+                LEFT JOIN app_user u_ver ON u_ver.id = cp.verified_by
+                WHERE 1=1
+                """);
+
+        if (customerId.isPresent()) {
+            sql.append(" AND cp.customer_id = :customerId");
+        }
+        if (routeId.isPresent()) {
+            sql.append("""
+                     AND (
+                        EXISTS (SELECT 1 FROM customer_route cr WHERE cr.customer_id = c.id AND cr.route_id = :routeId AND cr.valid_to IS NULL)
+                        OR EXISTS (SELECT 1 FROM route_load rl WHERE rl.id = cp.route_load_id AND rl.route_id = :routeId)
+                     )
+                    """);
+        }
+
+        sql.append(" ORDER BY cp.created_at DESC LIMIT :limit");
+
+        var spec = jdbc.sql(sql.toString()).param("limit", Math.max(1, Math.min(limit, 500)));
+        if (customerId.isPresent()) {
+            spec = spec.param("customerId", customerId.get());
+        }
+        if (routeId.isPresent()) {
+            spec = spec.param("routeId", routeId.get());
+        }
+
+        return spec.query(this::mapPaymentRow).list();
+    }
+
     private CreditPaymentResponse mapPaymentRow(ResultSet rs, int rowNum) throws SQLException {
         return new CreditPaymentResponse(
                 rs.getObject("id", UUID.class),

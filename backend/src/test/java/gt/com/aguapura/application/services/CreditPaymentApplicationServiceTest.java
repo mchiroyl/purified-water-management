@@ -152,4 +152,26 @@ class CreditPaymentApplicationServiceTest {
         assertThat(result.totalDebt()).isEqualTo(new BigDecimal("200.00"));
         verify(port).getRoutePending(routeId);
     }
+
+    @Test
+    void findAllPaymentsReturnsPortResult() {
+        var port = mock(CreditPaymentPort.class);
+        var voucherPdf = mock(CreditPaymentVoucherPdfPort.class);
+        var service = new CreditPaymentApplicationService(port, voucherPdf);
+
+        var payment = new CreditPaymentResponse(
+                UUID.randomUUID(), UUID.randomUUID(), "Farmacia", "CLI-01", null,
+                new BigDecimal("80.00"), "CASH", "CONFIRMED", "", "", "", "Pago",
+                UUID.randomUUID(), "vendedor", UUID.randomUUID(), null, null, null, Instant.now()
+        );
+
+        when(port.findAllPayments(java.util.Optional.empty(), java.util.Optional.empty(), 50))
+                .thenReturn(List.of(payment));
+
+        var result = service.findAllPayments(java.util.Optional.empty(), java.util.Optional.empty(), 50);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().amount()).isEqualTo(new BigDecimal("80.00"));
+        verify(port).findAllPayments(java.util.Optional.empty(), java.util.Optional.empty(), 50);
+    }
 }

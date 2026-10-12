@@ -80,6 +80,15 @@ public class CreditPaymentController {
                 .body(pdfBytes);
     }
 
+    @GetMapping("/payments")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR_CREDITO', 'ADMINISTRADOR', 'SUPERVISOR', 'VENDEDOR')")
+    public List<CreditPaymentResponse> findAllPayments(
+            @RequestParam(required = false) UUID routeId,
+            @RequestParam(required = false) UUID customerId,
+            @RequestParam(defaultValue = "150") int limit) {
+        return service.findAllPayments(java.util.Optional.ofNullable(routeId), java.util.Optional.ofNullable(customerId), limit);
+    }
+
     @GetMapping("/payments/transfers/pending")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR_CREDITO', 'ADMINISTRADOR')")
     public List<CreditPaymentResponse> findPendingTransfers() {

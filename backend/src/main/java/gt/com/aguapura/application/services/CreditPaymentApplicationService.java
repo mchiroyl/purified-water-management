@@ -58,4 +58,8 @@ public class CreditPaymentApplicationService {
     public List<CreditPaymentResponse> findPendingTransfers() {
         return port.findPendingTransfers();
     }
+
+    public List<CreditPaymentResponse> findAllPayments(java.util.Optional<UUID> routeId, java.util.Optional<UUID> customerId, int limit) {
+        return port.findAllPayments(routeId, customerId, limit);
+    }
 }

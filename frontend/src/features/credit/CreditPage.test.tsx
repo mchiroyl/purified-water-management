@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CreditPage } from './CreditPage';
@@ -195,5 +195,89 @@ describe('CreditPage', () => {
     expect(await screen.findByText('Productos a Crédito')).toBeInTheDocument();
     expect(await screen.findByText('Garrafon')).toBeInTheDocument();
     expect(await screen.findByText('Fardo')).toBeInTheDocument();
+  });
+
+  it('permite al administrador auditar el historial de abonos y muestra últimos abonos', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('/customers')) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify([
+                {
+                  id: 'c1',
+                  code: 'CLI-001',
+                  name: 'Farmacia El Milagro',
+                  currentBalance: 350.0,
+                  creditLimit: 1000.0,
+                  creditAllowed: true,
+                  routeId: 'r1',
+                  routeCode: 'R-01',
+                  routeName: 'Ruta Reu',
+                },
+              ]),
+              { status: 200, headers: { 'Content-Type': 'application/json' } }
+            )
+          );
+        }
+        if (url.endsWith('/routes')) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify([{ id: 'r1', code: 'R-01', name: 'Ruta Reu' }]),
+              { status: 200, headers: { 'Content-Type': 'application/json' } }
+            )
+          );
+        }
+        if (url.endsWith('/credit/payments')) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify([
+                {
+                  id: 'pay-001-uuid-1234',
+                  customerId: 'c1',
+                  customerName: 'Farmacia El Milagro',
+                  customerCode: 'CLI-001',
+                  amount: 80.0,
+                  paymentMethod: 'CASH',
+                  status: 'CONFIRMED',
+                  reference: '',
+                  bank: '',
+                  collectedByName: 'Vendedor Juan',
+                  createdAt: '2026-10-10T14:30:00Z',
+                },
+              ]),
+              { status: 200, headers: { 'Content-Type': 'application/json' } }
+            )
+          );
+        }
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+      })
+    );
+
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter>
+          <CreditPage canRecord={true} canVerify={true} isAdmin={true} />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    // Verifica que en la tabla de deudores se muestre la columna Último Abono
+    expect(await screen.findByText('Último Abono')).toBeInTheDocument();
+    expect(await screen.findByText(/Q 80.00/)).toBeInTheDocument();
+
+    // Navega a la pestaña de Historial de Abonos
+    const historyButton = screen.getByRole('button', { name: /historial de abonos/i });
+    expect(historyButton).toBeInTheDocument();
+    fireEvent.click(historyButton);
+
+    // Verifica que se renderice el panel de auditoría de abonos y KPIs
+    expect(await screen.findByRole('heading', { level: 2, name: /historial y control de abonos/i })).toBeInTheDocument();
+    expect(await screen.findByText(/total abonos cobrados/i)).toBeInTheDocument();
+    expect(await screen.findByText(/efectivo físico/i)).toBeInTheDocument();
+    expect(await screen.findByText('AB-PAY-001-')).toBeInTheDocument();
+    expect(await screen.findByText('Vendedor Juan')).toBeInTheDocument();
   });
 });

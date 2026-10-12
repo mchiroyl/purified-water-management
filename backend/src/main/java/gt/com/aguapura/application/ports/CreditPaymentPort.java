@@ -19,4 +19,5 @@ public interface CreditPaymentPort {
     CreditBalanceResponse getCustomerBalance(UUID customerId);
     CreditRoutePendingResponse getRoutePending(UUID routeId);
     List<CreditPaymentResponse> findPendingTransfers();
+    List<CreditPaymentResponse> findAllPayments(java.util.Optional<UUID> routeId, java.util.Optional<UUID> customerId, int limit);
 }
