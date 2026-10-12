@@ -15,7 +15,7 @@ export function downloadCreditVoucherFile(blob: Blob, voucherNumber: string) {
 
 export async function shareCreditVoucherFile(
   blob: Blob,
-  details: { voucherNumber: string; customerName: string; amount: number }
+  details: { voucherNumber: string; customerName: string; amount: number; customerPhone?: string }
 ): Promise<VoucherShareResult> {
   const filename = `comprobante-abono-${details.voucherNumber}.pdf`;
   const message = `Hola ${details.customerName}. Adjunto su comprobante de abono ${details.voucherNumber} por un monto de Q ${details.amount.toFixed(2)} de la purificadora de agua.`;
@@ -34,17 +34,27 @@ export async function shareCreditVoucherFile(
 
   downloadCreditVoucherFile(blob, details.voucherNumber);
   const fallbackMessage = `${message} El comprobante PDF quedó descargado; puede adjuntarlo a este chat.`;
-  window.open(`https://wa.me/?text=${encodeURIComponent(fallbackMessage)}`, '_blank', 'noopener,noreferrer');
+  const cleanPhone = details.customerPhone ? details.customerPhone.replace(/\D/g, '') : '';
+  const waTarget = cleanPhone ? (cleanPhone.length === 8 ? `502${cleanPhone}` : cleanPhone) : '';
+  const waUrl = waTarget
+    ? `https://wa.me/${waTarget}?text=${encodeURIComponent(fallbackMessage)}`
+    : `https://wa.me/?text=${encodeURIComponent(fallbackMessage)}`;
+  window.open(waUrl, '_blank', 'noopener,noreferrer');
   return 'DOWNLOADED_WITH_WHATSAPP';
 }
 
 export async function fetchAndShareCreditVoucher(
   paymentId: string,
-  details: { customerName: string; amount: number }
+  details: { customerName: string; amount: number; customerPhone?: string }
 ): Promise<VoucherShareResult> {
   const blob = await apiBlob(`/credit/payments/${paymentId}/voucher`);
   const voucherNum = paymentId.slice(0, 8).toUpperCase();
-  return shareCreditVoucherFile(blob, { voucherNumber: voucherNum, customerName: details.customerName, amount: details.amount });
+  return shareCreditVoucherFile(blob, {
+    voucherNumber: voucherNum,
+    customerName: details.customerName,
+    amount: details.amount,
+    customerPhone: details.customerPhone,
+  });
 }
 
 export async function fetchAndDownloadCreditVoucher(paymentId: string) {

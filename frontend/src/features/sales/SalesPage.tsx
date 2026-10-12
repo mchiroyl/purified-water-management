@@ -32,7 +32,8 @@ import { useOptionalSession } from '../auth/SessionContext';
 import { queueProvisionalCustomer } from '../routes/provisionalCustomerOffline';
 import { CustomerCombobox } from './CustomerCombobox';
 import type { JugBalanceResponse } from '../jugs/types';
-import type { CreditBalanceResponse, CreditPaymentMethod } from '../credit/types';
+import type { CreditBalanceResponse, CreditPaymentMethod, CreditPaymentResponse } from '../credit/types';
+import { fetchAndDownloadCreditVoucher, fetchAndShareCreditVoucher } from '../credit/creditVoucherSharing';
 
 type Route = { id: string; code: string; name: string; status: string };
 type Customer = {
@@ -251,12 +252,14 @@ function InlineAbonoForm({
   customerId,
   routeId,
   customerName,
+  customerPhone,
   onDone,
   onSuccessToast,
 }: {
   customerId: string;
   routeId: string;
   customerName?: string;
+  customerPhone?: string;
   onDone: () => void;
   onSuccessToast?: (toast: { title: string; message: string; icon?: string }) => void;
 }) {
@@ -266,10 +269,13 @@ function InlineAbonoForm({
   const [reference, setReference] = useState('');
   const [bank, setBank] = useState('');
   const [abonoError, setAbonoError] = useState('');
-  const [abonoSuccess, setAbonoSuccess] = useState('');
+  const [createdPayment, setCreatedPayment] = useState<CreditPaymentResponse | null>(null);
+  const [isSharing, setIsSharing] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+
   const abono = useMutation({
     mutationFn: () =>
-      apiRequest('/credit/payments', {
+      apiRequest<CreditPaymentResponse>('/credit/payments', {
         method: 'POST',
         body: JSON.stringify({
           customerId,
@@ -280,11 +286,11 @@ function InlineAbonoForm({
           bank: method === 'TRANSFER' ? bank : undefined,
         }),
       }),
-    onSuccess: () => {
+    onSuccess: (res) => {
+      setCreatedPayment(res);
       const formattedAmount = `Q${Number(amount).toFixed(2)}`;
       const methodLabel = method === 'CASH' ? 'en efectivo y aplicado al saldo' : 'por transferencia bancaria (pendiente de verificación)';
       const msg = `Abono de ${formattedAmount} ${methodLabel}${customerName ? ` para ${customerName}` : ''} procesado con éxito.`;
-      setAbonoSuccess(msg);
       void queryClient.invalidateQueries({ queryKey: ['credit'] });
       void queryClient.invalidateQueries({ queryKey: ['customers'] });
       void queryClient.invalidateQueries({ queryKey: ['settlements'] });
@@ -297,10 +303,114 @@ function InlineAbonoForm({
           icon: '💳',
         });
       }
-      setTimeout(onDone, 1800);
     },
     onError: (err: Error) => setAbonoError(err.message || 'Error al registrar el abono.'),
   });
+
+  if (createdPayment) {
+    const voucherNumber = `AB-${createdPayment.id.slice(0, 8).toUpperCase()}`;
+    return (
+      <div
+        className="inline-abono-form"
+        style={{
+          marginTop: '0.5rem',
+          background: '#f0fdf4',
+          border: '1.5px solid #86efac',
+          borderRadius: '8px',
+          padding: '0.85rem 1rem',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
+          <span style={{ fontSize: '1.4rem' }}>✅</span>
+          <div>
+            <strong style={{ fontSize: '0.96rem', color: '#166534', display: 'block' }}>
+              ¡Abono registrado exitosamente!
+            </strong>
+            <span style={{ fontSize: '0.82rem', color: '#15803d' }}>
+              Comprobante: <strong>{voucherNumber}</strong> · Monto: <strong>Q{createdPayment.amount.toFixed(2)}</strong> ({createdPayment.paymentMethod === 'CASH' ? 'Efectivo' : 'Transferencia'})
+            </span>
+          </div>
+        </div>
+
+        {customerName && (
+          <p style={{ margin: '0.2rem 0 0.6rem 0', fontSize: '0.83rem', color: '#374151' }}>
+            Cliente: <strong>{customerName}</strong> {customerPhone ? `· 📞 ${customerPhone}` : ''}
+          </p>
+        )}
+
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', marginTop: '0.5rem' }}>
+          <button
+            type="button"
+            className="primary"
+            style={{
+              backgroundColor: '#16a34a',
+              borderColor: '#15803d',
+              fontSize: '0.85rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              fontWeight: 600,
+            }}
+            disabled={isSharing}
+            onClick={async () => {
+              try {
+                setIsSharing(true);
+                await fetchAndShareCreditVoucher(createdPayment.id, {
+                  customerName: customerName || createdPayment.customerName || 'Cliente',
+                  amount: createdPayment.amount,
+                  customerPhone,
+                });
+              } catch (e: any) {
+                alert('No se pudo compartir el comprobante: ' + (e?.message || 'Error'));
+              } finally {
+                setIsSharing(false);
+              }
+            }}
+          >
+            <span>📲</span> {isSharing ? 'Preparando…' : 'Enviar por WhatsApp'}
+          </button>
+
+          <button
+            type="button"
+            className="secondary"
+            style={{
+              fontSize: '0.85rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+            }}
+            disabled={isDownloading}
+            onClick={async () => {
+              try {
+                setIsDownloading(true);
+                await fetchAndDownloadCreditVoucher(createdPayment.id);
+              } catch (e: any) {
+                alert('No se pudo descargar el comprobante: ' + (e?.message || 'Error'));
+              } finally {
+                setIsDownloading(false);
+              }
+            }}
+          >
+            <span>📄</span> {isDownloading ? 'Descargando…' : 'Descargar PDF'}
+          </button>
+
+          <button
+            type="button"
+            className="secondary"
+            style={{
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              marginLeft: 'auto',
+            }}
+            onClick={onDone}
+          >
+            ✓ Listo / Continuar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="inline-abono-form" style={{ marginTop: '0.5rem', background: '#eff6ff', border: '1px solid #bfdbfe' }}>
       <strong style={{ fontSize: '0.88rem', display: 'block', marginBottom: '0.4rem', color: '#1e40af' }}>
@@ -314,7 +424,6 @@ function InlineAbonoForm({
         <button type="button" className="secondary" style={{ fontSize: '0.85rem' }} onClick={onDone}>Cancelar</button>
       </div>
       {abonoError && <div className="alert error" style={{ marginTop: '0.4rem', fontSize: '0.82rem' }}>{abonoError}</div>}
-      {abonoSuccess && <div className="alert success" style={{ marginTop: '0.4rem', fontSize: '0.82rem' }}>{abonoSuccess}</div>}
     </div>
   );
 }
@@ -1042,6 +1151,7 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
           customerId={customerId}
           routeId={routeId}
           customerName={selectedCustomer?.name}
+          customerPhone={selectedCustomer?.phone || selectedCustomer?.whatsapp}
           onDone={() => setShowSaleAbono(false)}
           onSuccessToast={setSuccessToast}
         />
@@ -1206,6 +1316,7 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
                         customerId={visitCustomerId}
                         routeId={visitRouteId}
                         customerName={visitAvailableCustomers.find(c => c.id === visitCustomerId)?.name}
+                        customerPhone={visitAvailableCustomers.find(c => c.id === visitCustomerId)?.phone || visitAvailableCustomers.find(c => c.id === visitCustomerId)?.whatsapp}
                         onDone={() => setShowVisitAbono(false)}
                         onSuccessToast={setSuccessToast}
                       />

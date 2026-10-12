@@ -538,12 +538,14 @@ export function CreditPage({ canRecord = true, canVerify = false, currentUserId,
                 <button
                   type="button"
                   className="secondary"
-                  onClick={() =>
-                    fetchAndShareCreditVoucher(lastPaymentRegistered.id, {
+                  onClick={() => {
+                    const cObj = customers.data?.find(c => c.id === lastPaymentRegistered.customerId);
+                    void fetchAndShareCreditVoucher(lastPaymentRegistered.id, {
                       customerName: lastPaymentRegistered.customerName,
                       amount: lastPaymentRegistered.amount,
-                    })
-                  }
+                      customerPhone: cObj?.phone,
+                    });
+                  }}
                 >
                   Compartir por WhatsApp
                 </button>
@@ -1226,12 +1228,14 @@ export function CreditPage({ canRecord = true, canVerify = false, currentUserId,
                               type="button"
                               className="secondary"
                               style={{ padding: '0.3rem 0.55rem', fontSize: '0.78rem' }}
-                              onClick={() =>
-                                fetchAndShareCreditVoucher(p.id, {
+                              onClick={() => {
+                                const cObj = customers.data?.find(c => c.id === p.customerId);
+                                void fetchAndShareCreditVoucher(p.id, {
                                   customerName: p.customerName,
                                   amount: p.amount,
-                                })
-                              }
+                                  customerPhone: cObj?.phone,
+                                });
+                              }}
                               title="Compartir Comprobante por WhatsApp"
                             >
                               📲 Enviar

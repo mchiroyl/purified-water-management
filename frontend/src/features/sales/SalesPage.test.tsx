@@ -234,4 +234,69 @@ describe('SalesPage', () => {
     expect(await screen.findByText(/cliente provisional registrado/i)).toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([input, init]) => input.toString().endsWith('/customers/occasional') && (init as RequestInit | undefined)?.method === 'POST')).toBe(true);
   });
+
+  it('permite registrar abono en ruta y muestra botones para enviar por WhatsApp y descargar PDF', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = input.toString();
+      if (path.endsWith('/routes')) {
+        return Promise.resolve(new Response(JSON.stringify([{ id: 'route-1', code: 'R-01', name: 'Ruta norte', status: 'ACTIVE' }]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (path.endsWith('/customers')) {
+        return Promise.resolve(new Response(JSON.stringify([{
+          id: 'cust-1', code: 'CLI-001', name: 'Abarrotes La Fe', status: 'ACTIVE',
+          routeId: 'route-1', customerType: 'REGULAR', creditAllowed: true, creditLimit: 500, currentBalance: 200, phone: '55551234'
+        }]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (path.includes('/credit/customers/') && path.endsWith('/balance')) {
+        return Promise.resolve(new Response(JSON.stringify({
+          customerId: 'cust-1', customerName: 'Abarrotes La Fe', customerCode: 'CLI-001',
+          creditAllowed: true, creditLimit: 500, currentBalance: 200, availableCredit: 300
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (path.endsWith('/credit/payments') && init?.method === 'POST') {
+        return Promise.resolve(new Response(JSON.stringify({
+          id: 'pay-uuid-777', customerId: 'cust-1', customerName: 'Abarrotes La Fe', customerCode: 'CLI-001',
+          amount: 50.0, paymentMethod: 'CASH', status: 'CONFIRMED', reference: '', bank: '',
+          collectedByName: 'Vendedor', createdAt: '2026-10-12T10:00:00Z'
+        }), { status: 201, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (path.endsWith('/products')) {
+        return Promise.resolve(new Response(JSON.stringify([{ id: 'p-1', code: 'GAR', name: 'Garrafon', active: true, controlsInventory: true, presentations: [{ id: 'pres-1', code: 'GAR-20', name: '20L', active: true }] }]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      return Promise.resolve(new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <MemoryRouter>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <SalesPage canSell={true} canViewLocation={false} />
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+
+    // Seleccionar ruta
+    await screen.findByRole('option', { name: /r-01.*ruta norte/i });
+    fireEvent.change(screen.getByLabelText('Ruta'), { target: { value: 'route-1' } });
+
+    // Seleccionar cliente con deuda
+    fireEvent.change(screen.getByLabelText('Cliente'), { target: { value: 'cust-1' } });
+
+    // Abrir formulario de abono
+    const abonoBtn = await screen.findByRole('button', { name: /registrar abono/i });
+    fireEvent.click(abonoBtn);
+
+    // Llenar monto y registrar
+    const amountInput = screen.getByLabelText(/monto/i);
+    fireEvent.change(amountInput, { target: { value: '50' } });
+    const confirmBtn = screen.getByRole('button', { name: /confirmar abono/i });
+    fireEvent.click(confirmBtn);
+
+    // Validar tarjeta de éxito con botones de WhatsApp y PDF
+    expect(await screen.findByText(/¡abono registrado exitosamente!/i)).toBeInTheDocument();
+    expect(await screen.findByText(/AB-PAY-UUID/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /enviar por whatsapp/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /descargar pdf/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /listo \/ continuar/i })).toBeInTheDocument();
+  });
 });
