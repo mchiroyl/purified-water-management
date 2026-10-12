@@ -312,7 +312,7 @@ public class JdbcSettlementAdapter implements SettlementPort {
     @Override
     public List<SettlementView> findAll(Optional<UUID> sellerUserId) {
         String filter = sellerUserId.isPresent() ? " AND EXISTS(SELECT 1 FROM route_assignment ra JOIN seller own ON own.id=ra.seller_id WHERE ra.route_id=s.route_id AND own.user_id=:userId AND ra.valid_from<=rl.planned_date AND (ra.valid_to IS NULL OR ra.valid_to>=rl.planned_date))" : "";
-        var query = jdbc.sql(settlementSelect() + filter + " ORDER BY s.calculated_at DESC");
+        var query = jdbc.sql(settlementSelect() + filter + " ORDER BY rl.load_number DESC, s.calculated_at DESC");
         if (sellerUserId.isPresent()) query = query.param("userId", sellerUserId.get());
         List<SettlementView> settlements = query.query((rs, row) -> settlementRow(rs)).list();
         if (settlements.isEmpty()) {

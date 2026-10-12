@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { PageHeader } from '../../app/PageHeader';
 import { useSync } from '../../offline/SyncContext';
 import { apiRequest } from '../../services/apiClient';
@@ -55,6 +55,38 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
   const [deletingDeliveryId, setDeletingDeliveryId] = useState<string | null>(null);
   const [cardSuccessMsg, setCardSuccessMsg] = useState<Record<string, string>>({});
   const [showExtraCash, setShowExtraCash] = useState<Record<string, boolean>>({});
+  const [collapsedSettlements, setCollapsedSettlements] = useState<Record<string, boolean>>({});
+
+  const sortedSettlements = useMemo(() => {
+    if (!settlements.data) return [];
+    return [...settlements.data].sort((a, b) => Number(b.loadNumber) - Number(a.loadNumber));
+  }, [settlements.data]);
+
+  const toggleSettlementCollapse = (id: string) => {
+    setCollapsedSettlements(prev => {
+      const current = prev[id];
+      const targetSettlement = sortedSettlements.find(s => s.id === id);
+      const isClosed = targetSettlement ? (targetSettlement.loadStatus !== 'STARTED' || targetSettlement.status === 'CLOSED') : false;
+      const effectiveState = current !== undefined ? current : isClosed;
+      return { ...prev, [id]: !effectiveState };
+    });
+  };
+
+  const collapseAll = () => {
+    const next: Record<string, boolean> = {};
+    for (const s of sortedSettlements) {
+      next[s.id] = true;
+    }
+    setCollapsedSettlements(next);
+  };
+
+  const expandAll = () => {
+    const next: Record<string, boolean> = {};
+    for (const s of sortedSettlements) {
+      next[s.id] = false;
+    }
+    setCollapsedSettlements(next);
+  };
 
   const refresh = async () => {
     await client.invalidateQueries({ queryKey: ['settlements'] });
@@ -388,9 +420,29 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
 
     {/* Conciliaciones */}
     <section className="section-panel">
-      <div className="section-heading">
-        <h2>Conciliaciones</h2>
-        <span>{settlements.data?.length ?? 0}</span>
+      <div className="section-heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+        <div>
+          <h2 style={{ margin: 0, display: 'inline-block', marginRight: '0.5rem' }}>Conciliaciones</h2>
+          <span>{sortedSettlements.length}</span>
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button
+            type="button"
+            className="secondary"
+            style={{ fontSize: '0.82rem', padding: '0.35rem 0.75rem' }}
+            onClick={expandAll}
+          >
+            ▲ Desplegar todas
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            style={{ fontSize: '0.82rem', padding: '0.35rem 0.75rem' }}
+            onClick={collapseAll}
+          >
+            ▼ Plegar todas
+          </button>
+        </div>
       </div>
       {(settlements.error || calculate.error || deliver.error || close.error) && (
         <div className="alert error">
@@ -398,25 +450,94 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
         </div>
       )}
 
-      <div className="sales-grid">
-        {settlements.data?.map(item => {
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+        {sortedSettlements.map(item => {
           const salesCashValue = item.salesCash ?? (item.expectedCash - (item.creditCollectionsCash ?? 0));
           const creditCollectionsCashValue = item.creditCollectionsCash ?? 0;
           const isClosed = item.loadStatus !== 'STARTED' || item.status === 'CLOSED';
           const isDeliveringThis = deliveringLoadId === item.routeLoadId || (deliver.isPending && deliver.variables === item.routeLoadId);
           const isClosingThis = closingLoadId === item.routeLoadId || (close.isPending && close.variables === item.routeLoadId);
+          const isCollapsed = collapsedSettlements[item.id] !== undefined
+            ? collapsedSettlements[item.id]
+            : isClosed;
 
           return (
-            <article className="panel sale-card" key={item.id} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div className="section-heading">
-                <div>
-                  <strong>Carga {item.loadNumber} · {item.routeCode} · {item.routeName}</strong>
-                  <span>Vendedor: {item.sellerName}</span>
+            <article
+              className="panel sale-card"
+              key={item.id}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: isCollapsed ? '0' : '1rem',
+                border: isClosed ? '1px solid #e2e8f0' : '1.5px solid #0284c7',
+                borderRadius: '10px',
+                padding: '1rem',
+                background: '#ffffff',
+                boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)',
+              }}
+            >
+              <div
+                className="section-heading"
+                style={{
+                  cursor: 'pointer',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '0.75rem',
+                  padding: 0,
+                  margin: 0,
+                }}
+                onClick={() => toggleSettlementCollapse(item.id)}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <span style={{ fontSize: '1.4rem' }}>🚚</span>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <strong style={{ fontSize: '1.05rem', color: '#0f172a' }}>
+                        Carga {item.loadNumber} · {item.routeCode} · {item.routeName}
+                      </strong>
+                    </div>
+                    <div style={{ fontSize: '0.84rem', color: '#64748b', marginTop: '0.2rem', display: 'flex', gap: '0.85rem', flexWrap: 'wrap' }}>
+                      <span>👤 Vendedor: <strong style={{ color: '#0f766e' }}>{item.sellerName}</strong></span>
+                      <span>💰 Ventas: <strong style={{ color: '#0f172a' }}>{money(item.salesTotal)}</strong></span>
+                      <span>💵 A entregar: <strong style={{ color: '#0369a1' }}>{money(item.expectedCash)}</strong></span>
+                      <span>📥 Entregado: <strong style={{ color: item.deliveredCash > 0 ? '#15803d' : '#64748b' }}>{money(item.deliveredCash)}</strong></span>
+                    </div>
+                  </div>
                 </div>
-                <span className={`status-pill ${item.status === 'BALANCED' || item.monetaryDifference === 0 ? 'status-ok' : ''}`}>
-                  {statusLabels[item.status] ?? item.status}
-                </span>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                  <span
+                    className={`status-pill ${item.status === 'BALANCED' || item.monetaryDifference === 0 ? 'status-ok' : ''}`}
+                    style={{ fontSize: '0.82rem' }}
+                  >
+                    {statusLabels[item.status] ?? item.status}
+                  </span>
+                  <button
+                    type="button"
+                    className="secondary"
+                    style={{
+                      fontSize: '0.82rem',
+                      padding: '0.35rem 0.75rem',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleSettlementCollapse(item.id);
+                    }}
+                  >
+                    {isCollapsed ? '▼ Desplegar' : '▲ Plegar'}
+                  </button>
+                </div>
               </div>
+
+              {!isCollapsed && (
+                <>
 
               {/* BLOQUE FINANCIERO COMPACTO: 2 Columnas (Ventas vs Caja en Mano) */}
               <div
@@ -900,7 +1021,9 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
                   </div>
                 </div>
               )}
-            </article>
+            </>
+          )}
+        </article>
           );
         })}
       </div>
