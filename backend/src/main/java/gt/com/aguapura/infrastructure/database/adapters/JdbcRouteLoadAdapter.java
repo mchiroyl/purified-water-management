@@ -104,6 +104,13 @@ public class JdbcRouteLoadAdapter implements RouteLoadPort {
     public LoadView createLoad(NewLoad item) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
+                SELECT setval(
+                    'route_load_number_seq',
+                    GREATEST(COALESCE((SELECT MAX(load_number) FROM route_load), 0), 1),
+                    (SELECT EXISTS (SELECT 1 FROM route_load))
+                )
+                """).query().singleRow();
+        jdbc.sql("""
                 INSERT INTO route_load(id,route_id,source_location_id,target_location_id,planned_date,load_type,notes,created_by)
                 VALUES (:id,:routeId,:sourceLocationId,:targetLocationId,:plannedDate,:loadType,:notes,:createdBy)
                 """).param("id", id).param("routeId", item.routeId())

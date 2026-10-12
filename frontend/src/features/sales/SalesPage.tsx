@@ -287,6 +287,9 @@ function InlineAbonoForm({
       setAbonoSuccess(msg);
       void queryClient.invalidateQueries({ queryKey: ['credit'] });
       void queryClient.invalidateQueries({ queryKey: ['customers'] });
+      void queryClient.invalidateQueries({ queryKey: ['settlements'] });
+      void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      void queryClient.invalidateQueries({ queryKey: ['route-loads'] });
       if (onSuccessToast) {
         onSuccessToast({
           title: 'Abono registrado',
@@ -756,6 +759,7 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
       await queryClient.invalidateQueries({ queryKey: ['inventory'] });
       await queryClient.invalidateQueries({ queryKey: ['jugs'] });
       await queryClient.invalidateQueries({ queryKey: ['credit'] });
+      await queryClient.invalidateQueries({ queryKey: ['settlements'] });
     }
   });
 

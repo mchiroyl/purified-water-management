@@ -288,9 +288,20 @@ export function RouteLoadsPage({
                     <Fragment key={load.id}>
                       <tr>
                         <td>
-                          <strong>{load.loadNumber}</strong>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                            <strong style={{ fontSize: '1rem', color: '#0f172a' }}>{load.loadNumber}</strong>
+                            {load.loadType === 'REPLENISHMENT' ? (
+                              <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '0.12rem 0.45rem', borderRadius: '4px', background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd' }}>
+                                🔄 Recarga
+                              </span>
+                            ) : (
+                              <span style={{ fontSize: '0.72rem', fontWeight: 600, padding: '0.12rem 0.45rem', borderRadius: '4px', background: '#f1f5f9', color: '#475569' }}>
+                                🚚 Inicial
+                              </span>
+                            )}
+                          </div>
                           <small style={{ display: 'block', color: 'var(--muted)', marginTop: '0.2rem' }}>
-                            {load.loadType === 'REPLENISHMENT' ? 'Recarga' : 'Carga inicial'} · {load.plannedDate}
+                            {load.plannedDate}
                           </small>
                         </td>
                         <td>

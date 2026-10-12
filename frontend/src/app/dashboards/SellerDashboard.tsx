@@ -195,10 +195,36 @@ export function SellerDashboard({
     sellerLoad &&
     l.routeId === sellerLoad.routeId &&
     l.loadType === 'REPLENISHMENT' &&
-    (l.status === 'STARTED' || l.status === 'RECEIVED' || l.status === 'SETTLED' || l.status === 'WAREHOUSE_CONFIRMED')
+    l.id !== sellerLoad.id &&
+    (l.status === 'STARTED' || l.status === 'RECEIVED' || l.status === 'SETTLED') &&
+    (
+      (loadStartTime && l.sellerReceivedAt && new Date(l.sellerReceivedAt).getTime() >= new Date(loadStartTime).getTime()) ||
+      (l.plannedDate && sellerLoad.plannedDate && l.plannedDate === sellerLoad.plannedDate)
+    )
   );
 
   const truckItems = (sellerLoad?.items ?? []).map(item => {
+    // Si tenemos liquidación calculada oficial del backend para esta carga, usamos sus datos exactos
+    const settlementItem = currentSettlement?.items?.find((it: any) => 
+      (it.productId && item.productId && it.productId === item.productId) ||
+      (it.productName && item.productName && normalizeText(it.productName) === normalizeText(item.productName)) ||
+      (it.productCode && item.productCode && normalizeText(it.productCode) === normalizeText(item.productCode))
+    );
+
+    if (settlementItem) {
+      const totalItemLoaded = Number(settlementItem.loadedUnits ?? item.quantityBaseUnits ?? 0);
+      const soldQty = Number(settlementItem.soldUnits ?? 0);
+      const wasteUnits = Number(settlementItem.approvedWasteUnits ?? 0);
+      const remainingOnTruck = isSettled ? 0 : Math.max(0, totalItemLoaded - soldQty - wasteUnits);
+      return {
+        ...item,
+        quantityBaseUnits: totalItemLoaded,
+        soldQty,
+        remainingOnTruck
+      };
+    }
+
+    // Fallback reactivo si aún no se ha obtenido el cálculo de liquidación:
     const replenishmentUnits = routeReplenishments.reduce((acc, rep) => {
       const match = rep.items?.find(it => 
         (it.productId && item.productId && it.productId === item.productId) ||
@@ -248,17 +274,7 @@ export function SellerDashboard({
       };
     }
 
-    // Conciliación de retorno físico según lo reportado a bordo:
-    // Carga inicial CARGA-000007: 125 Fardos y 65 Garrafones cargados.
-    // Retorno en camión no vendido: 37 Fardos y 7 Garrafones.
-    // Ventas efectivas: 125 - 37 = 88 Fardos | 65 - 7 = 58 Garrafones.
-    const isTargetCarga7 = sellerLoad?.loadNumber === 'CARGA-000007' || String(sellerLoad?.loadNumber).includes('7');
-    const itemNorm = normalizeText(item.productName);
-    const expectedSoldForCarga7 = isTargetCarga7
-      ? (itemNorm.includes('fardo') ? 88 : itemNorm.includes('garrafon') ? 58 : 0)
-      : 0;
-
-    const soldQty = Math.min(totalItemLoaded, Math.max(rawSoldQty, expectedSoldForCarga7));
+    const soldQty = Math.min(totalItemLoaded, rawSoldQty);
     const remainingOnTruck = Math.max(0, totalItemLoaded - soldQty);
 
     return {
@@ -306,11 +322,30 @@ export function SellerDashboard({
     return acc + creditPayments.reduce((pAcc, p) => pAcc + Number(p.amount || 0), 0);
   }, 0);
 
-  const effectiveSalesToday = localSalesToday;
-  const effectiveCash = localCash;
-  const effectiveTransfers = localTransfers;
-  const effectiveCredit = localCredit;
-  const cashInHand = isSettled ? 0 : Math.max(0, effectiveCash);
+  const effectiveSalesToday = currentSettlement?.salesTotal != null
+    ? Number(currentSettlement.salesTotal)
+    : localSalesToday;
+
+  const effectiveCash = currentSettlement?.salesCash != null
+    ? Number(currentSettlement.salesCash)
+    : localCash;
+
+  const effectiveTransfers = currentSettlement?.verifiedTransfers != null
+    ? Number(currentSettlement.verifiedTransfers)
+    : localTransfers;
+
+  const effectiveCredit = currentSettlement?.appliedCredit != null
+    ? Number(currentSettlement.appliedCredit)
+    : localCredit;
+
+  const creditCollectionsCash = Number(currentSettlement?.creditCollectionsCash || 0);
+
+  // Efectivo físico a entregar: Ventas en efectivo + Abonos cobrados en efectivo
+  const cashInHand = isSettled
+    ? 0
+    : currentSettlement?.expectedCash != null
+      ? Number(currentSettlement.expectedCash)
+      : Math.max(0, effectiveCash + creditCollectionsCash);
 
   return (
     <div style={{ width: '100%', maxWidth: '1180px', margin: '0 auto', paddingBottom: '2.5rem', minWidth: 0, boxSizing: 'border-box' }}>
@@ -395,7 +430,11 @@ export function SellerDashboard({
             {money(cashInHand, dashboard.currencyCode)}
           </strong>
           <div className="kpi-subtext" style={{ fontSize: '0.74rem', color: '#64748b' }}>
-            {isSettled ? 'Liquidado y depositado en caja' : 'Total físico a rendir en caja central'}
+            {isSettled
+              ? 'Liquidado y depositado en caja'
+              : creditCollectionsCash > 0
+                ? `Ventas efec: ${money(effectiveCash)} · Abonos: ${money(creditCollectionsCash)}`
+                : 'Total físico a rendir en caja central'}
           </div>
         </article>
 
