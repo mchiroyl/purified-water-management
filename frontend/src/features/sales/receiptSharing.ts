@@ -25,7 +25,7 @@ export async function shareReceiptFile(blob: Blob, details: ReceiptShareDetails)
       return 'SHARED';
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return 'CANCELLED';
-      throw error;
+      console.warn('Web Share API no disponible en este contexto, usando respaldo WhatsApp directo:', error);
     }
   }
 

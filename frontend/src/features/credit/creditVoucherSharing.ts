@@ -28,7 +28,9 @@ export async function shareCreditVoucherFile(
       return 'SHARED';
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return 'CANCELLED';
-      throw error;
+      // Si el navegador rechaza navigator.share (p. ej. por expiración de user gesture tras fetch asíncrono),
+      // no lanzar excepción técnica al usuario: continuar suavemente al respaldo directo de WhatsApp.
+      console.warn('Web Share API no disponible en este contexto, usando respaldo WhatsApp directo:', error);
     }
   }
 

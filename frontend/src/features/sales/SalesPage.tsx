@@ -33,7 +33,7 @@ import { queueProvisionalCustomer } from '../routes/provisionalCustomerOffline';
 import { CustomerCombobox } from './CustomerCombobox';
 import type { JugBalanceResponse } from '../jugs/types';
 import type { CreditBalanceResponse, CreditPaymentMethod, CreditPaymentResponse } from '../credit/types';
-import { fetchAndDownloadCreditVoucher, fetchAndShareCreditVoucher } from '../credit/creditVoucherSharing';
+import { fetchAndDownloadCreditVoucher, fetchAndShareCreditVoucher, shareCreditVoucherFile } from '../credit/creditVoucherSharing';
 
 type Route = { id: string; code: string; name: string; status: string };
 type Customer = {
@@ -270,8 +270,18 @@ function InlineAbonoForm({
   const [bank, setBank] = useState('');
   const [abonoError, setAbonoError] = useState('');
   const [createdPayment, setCreatedPayment] = useState<CreditPaymentResponse | null>(null);
+  const [cachedVoucherBlob, setCachedVoucherBlob] = useState<Blob | null>(null);
   const [isSharing, setIsSharing] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+
+  // Pre-cargar el PDF del comprobante en cuanto se registra el pago para que el toque del usuario sea 100% síncrono
+  useEffect(() => {
+    if (createdPayment?.id) {
+      apiBlob(`/credit/payments/${createdPayment.id}/voucher`)
+        .then(setCachedVoucherBlob)
+        .catch(err => console.warn('Pre-carga de comprobante:', err));
+    }
+  }, [createdPayment?.id]);
 
   const abono = useMutation({
     mutationFn: () =>
@@ -355,13 +365,24 @@ function InlineAbonoForm({
             onClick={async () => {
               try {
                 setIsSharing(true);
-                await fetchAndShareCreditVoucher(createdPayment.id, {
+                const shareDetails = {
+                  voucherNumber,
                   customerName: customerName || createdPayment.customerName || 'Cliente',
                   amount: createdPayment.amount,
                   customerPhone,
-                });
+                };
+                if (cachedVoucherBlob) {
+                  await shareCreditVoucherFile(cachedVoucherBlob, shareDetails);
+                } else {
+                  await fetchAndShareCreditVoucher(createdPayment.id, shareDetails);
+                }
               } catch (e: any) {
-                alert('No se pudo compartir el comprobante: ' + (e?.message || 'Error'));
+                console.warn('Error al compartir comprobante:', e);
+                // Si la API del navegador falla, abrir WhatsApp directamente sin alerta técnica
+                const cleanPhone = customerPhone ? customerPhone.replace(/\D/g, '') : '';
+                const waTarget = cleanPhone ? (cleanPhone.length === 8 ? `502${cleanPhone}` : cleanPhone) : '';
+                const waText = `Hola ${customerName || 'Cliente'}. Adjunto su comprobante de abono ${voucherNumber} por un monto de Q ${createdPayment.amount.toFixed(2)} de la purificadora de agua.`;
+                window.open(`https://wa.me/${waTarget}?text=${encodeURIComponent(waText)}`, '_blank', 'noopener,noreferrer');
               } finally {
                 setIsSharing(false);
               }
