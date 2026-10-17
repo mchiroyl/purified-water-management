@@ -345,8 +345,12 @@ export function VendorItineraryPanel({ routeId, isSeller = false }: VendorItiner
           customerName: cleanDisplayText(String(ts.customerName || custMatch?.name || 'Cliente')),
           contactPhone: custMatch?.phone || custMatch?.whatsapp || null,
           addressReference: ts.addressReference || custMatch?.addressReference || null,
-          targetLatitude: ts.targetLatitude != null ? Number(ts.targetLatitude) : (custMatch?.latitude != null ? Number(custMatch.latitude) : null),
-          targetLongitude: ts.targetLongitude != null ? Number(ts.targetLongitude) : (custMatch?.longitude != null ? Number(custMatch.longitude) : null),
+          targetLatitude: ts.targetLatitude != null && Number(ts.targetLatitude) !== 0
+            ? Number(ts.targetLatitude)
+            : ((custMatch?.confirmedLatitude ?? custMatch?.latitude) != null ? Number(custMatch?.confirmedLatitude ?? custMatch?.latitude) : null),
+          targetLongitude: ts.targetLongitude != null && Number(ts.targetLongitude) !== 0
+            ? Number(ts.targetLongitude)
+            : ((custMatch?.confirmedLongitude ?? custMatch?.longitude) != null ? Number(custMatch?.confirmedLongitude ?? custMatch?.longitude) : null),
           stopOrder: Number(ts.stopOrder || idx + 1),
           status: isSold ? 'ATTENDED_SALE' : 'PENDING',
           hasLocationMismatch: false,
@@ -358,6 +362,8 @@ export function VendorItineraryPanel({ routeId, isSeller = false }: VendorItiner
           (s.customerId && c.id && s.customerId === c.id) ||
           (s.customerName && c.name && normalizeText(s.customerName) === normalizeText(c.name))
         );
+        const lat = c.confirmedLatitude ?? c.latitude;
+        const lon = c.confirmedLongitude ?? c.longitude;
         return {
           id: String(c.id),
           runId: 'cust-run',
@@ -366,8 +372,8 @@ export function VendorItineraryPanel({ routeId, isSeller = false }: VendorItiner
           customerName: cleanDisplayText(String(c.name || 'Cliente')),
           contactPhone: c.phone || c.whatsapp || null,
           addressReference: c.addressReference || null,
-          targetLatitude: c.latitude != null ? Number(c.latitude) : null,
-          targetLongitude: c.longitude != null ? Number(c.longitude) : null,
+          targetLatitude: (lat != null && Number(lat) !== 0) ? Number(lat) : null,
+          targetLongitude: (lon != null && Number(lon) !== 0) ? Number(lon) : null,
           stopOrder: idx + 1,
           status: isSold ? 'ATTENDED_SALE' : 'PENDING',
           hasLocationMismatch: false,
