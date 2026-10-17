@@ -8,6 +8,22 @@ import { apiRequest } from '../../services/apiClient';
 import { calendarOnlyProps, currentMonthDateBounds } from '../../utils/dateInput';
 import { queueProvisionalCustomer } from './provisionalCustomerOffline';
 import { localDate, type Customer, type ProvisionalReview, type Route } from './types';
+import {
+  MapPin,
+  Pencil,
+  Trash2,
+  CreditCard,
+  CheckCircle2,
+  Truck,
+  AlertTriangle,
+  Layers,
+  List,
+  User,
+  Users,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
+import { CustomerLocationModal } from './CustomerLocationModal';
 
 type CustomersPageProps = {
   canManage: boolean;
@@ -57,6 +73,7 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
     routeName: string;
     validFrom: string;
   } | null>(null);
+  const [locationModalCustomer, setLocationModalCustomer] = useState<Customer | null>(null);
   const [selectedRouteFilter, setSelectedRouteFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped');
@@ -318,16 +335,37 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
                             title="Ver y registrar garrafones del cliente"
                             onClick={() => navigate(`/jugs?customerId=${customer.id}`)}
                           >
-                            🧴 Garrafones
+                            Garrafones
                           </button>
                           <button
                             type="button"
                             className="secondary"
-                            style={{ padding: '0.2rem 0.6rem', fontSize: '0.85rem' }}
+                            style={{ padding: '0.2rem 0.6rem', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
                             title="Ver estado de cuenta y abonar a crédito"
                             onClick={() => navigate(`/credit?customerId=${customer.id}`)}
                           >
-                            💳 Crédito
+                            <CreditCard size={13} />
+                            Crédito
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary"
+                            style={{
+                              padding: '0.2rem 0.6rem',
+                              fontSize: '0.85rem',
+                              color: '#0284c7',
+                              borderColor: '#bae6fd',
+                              backgroundColor: '#f0f9ff',
+                              fontWeight: 600,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.3rem',
+                            }}
+                            title="Auditar o confirmar coordenadas GPS del cliente"
+                            onClick={() => setLocationModalCustomer(customer)}
+                          >
+                            <MapPin size={13} strokeWidth={2} />
+                            GPS
                           </button>
                           <button
                             type="button"
@@ -338,6 +376,9 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
                               color: '#007680',
                               borderColor: '#007680',
                               fontWeight: 600,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.3rem',
                             }}
                             title="Modificar datos, crédito o estado del cliente"
                             onClick={() => {
@@ -355,7 +396,8 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
                               });
                             }}
                           >
-                            ✏️ Modificar
+                            <Pencil size={13} />
+                            Modificar
                           </button>
                           <button
                             type="button"
@@ -367,6 +409,9 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
                               borderColor: '#fca5a5',
                               backgroundColor: '#fef2f2',
                               fontWeight: 600,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.3rem',
                             }}
                             title="Eliminar cliente del sistema"
                             onClick={() => {
@@ -374,7 +419,8 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
                               setDeleteErrorMessage(null);
                             }}
                           >
-                            🗑️ Eliminar
+                            <Trash2 size={13} />
+                            Eliminar
                           </button>
                         </>
                       )}
@@ -613,7 +659,7 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
                 <input
                   type="search"
                   className="customer-search-input"
-                  placeholder="🔍 Buscar cliente por nombre, código, teléfono o dirección..."
+                  placeholder="Buscar cliente por nombre, código, teléfono o dirección..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                 />
@@ -622,15 +668,19 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
                     type="button"
                     className={`customer-view-btn ${viewMode === 'grouped' ? 'active' : ''}`}
                     onClick={() => setViewMode('grouped')}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
                   >
-                    📑 Agrupado por Ruta
+                    <Layers size={14} />
+                    Agrupado por Ruta
                   </button>
                   <button
                     type="button"
                     className={`customer-view-btn ${viewMode === 'flat' ? 'active' : ''}`}
                     onClick={() => setViewMode('flat')}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
                   >
-                    📋 Lista Plana
+                    <List size={14} />
+                    Lista Plana
                   </button>
                 </div>
               </div>
@@ -650,9 +700,9 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
                     key={grp.key}
                     className={`customer-filter-pill ${selectedRouteFilter === grp.key ? 'active' : ''}`}
                     onClick={() => setSelectedRouteFilter(grp.key)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
                   >
-                    {grp.key === 'UNASSIGNED' ? '⚠️' : '🚚'} {grp.routeName}
-                    {grp.sellerName ? ` (${grp.sellerName})` : ''} · <strong>{grp.customers.length}</strong>
+                    {grp.key === 'UNASSIGNED' ? <AlertTriangle size={13} style={{ color: '#b45309' }} /> : <Truck size={13} style={{ color: '#0284c7' }} />} {grp.routeName}{grp.sellerName ? ` (${grp.sellerName})` : ''} · <strong>{grp.customers.length}</strong>
                   </button>
                 ))}
               </div>
@@ -676,13 +726,16 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
                       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') toggleGroupCollapse(group.key); }}
                     >
                       <div className="route-group-info">
-                        <span style={{ fontSize: '1.5rem' }}>{isUnassigned ? '⚠️' : '🚚'}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '38px', height: '38px', borderRadius: '8px', backgroundColor: isUnassigned ? '#fef3c7' : '#e0f2fe' }}>
+                          {isUnassigned ? <AlertTriangle size={20} style={{ color: '#b45309' }} /> : <Truck size={20} style={{ color: '#0369a1' }} />}
+                        </div>
                         <div>
                           <h3 className="route-group-title">
                             {isUnassigned ? 'Clientes Sin Ruta Asignada' : `Ruta ${group.routeName} ${group.routeCode ? `(${group.routeCode})` : ''}`}
                           </h3>
-                          <span className="route-group-subtitle">
-                            👤 Vendedor responsable: <strong style={{ color: group.sellerName ? '#0f766e' : '#b45309' }}>
+                          <span className="route-group-subtitle" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <User size={13} />
+                            Vendedor responsable: <strong style={{ color: group.sellerName ? '#0f766e' : '#b45309' }}>
                               {group.sellerName || 'Sin vendedor asignado'}
                             </strong>
                           </span>
@@ -698,12 +751,16 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
                             padding: '0.3rem 0.75rem',
                             borderRadius: '1rem',
                             fontSize: '0.85rem',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
                           }}
                         >
-                          👥 {group.customers.length} {group.customers.length === 1 ? 'cliente' : 'clientes'}
+                          <Users size={13} />
+                          {group.customers.length} {group.customers.length === 1 ? 'cliente' : 'clientes'}
                         </span>
-                        <span style={{ fontSize: '0.85rem', color: 'var(--muted)', fontWeight: 600 }}>
-                          {isCollapsed ? '▼ Desplegar' : '▲ Plegar'}
+                        <span style={{ fontSize: '0.85rem', color: 'var(--muted)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                          {isCollapsed ? <><ChevronDown size={14} /> Desplegar</> : <><ChevronUp size={14} /> Plegar</>}
                         </span>
                       </div>
                     </div>
@@ -992,7 +1049,9 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
       {showDeleteSuccessModal && (
         <div className="floating-toast-overlay" role="dialog" aria-modal="true">
           <div className="floating-toast-card">
-            <div className="floating-toast-icon">🗑️</div>
+            <div className="floating-toast-icon">
+              <Trash2 size={24} style={{ color: '#b91c1c' }} />
+            </div>
             <div className="floating-toast-body">
               <h3>Cliente eliminado</h3>
               <p>
@@ -1017,7 +1076,9 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
       {showUpdateSuccessModal && (
         <div className="floating-toast-overlay" role="dialog" aria-modal="true">
           <div className="floating-toast-card">
-            <div className="floating-toast-icon">✅</div>
+            <div className="floating-toast-icon">
+              <CheckCircle2 size={24} style={{ color: '#047857' }} />
+            </div>
             <div className="floating-toast-body">
               <h3>Datos actualizados</h3>
               <p>
@@ -1042,7 +1103,9 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
       {assignmentSuccess && (
         <div className="floating-toast-overlay" role="dialog" aria-modal="true" aria-labelledby="assignment-success-title">
           <div className="floating-toast-card">
-            <div className="floating-toast-icon">✅</div>
+            <div className="floating-toast-icon">
+              <CheckCircle2 size={24} style={{ color: '#047857' }} />
+            </div>
             <div className="floating-toast-body">
               <h3 id="assignment-success-title">Ruta asignada exitosamente</h3>
               <p>
@@ -1058,8 +1121,9 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
                 textAlign: 'center',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
               }}>
-                <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#166534' }}>
-                  🚚 {assignmentSuccess.routeName}
+                <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#166534', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
+                  <Truck size={18} />
+                  <span>{assignmentSuccess.routeName}</span>
                 </div>
                 <div style={{ marginTop: '0.25rem', fontSize: '0.82rem', color: '#15803d' }}>
                   Vigencia a partir de: <strong>{assignmentSuccess.validFrom}</strong>
@@ -1078,6 +1142,15 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Modal de confirmación y auditoría de coordenadas GPS ── */}
+      {locationModalCustomer && (
+        <CustomerLocationModal
+          customerId={locationModalCustomer.id}
+          customerName={locationModalCustomer.name}
+          onClose={() => setLocationModalCustomer(null)}
+        />
       )}
     </main>
   );

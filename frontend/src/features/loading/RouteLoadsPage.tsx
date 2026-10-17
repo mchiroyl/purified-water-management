@@ -1,24 +1,31 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState, Fragment, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState, useMemo, Fragment, type FormEvent } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { PageHeader } from '../../app/PageHeader';
 import { apiRequest } from '../../services/apiClient';
 import { calendarOnlyProps, currentMonthDateBounds } from '../../utils/dateInput';
 import { captureCurrentLocation } from '../../services/geolocation';
 import { RouteMapPanel, type RouteMapData } from '../routes/RouteMapPanel';
+import { VendorItineraryMap } from '../routes/VendorItineraryMap';
+import type { DailyItineraryRunResponse } from '../routes/types';
 
 type LoadItem = { id: string; productId: string; productCode: string; productName: string; baseUnitCode: string; quantityBaseUnits: number };
 type Correction = { id: string; productId: string; productName: string; quantityDelta: number; reason: string; actorUsername: string; createdAt: string };
 type RouteLoad = { id: string; loadNumber: string; routeId: string; routeCode: string; routeName: string; sourceLocationId: string; sourceLocationName: string; targetLocationId: string; targetLocationName: string; plannedDate: string; loadType: 'INITIAL' | 'REPLENISHMENT'; notes: string; status: string; createdByUsername: string; warehouseConfirmedByUsername?: string; warehouseConfirmedDeviceId?: string; warehouseConfirmedAt?: string; sellerReceivedByUsername?: string; sellerReceivedDeviceId?: string; sellerReceivedAt?: string; startedByUsername?: string; startedDeviceId?: string; startedAt?: string; items: LoadItem[]; corrections: Correction[] };
-type Location = { id: string; code: string; name: string; locationType: string; active: boolean };
+type LocationBalance = { productId: string; productCode: string; productName: string; baseUnitCode: string; quantityBaseUnits: number };
+type Location = { id: string; code: string; name: string; locationType: string; active: boolean; balances?: LocationBalance[] };
 type Route = { id: string; code: string; name: string; status: string };
 type Product = { id: string; code: string; name: string; active: boolean; controlsInventory: boolean };
 type ItemForm = { productId: string; quantityBaseUnits: number };
 type CorrectionForm = { productId: string; quantityDelta: number; reason: string };
 
-const dateInZone = (timezone = 'America/Guatemala') => {
+const dateInZone = (timezone = 'America/Guatemala', offsetDays = 0) => {
+  const target = new Date();
+  if (offsetDays !== 0) {
+    target.setDate(target.getDate() + offsetDays);
+  }
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' })
-    .formatToParts(new Date()).reduce<Record<string, string>>((result, part) => ({ ...result, [part.type]: part.value }), {});
+    .formatToParts(target).reduce<Record<string, string>>((result, part) => ({ ...result, [part.type]: part.value }), {});
   return `${parts.year}-${parts.month}-${parts.day}`;
 };
 const statusLabel: Record<string, string> = { PREPARED: 'Preparada', WAREHOUSE_CONFIRMED: 'Entregada por bodega', RECEIVED: 'Recibida', STARTED: 'Recorrido iniciado', SETTLED: 'Liquidada' };
@@ -58,6 +65,12 @@ export function RouteLoadsPage({
   const locations = useQuery({ queryKey: ['inventory', 'locations'], queryFn: () => apiRequest<Location[]>('/inventory/locations'), enabled: canPrepare });
   const routes = useQuery({ queryKey: ['routes'], queryFn: () => apiRequest<Route[]>('/routes'), enabled: canPrepare });
   const products = useQuery({ queryKey: ['products'], queryFn: () => apiRequest<Product[]>('/products'), enabled: canPrepare || canCorrect });
+  const refresh = () => {
+    void loads.refetch();
+    void locations.refetch();
+    void client.invalidateQueries({ queryKey: ['route-loads'] });
+    void client.invalidateQueries({ queryKey: ['inventory', 'locations'] });
+  };
   const [form, setForm] = useState({ routeId: '', sourceLocationId: '', plannedDate: dateInZone(), loadType: 'INITIAL' as 'INITIAL' | 'REPLENISHMENT', notes: '' });
   const [items, setItems] = useState<ItemForm[]>([{ productId: '', quantityBaseUnits: 1 }]);
   const [locationError, setLocationError] = useState('');
@@ -66,12 +79,112 @@ export function RouteLoadsPage({
   const [activeLoadId, setActiveLoadId] = useState<string | null>(null);
   const [correctingLoad, setCorrectingLoad] = useState<RouteLoad | null>(null);
   const [correctionForm, setCorrectionForm] = useState<CorrectionForm>({ productId: '', quantityDelta: 0, reason: '' });
+  const [successModal, setSuccessModal] = useState<{ title: string; message: string } | null>(null);
 
-  const refresh = () => void client.invalidateQueries({ queryKey: ['route-loads'] });
   const [mapLoadId, setMapLoadId] = useState<string | null>(null);
+  const [showSettled, setShowSettled] = useState(false);
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlMapId = params.get('map') || params.get('mapLoadId');
+      if (urlMapId) {
+        setMapLoadId(urlMapId);
+      }
+    } catch {}
+  }, []);
+
+  const visibleLoads = useMemo(() => {
+    const raw = loads.data ?? [];
+    if (showSettled) return raw;
+    return raw.filter(l => l.status !== 'SETTLED');
+  }, [loads.data, showSettled]);
+
   const routeMapQuery = useQuery({
     queryKey: ['route-map', mapLoadId],
     queryFn: () => apiRequest<RouteMapData>(`/loads/${mapLoadId}/route-map`),
+    enabled: !!mapLoadId,
+  });
+
+  const itineraryMapQuery = useQuery({
+    queryKey: ['itinerary-map', mapLoadId],
+    queryFn: async () => {
+      if (!mapLoadId) return null;
+      const targetLoad = loads.data?.find(l => l.id === mapLoadId);
+      if (!targetLoad?.routeId) return null;
+      try {
+        const res = await apiRequest<DailyItineraryRunResponse>(`/routes/${targetLoad.routeId}/itineraries/active`);
+        if (res && res.stops && res.stops.length > 0) return res;
+      } catch {
+        // continue
+      }
+      // Fallback 1: Plantilla de ruta
+      try {
+        const templates = await apiRequest<any[]>(`/routes/${targetLoad.routeId}/templates`);
+        if (templates && templates.length > 0 && templates[0].stops && templates[0].stops.length > 0) {
+          const t = templates[0];
+          return {
+            id: t.id,
+            routeId: targetLoad.routeId,
+            routeCode: targetLoad.routeCode,
+            routeName: targetLoad.routeName,
+            startLatitude: t.startLatitude,
+            startLongitude: t.startLongitude,
+            startAddressReference: t.startAddressReference,
+            totalStops: t.stops.length,
+            completedStops: 0,
+            status: 'IN_PROGRESS',
+            stops: t.stops.map((ts: any, idx: number) => ({
+              id: ts.id || `ts-${idx}`,
+              runId: t.id,
+              customerId: ts.customerId,
+              customerCode: ts.customerCode || 'CLI',
+              customerName: ts.customerName,
+              addressReference: ts.addressReference,
+              targetLatitude: ts.targetLatitude,
+              targetLongitude: ts.targetLongitude,
+              stopOrder: ts.stopOrder || idx + 1,
+              status: 'PENDING',
+              hasLocationMismatch: false,
+            })),
+          } as unknown as DailyItineraryRunResponse;
+        }
+      } catch {
+        // continue
+      }
+      // Fallback 2: Clientes asignados a la ruta
+      try {
+        const allCusts = await apiRequest<any[]>('/customers');
+        const routeCusts = allCusts.filter((c: any) => c.routeId === targetLoad.routeId || c.routeCode === targetLoad.routeCode);
+        if (routeCusts.length > 0) {
+          return {
+            id: 'cust-run',
+            routeId: targetLoad.routeId,
+            routeCode: targetLoad.routeCode,
+            routeName: targetLoad.routeName,
+            totalStops: routeCusts.length,
+            completedStops: 0,
+            status: 'IN_PROGRESS',
+            stops: routeCusts.map((c: any, idx: number) => ({
+              id: c.id,
+              runId: 'cust-run',
+              customerId: c.id,
+              customerCode: c.code || 'CLI',
+              customerName: c.name,
+              addressReference: c.addressReference,
+              targetLatitude: c.confirmedLatitude ?? 14.534 + (idx * 0.003),
+              targetLongitude: c.confirmedLongitude ?? -91.503 + (idx * 0.003),
+              stopOrder: idx + 1,
+              status: 'PENDING',
+              hasLocationMismatch: false,
+            })),
+          } as unknown as DailyItineraryRunResponse;
+        }
+      } catch {
+        return null;
+      }
+      return null;
+    },
     enabled: !!mapLoadId,
   });
 
@@ -89,9 +202,25 @@ export function RouteLoadsPage({
     mutationFn: ({ id, action, body }: { id: string; action: string; body?: unknown }) => apiRequest<RouteLoad>(`/loads/${id}/${action}`, {
       method: 'POST', body: body === undefined ? undefined : JSON.stringify(body),
     }),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       setActiveLoadId(null);
       refresh();
+      if (variables.action === 'receipt') {
+        setSuccessModal({
+          title: '¡Recepción Confirmada!',
+          message: 'La carga ha sido recibida exitosamente en el camión. Se registraron las coordenadas GPS y las existencias quedaron cargadas a tu jornada.'
+        });
+      } else if (variables.action === 'warehouse-confirmation') {
+        setSuccessModal({
+          title: '¡Entrega de Bodega Confirmada!',
+          message: 'Se confirmó la entrega física de la carga desde bodega para el vendedor.'
+        });
+      } else if (variables.action === 'start') {
+        setSuccessModal({
+          title: '¡Recorrido Iniciado!',
+          message: 'El camión ha iniciado su jornada y las ventas han sido habilitadas.'
+        });
+      }
     },
     onError: () => {
       refresh();
@@ -207,7 +336,43 @@ export function RouteLoadsPage({
               </select>
             </label>
             <label>
-              Fecha planificada
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                <span>Fecha planificada</span>
+                <div style={{ display: 'flex', gap: '0.35rem' }}>
+                  <button
+                    type="button"
+                    className="secondary"
+                    style={{
+                      padding: '0.15rem 0.55rem',
+                      fontSize: '0.78rem',
+                      minHeight: '28px',
+                      backgroundColor: form.plannedDate === dateInZone(company.data?.timezone, 0) ? '#e0f2fe' : undefined,
+                      borderColor: form.plannedDate === dateInZone(company.data?.timezone, 0) ? '#0284c7' : undefined,
+                      color: form.plannedDate === dateInZone(company.data?.timezone, 0) ? '#0369a1' : undefined,
+                      fontWeight: form.plannedDate === dateInZone(company.data?.timezone, 0) ? 600 : 400,
+                    }}
+                    onClick={() => setForm(f => ({ ...f, plannedDate: dateInZone(company.data?.timezone, 0) }))}
+                  >
+                    Hoy
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    style={{
+                      padding: '0.15rem 0.55rem',
+                      fontSize: '0.78rem',
+                      minHeight: '28px',
+                      backgroundColor: form.plannedDate === dateInZone(company.data?.timezone, 1) ? '#e0f2fe' : undefined,
+                      borderColor: form.plannedDate === dateInZone(company.data?.timezone, 1) ? '#0284c7' : undefined,
+                      color: form.plannedDate === dateInZone(company.data?.timezone, 1) ? '#0369a1' : undefined,
+                      fontWeight: form.plannedDate === dateInZone(company.data?.timezone, 1) ? 600 : 400,
+                    }}
+                    onClick={() => setForm(f => ({ ...f, plannedDate: dateInZone(company.data?.timezone, 1) }))}
+                  >
+                    Mañana
+                  </button>
+                </div>
+              </div>
               <input required type="date" min={dateBounds.min} max={dateBounds.max} {...calendarOnlyProps()} value={form.plannedDate} onChange={event => setForm({ ...form, plannedDate: event.target.value })} />
             </label>
             <label>
@@ -223,9 +388,16 @@ export function RouteLoadsPage({
                   Producto
                   <select required value={item.productId} onChange={event => setItems(items.map((row, rowIndex) => rowIndex === index ? { ...row, productId: event.target.value } : row))}>
                     <option value="">Seleccionar</option>
-                    {products.data?.filter(product => product.active && product.controlsInventory).map(product => (
-                      <option value={product.id} key={product.id}>{product.code} · {product.name}</option>
-                    ))}
+                    {products.data?.filter(product => product.active && product.controlsInventory).map(product => {
+                      const selectedLoc = locations.data?.find(l => l.id === form.sourceLocationId);
+                      const bal = selectedLoc?.balances?.find(b => b.productId === product.id);
+                      const stockText = form.sourceLocationId ? (bal ? ` (Stock: ${bal.quantityBaseUnits} ${bal.baseUnitCode})` : ' (Stock: 0)') : '';
+                      return (
+                        <option value={product.id} key={product.id}>
+                          {product.code} · {product.name}{stockText}
+                        </option>
+                      );
+                    })}
                   </select>
                 </label>
                 <label>
@@ -253,7 +425,12 @@ export function RouteLoadsPage({
               <div>{create.error.message}</div>
               {create.error.message.includes('La recarga requiere una ruta con recorrido iniciado') && (
                 <div style={{ marginTop: '0.45rem', fontSize: '0.88rem', fontWeight: 500, color: '#991b1b' }}>
-                  👉 <strong>Solución:</strong> En el campo <strong>&quot;Tipo de operación&quot;</strong>, cambie a <strong>&quot;Carga inicial&quot;</strong>. La &quot;Recarga de ruta&quot; solo se usa cuando el vendedor ya está en ruta y necesita reposición adicional durante el día.
+                  <strong>Solución:</strong> En el campo <strong>&quot;Tipo de operación&quot;</strong>, cambie a <strong>&quot;Carga inicial&quot;</strong>. La &quot;Recarga de ruta&quot; solo se usa cuando el vendedor ya está en ruta y necesita reposición adicional durante el día.
+                </div>
+              )}
+              {(create.error.message.includes('conflicto con datos existentes') || create.error.message.includes('ya cuenta con una carga inicial activa') || create.error.message.includes('ya tiene una carga inicial')) && (
+                <div style={{ marginTop: '0.45rem', fontSize: '0.88rem', fontWeight: 500, color: '#991b1b' }}>
+                  <strong>Causa:</strong> Esta ruta ya tiene una carga inicial abierta en proceso (estado Preparada, Entregada o en Recorrido). El sistema de la purificadora no permite crear dos cargas iniciales al mismo tiempo para la misma ruta sin antes liquidar o despachar la anterior. Puede consultar la pestaña <strong>&quot;Listado de cargas&quot;</strong> para gestionar la carga existente.
                 </div>
               )}
             </div>
@@ -264,13 +441,23 @@ export function RouteLoadsPage({
       {/* ── Vista de Lista: Cargas Registradas en Tabla Compacta Profesional ── */}
       {effectiveView === 'list' && (
         <section className="section-panel">
-          <div className="section-heading">
-            <h2>Cargas registradas</h2>
-            <span>{loads.data?.length ?? 0} cargas</span>
+          <div className="section-heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <div>
+              <h2>Cargas registradas</h2>
+              <span>{visibleLoads.length} cargas activas</span>
+            </div>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', color: '#64748b', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={showSettled}
+                onChange={e => setShowSettled(e.target.checked)}
+              />
+              <span>Mostrar liquidadas (historial)</span>
+            </label>
           </div>
           {loads.error && <div className="alert error">{loads.error.message}</div>}
 
-          {loads.data && loads.data.length > 0 ? (
+          {visibleLoads.length > 0 ? (
             <div className="table-wrap loads-table-wrap">
               <table>
                 <thead>
@@ -284,7 +471,7 @@ export function RouteLoadsPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {loads.data.map(load => (
+                  {visibleLoads.map(load => (
                     <Fragment key={load.id}>
                       <tr>
                         <td>
@@ -348,19 +535,14 @@ export function RouteLoadsPage({
                             {load.status === 'PREPARED' && canConfirmWarehouse && (
                               <button
                                 type="button"
-                                className="primary"
-                                style={{ padding: '0.35rem 0.65rem', fontSize: '0.82rem', width: '100%' }}
+                                className="secondary"
+                                style={{ padding: '0.35rem 0.65rem', fontSize: '0.82rem', width: '100%', marginBottom: canReceive ? '0.25rem' : 0 }}
                                 onClick={() => transition.mutate({ id: load.id, action: 'warehouse-confirmation' })}
                               >
-                                Confirmar entrega
+                                Confirmar entrega bodega
                               </button>
                             )}
-                            {load.status === 'PREPARED' && !canConfirmWarehouse && (
-                              <span style={{ fontSize: '0.8rem', color: '#b45309', fontWeight: 600 }}>
-                                ⏳ Espera entrega bodega
-                              </span>
-                            )}
-                            {load.status === 'WAREHOUSE_CONFIRMED' && canReceive && (
+                            {(load.status === 'PREPARED' || load.status === 'WAREHOUSE_CONFIRMED') && canReceive && (
                               <button
                                 type="button"
                                 className="primary"
@@ -370,6 +552,11 @@ export function RouteLoadsPage({
                               >
                                 {isCapturingLocation ? (locationProgress || 'Obteniendo GPS…') : 'Confirmar recepción'}
                               </button>
+                            )}
+                            {load.status === 'PREPARED' && !canConfirmWarehouse && !canReceive && (
+                              <span style={{ fontSize: '0.8rem', color: '#b45309', fontWeight: 600 }}>
+                                ⏳ Espera entrega bodega
+                              </span>
                             )}
                             {load.status === 'RECEIVED' && canStart && load.loadType !== 'REPLENISHMENT' && (
                               <button
@@ -438,9 +625,41 @@ export function RouteLoadsPage({
                       {mapLoadId === load.id && (
                         <tr key={`${load.id}-map`}>
                           <td colSpan={6} style={{ padding: '1rem', background: '#f8fafc' }}>
-                            {routeMapQuery.isLoading && <p className="muted">Cargando mapa de ruta…</p>}
-                            {routeMapQuery.error && <p className="alert error">{(routeMapQuery.error as Error).message}</p>}
-                            {routeMapQuery.data && <RouteMapPanel data={routeMapQuery.data} height="360px" />}
+                            {itineraryMapQuery.data && itineraryMapQuery.data.stops && itineraryMapQuery.data.stops.length > 0 ? (
+                              <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
+                                  <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>
+                                    📍 Recorrido de Clientes Planificado ({itineraryMapQuery.data.stops.length} clientes numerados)
+                                  </strong>
+                                  <Link to="/itinerary" style={{ fontSize: '0.82rem', color: '#0284c7', fontWeight: 600, textDecoration: 'none' }}>
+                                    Ver Detalle en Lista ➔
+                                  </Link>
+                                </div>
+                                <VendorItineraryMap
+                                  start={{
+                                    latitude: Number((itineraryMapQuery.data as any).startLatitude || 14.534),
+                                    longitude: Number((itineraryMapQuery.data as any).startLongitude || -91.503),
+                                    label: (itineraryMapQuery.data as any).startAddressReference || 'Inicio de ruta',
+                                  }}
+                                  stops={(itineraryMapQuery.data.stops || []).map((s: any, idx: number) => ({
+                                    ...s,
+                                    stopOrder: Number(s.stopOrder ?? s.plannedOrder ?? idx + 1),
+                                    customerName: String(s.customerName ?? s.customerNameSnapshot ?? 'Cliente'),
+                                    customerCode: String(s.customerCode ?? s.customer_code ?? 'CLI'),
+                                    addressReference: String(s.addressReference ?? s.addressReferenceSnapshot ?? ''),
+                                    targetLatitude: s.targetLatitude != null ? Number(s.targetLatitude) : 14.534 + ((idx + 1) * 0.0035),
+                                    targetLongitude: s.targetLongitude != null ? Number(s.targetLongitude) : -91.503 + ((idx + 1) * 0.0035),
+                                  }))}
+                                  height="360px"
+                                />
+                              </div>
+                            ) : (
+                              <>
+                                {routeMapQuery.isLoading && <p className="muted">Cargando mapa de ruta…</p>}
+                                {routeMapQuery.error && <p className="alert error">{(routeMapQuery.error as Error).message}</p>}
+                                {routeMapQuery.data && <RouteMapPanel data={routeMapQuery.data} height="360px" />}
+                              </>
+                            )}
                           </td>
                         </tr>
                       )}
@@ -525,6 +744,44 @@ export function RouteLoadsPage({
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Modal de confirmación de acción */}
+      {successModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(3px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '1rem', zIndex: 9999
+        }}>
+          <div style={{
+            background: '#ffffff', borderRadius: '12px', maxWidth: '420px', width: '100%',
+            padding: '1.75rem 1.5rem', textAlign: 'center', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15)'
+          }}>
+            <div style={{
+              width: '56px', height: '56px', borderRadius: '50%',
+              background: '#ecfdf5', color: '#059669', display: 'inline-flex',
+              alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem',
+              fontSize: '1.75rem'
+            }}>
+              ✓
+            </div>
+            <h3 style={{ margin: '0 0 0.5rem', color: '#0f172a', fontSize: '1.25rem', fontWeight: 700 }}>
+              {successModal.title}
+            </h3>
+            <p style={{ margin: '0 0 1.25rem', color: '#475569', fontSize: '0.9rem', lineHeight: 1.5 }}>
+              {successModal.message}
+            </p>
+            <button
+              type="button"
+              className="primary"
+              style={{ width: '100%', minHeight: '44px', fontSize: '0.95rem', fontWeight: 700, background: '#059669', borderColor: '#059669' }}
+              onClick={() => setSuccessModal(null)}
+            >
+              Entendido
+            </button>
+          </div>
         </div>
       )}
     </main>

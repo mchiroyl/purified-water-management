@@ -59,7 +59,7 @@ public class JugLoanController {
     }
 
     @GetMapping("/routes/{routeId}/summary")
-    @PreAuthorize("hasAnyRole('ADMINISTRADOR_CREDITO', 'ADMINISTRADOR', 'SUPERVISOR')")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR_CREDITO', 'ADMINISTRADOR', 'SUPERVISOR', 'VENDEDOR')")
     public JugRouteSummaryResponse getRouteSummary(@PathVariable UUID routeId) {
         return service.getRouteSummary(routeId);
     }

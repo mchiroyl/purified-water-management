@@ -59,7 +59,8 @@ public class JdbcSettlementAdapter implements SettlementPort {
         var products = jdbc.sql("""
                 SELECT p.id product_id,p.code product_code,p.name product_name,loaded.loaded_units,
                     COALESCE((SELECT SUM(si.quantity_base_units) FROM sale_item si JOIN sale sale ON sale.id=si.sale_id
-                        WHERE sale.route_id=rl.route_id AND si.product_id=p.id AND sale.status='CONFIRMED'
+                        WHERE (sale.route_load_id = rl.id OR (sale.route_id=rl.route_id AND sale.created_at>=rl.started_at AND sale.created_at<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now())))
+                          AND si.product_id=p.id AND sale.status='CONFIRMED'
                           AND NOT EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=sale.id AND ar.status='APPROVED')
                           AND sale.created_at>=rl.started_at AND sale.created_at<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now())),0) sold_units,
                     COALESCE((SELECT SUM(ri.received_base_units) FROM return_item ri JOIN customer_return cr ON cr.id=ri.return_id
@@ -99,31 +100,30 @@ public class JdbcSettlementAdapter implements SettlementPort {
                 rs.getBigDecimal("approved_waste_units"))).list();
         var financial = jdbc.sql("""
                 SELECT
-                  COALESCE((SELECT SUM(sale.total) FROM sale WHERE sale.route_id=rl.route_id AND sale.status='CONFIRMED'
-                    AND NOT EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=sale.id AND ar.status='APPROVED')
-                    AND sale.created_at>=rl.started_at AND sale.created_at<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now())),0) sales_total,
+                  COALESCE((SELECT SUM(sale.total) FROM sale WHERE (sale.route_load_id = rl.id OR (sale.route_id=rl.route_id AND sale.created_at>=rl.started_at AND sale.created_at<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now()))) AND sale.status='CONFIRMED'
+                    AND NOT EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=sale.id AND ar.status='APPROVED')),0) sales_total,
                   COALESCE((SELECT SUM(pay.amount) FROM payment pay JOIN sale sale ON sale.id=pay.sale_id
-                    WHERE sale.route_id=rl.route_id AND pay.payment_method='CASH' AND pay.status='CONFIRMED'
-                      AND NOT EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=sale.id AND ar.status='APPROVED')
-                      AND sale.created_at>=rl.started_at AND sale.created_at<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now())),0) sales_cash,
+                    WHERE (sale.route_load_id = rl.id OR (sale.route_id=rl.route_id AND sale.created_at>=rl.started_at AND sale.created_at<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now())))
+                      AND pay.payment_method='CASH' AND pay.status='CONFIRMED'
+                      AND NOT EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=sale.id AND ar.status='APPROVED')),0) sales_cash,
                   COALESCE((SELECT SUM(cp.amount) FROM credit_payment cp
                     WHERE cp.payment_method='CASH' AND cp.status='CONFIRMED'
                       AND (cp.route_load_id=rl.id OR (cp.collected_by=rl.seller_received_by AND cp.created_at>=rl.started_at
                         AND cp.created_at<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now())))),0) credit_collections_cash,
                   COALESCE((SELECT SUM(cd.amount) FROM cash_delivery cd WHERE cd.route_load_id=rl.id),0) delivered_cash,
                   COALESCE((SELECT SUM(pay.amount) FROM payment pay JOIN sale sale ON sale.id=pay.sale_id
-                    WHERE sale.route_id=rl.route_id AND pay.payment_method='TRANSFER' AND pay.status='VERIFIED'
-                      AND NOT EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=sale.id AND ar.status='APPROVED')
-                      AND sale.created_at>=rl.started_at AND sale.created_at<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now())),0)
+                    WHERE (sale.route_load_id = rl.id OR (sale.route_id=rl.route_id AND sale.created_at>=rl.started_at AND sale.created_at<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now())))
+                      AND pay.payment_method='TRANSFER' AND pay.status='VERIFIED'
+                      AND NOT EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=sale.id AND ar.status='APPROVED')),0)
                   +
                   COALESCE((SELECT SUM(cp.amount) FROM credit_payment cp
                     WHERE cp.payment_method='TRANSFER' AND cp.status='VERIFIED'
                       AND (cp.route_load_id=rl.id OR (cp.collected_by=rl.seller_received_by AND cp.created_at>=rl.started_at
                         AND cp.created_at<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now())))),0) verified_transfers,
                   COALESCE((SELECT SUM(pay.amount) FROM payment pay JOIN sale sale ON sale.id=pay.sale_id
-                    WHERE sale.route_id=rl.route_id AND pay.payment_method='CREDIT' AND pay.status='APPLIED'
-                      AND NOT EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=sale.id AND ar.status='APPROVED')
-                      AND sale.created_at>=rl.started_at AND sale.created_at<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now())),0) applied_credit
+                    WHERE (sale.route_load_id = rl.id OR (sale.route_id=rl.route_id AND sale.created_at>=rl.started_at AND sale.created_at<=COALESCE((SELECT closed_at FROM settlement WHERE route_load_id=rl.id),now())))
+                      AND pay.payment_method='CREDIT' AND pay.status='APPLIED'
+                      AND NOT EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=sale.id AND ar.status='APPROVED')),0) applied_credit
                 FROM route_load rl WHERE rl.id=:id
                 """).param("id", routeLoadId).query((rs, row) -> {
                     BigDecimal salesCash = rs.getBigDecimal("sales_cash");

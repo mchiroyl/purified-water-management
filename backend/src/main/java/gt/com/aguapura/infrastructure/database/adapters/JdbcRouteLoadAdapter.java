@@ -159,9 +159,15 @@ public class JdbcRouteLoadAdapter implements RouteLoadPort {
     @Override
     public LoadView confirmReceipt(UUID id, UUID actorId, UUID deviceId) {
         updateStatus("""
-                UPDATE route_load SET status='RECEIVED',seller_received_by=:actorId,
-                    seller_received_device_id=:deviceId,seller_received_at=now(),version=version+1
-                WHERE id=:id AND status='WAREHOUSE_CONFIRMED'
+                UPDATE route_load SET status='RECEIVED',
+                    warehouse_confirmed_by=COALESCE(warehouse_confirmed_by, created_by),
+                    warehouse_confirmed_device_id=COALESCE(warehouse_confirmed_device_id, :deviceId),
+                    warehouse_confirmed_at=COALESCE(warehouse_confirmed_at, now()),
+                    seller_received_by=:actorId,
+                    seller_received_device_id=:deviceId,
+                    seller_received_at=now(),
+                    version=version+1
+                WHERE id=:id AND status IN ('PREPARED', 'WAREHOUSE_CONFIRMED')
                 """, id, actorId, deviceId);
         return findLoad(id);
     }

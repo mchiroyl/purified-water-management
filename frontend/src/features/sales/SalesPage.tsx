@@ -22,6 +22,11 @@ import {
   Search,
   Filter,
   ShieldAlert,
+  Camera,
+  Trash2,
+  Clock,
+  X,
+  ImageIcon,
 } from 'lucide-react';
 import { apiBlob, apiRequest } from '../../services/apiClient';
 import { openMobileDatabase, type GeoLocationSnapshot } from '../../offline/mobileDatabase';
@@ -34,6 +39,7 @@ import { CustomerCombobox } from './CustomerCombobox';
 import type { JugBalanceResponse } from '../jugs/types';
 import type { CreditBalanceResponse, CreditPaymentMethod, CreditPaymentResponse } from '../credit/types';
 import { fetchAndDownloadCreditVoucher, fetchAndShareCreditVoucher, shareCreditVoucherFile } from '../credit/creditVoucherSharing';
+import type { DailyItineraryRunResponse, DailyItineraryStopResponse } from '../routes/types';
 
 type Route = { id: string; code: string; name: string; status: string };
 type Customer = {
@@ -59,6 +65,8 @@ type Payment = { id: string; method: string; amount: number; status: string; ref
 type Sale = { id: string; documentNumber: string; routeCode: string; routeName: string; sellerName: string; customerCode: string; customerName: string; status: string; subtotal: number; total: number; currencyCode: string; createdAt: string; items: SaleItem[]; payments?: Payment[]; pendingTransferAmount?: number; rejectedTransferAmount?: number; creditAmount?: number; routeId?: string; customerId?: string };
 type ItemForm = { presentationId: string; quantity: number };
 type PaymentForm = { method: string; amount: string; reference: string; bank: string; evidenceReference: string };
+type LoadItem = { id: string; productId: string; productCode: string; productName: string; baseUnitCode: string; quantityBaseUnits: number };
+type RouteLoad = { id: string; loadNumber: string; routeId: string; routeCode: string; routeName: string; status: string; sellerReceivedByUsername?: string; createdByUsername: string; items: LoadItem[] };
 
 type SaleGroup = {
   key: string;
@@ -555,16 +563,38 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
   const routes = useQuery({ queryKey: ['routes'], queryFn: () => apiRequest<Route[]>('/routes'), enabled: canSell, staleTime: 300_000 });
   const customers = useQuery({ queryKey: ['customers'], queryFn: () => apiRequest<Customer[]>('/customers'), enabled: canSell, staleTime: 300_000 });
   const products = useQuery({ queryKey: ['products'], queryFn: () => apiRequest<Product[]>('/products'), enabled: canSell, staleTime: 300_000 });
+  const loads = useQuery({ queryKey: ['route-loads'], queryFn: () => apiRequest<RouteLoad[]>('/loads'), enabled: canSell, staleTime: 60_000 });
   const [searchParams] = useSearchParams();
   const [routeId, setRouteId] = useState('');
   const [customerId, setCustomerId] = useState('');
+  const [visitRouteId, setVisitRouteId] = useState('');
+  const [visitCustomerId, setVisitCustomerId] = useState('');
 
   useEffect(() => {
-    const preselect = searchParams.get('customerId');
-    if (preselect) {
-      setCustomerId(preselect);
+    const preselectCust = searchParams.get('customerId');
+    if (preselectCust) {
+      setCustomerId(preselectCust);
+      setVisitCustomerId(preselectCust);
+    }
+    const preselectRoute = searchParams.get('routeId');
+    if (preselectRoute) {
+      setRouteId(preselectRoute);
+      setVisitRouteId(preselectRoute);
     }
   }, [searchParams]);
+
+  // Sincronizar automáticamente la selección de cliente y ruta entre Venta y Visita sin compra
+  useEffect(() => {
+    if (customerId && visitCustomerId !== customerId) {
+      setVisitCustomerId(customerId);
+    }
+  }, [customerId]);
+
+  useEffect(() => {
+    if (routeId && visitRouteId !== routeId) {
+      setVisitRouteId(routeId);
+    }
+  }, [routeId]);
   const [items, setItems] = useState<ItemForm[]>([{ presentationId: '', quantity: 1 }]);
   const [payments, setPayments] = useState<PaymentForm[]>([newPayment()]);
   const [receiptError, setReceiptError] = useState('');
@@ -686,8 +716,6 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
 
   // ── Visita sin compra ──────────────────────────────────────────────────────
   const [visitOpen, setVisitOpen] = useState(false);
-  const [visitRouteId, setVisitRouteId] = useState('');
-  const [visitCustomerId, setVisitCustomerId] = useState('');
   const [visitReason, setVisitReason] = useState('NO_ESTABA');
   const [visitNote, setVisitNote] = useState('');
   const [visitCapturing, setVisitCapturing] = useState(false);
@@ -715,6 +743,158 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
       }
     }
   }, [assignedRoute, routeId, visitRouteId]);
+
+  // ── Verificación de Itinerario Activo y Salto de Paradas ───────────────────
+  const effectiveRouteId = routeId || assignedRoute?.id || '';
+  const activeItinerary = useQuery({
+    queryKey: ['itineraries', 'active', effectiveRouteId],
+    queryFn: async () => {
+      const url = effectiveRouteId ? `/routes/${effectiveRouteId}/itineraries/active` : '/itineraries/my-active';
+      try {
+        const res = await apiRequest<DailyItineraryRunResponse>(url);
+        return res ?? null;
+      } catch {
+        return null;
+      }
+    },
+    enabled: canSell && Boolean(effectiveRouteId || isSeller),
+    staleTime: 15_000,
+  });
+
+  const currentItineraryStop = useMemo(() => {
+    if (!activeItinerary.data?.stops || !customerId) return null;
+    return activeItinerary.data.stops.find(s => s.customerId === customerId) || null;
+  }, [activeItinerary.data, customerId]);
+
+  const skippedPendingStops = useMemo(() => {
+    if (!currentItineraryStop || !activeItinerary.data?.stops) return [];
+    const currentOrder = currentItineraryStop.stopOrder || 0;
+    return activeItinerary.data.stops
+      .filter(s => (s.stopOrder || 0) < currentOrder && s.status === 'PENDING')
+      .sort((a, b) => (a.stopOrder || 0) - (b.stopOrder || 0));
+  }, [currentItineraryStop, activeItinerary.data]);
+
+  const [showSkippedModal, setShowSkippedModal] = useState(false);
+  const [skippedReason, setSkippedReason] = useState('CALLE_BLOQUEADA');
+  const [skippedNotes, setSkippedNotes] = useState('');
+  const [skippedPhoto, setSkippedPhoto] = useState<string | null>(null);
+  const [isSubmittingJustification, setIsSubmittingJustification] = useState(false);
+  const [skippedModalError, setSkippedModalError] = useState('');
+  const [pendingSaleLocation, setPendingSaleLocation] = useState<GeoLocationSnapshot | null>(null);
+
+  const handlePhotoSelectedForSkipped = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSkippedModalError('');
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 1024;
+        let width = img.width;
+        let height = img.height;
+        if (width > height && width > maxDim) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else if (height > maxDim) {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+          setSkippedPhoto(dataUrl);
+        }
+      };
+      if (typeof event.target?.result === 'string') {
+        img.src = event.target.result;
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleConfirmSkippedJustification = async () => {
+    if (!skippedReason.trim()) {
+      setSkippedModalError('Por favor seleccione el motivo del salto de paradas.');
+      return;
+    }
+    const isBlockage = skippedReason === 'CALLE_BLOQUEADA' || skippedReason === 'ACCESO_INTRANSITABLE';
+    if (isBlockage && !skippedPhoto) {
+      setSkippedModalError('Para reportar calle bloqueada o acceso intransitable es obligatorio adjuntar fotografía de evidencia.');
+      return;
+    }
+    if (skippedReason === 'OTRO' && !skippedNotes.trim()) {
+      setSkippedModalError('Por favor detalle el motivo en las observaciones.');
+      return;
+    }
+
+    setIsSubmittingJustification(true);
+    setSkippedModalError('');
+
+    try {
+      const reasonLabel =
+        skippedReason === 'NO_ESTABA' ? 'Cliente no estaba / Negocio cerrado' :
+        skippedReason === 'NO_NECESITABA' ? 'No necesitó agua / No compró hoy' :
+        skippedReason === 'CALLE_BLOQUEADA' ? 'Calle bloqueada / Obra o paso cerrado' :
+        skippedReason === 'ACCESO_INTRANSITABLE' ? 'Camión no cabe / Acceso intransitable' :
+        skippedReason === 'ENTREGA_URGENTE' ? 'Cliente actual solicitó entrega prioritaria / urgente' :
+        'Otro motivo operativo';
+
+      const fullNotes = `[SALTO A PARADA #${currentItineraryStop?.stopOrder || ''} ${currentItineraryStop?.customerName || ''}] ${reasonLabel}. ${skippedNotes.trim()}`.trim();
+
+      if (skippedReason === 'NO_ESTABA' || skippedReason === 'NO_NECESITABA') {
+        // Registrar formalmente como Visita sin compra para cada cliente omitido
+        await Promise.all(
+          skippedPendingStops.map(stop =>
+            apiRequest('/sales/no-purchase-visit', {
+              method: 'POST',
+              body: JSON.stringify({
+                routeId: effectiveRouteId,
+                customerId: stop.customerId,
+                visitReason: skippedReason,
+                visitNote: fullNotes,
+                location: pendingSaleLocation,
+              }),
+            })
+          )
+        );
+      } else {
+        // Reportar postergación o desvío para cada parada omitida
+        await Promise.all(
+          skippedPendingStops.map(stop =>
+            apiRequest(`/itineraries/stops/${stop.id}/postpone`, {
+              method: 'POST',
+              body: JSON.stringify({
+                reason: skippedReason,
+                notes: fullNotes,
+                latitude: pendingSaleLocation?.latitude ?? null,
+                longitude: pendingSaleLocation?.longitude ?? null,
+                accuracyMeters: pendingSaleLocation?.accuracyMeters ?? null,
+                evidencePhoto: isBlockage ? (skippedPhoto || null) : null,
+              }),
+            })
+          )
+        );
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ['itineraries'] });
+      await queryClient.invalidateQueries({ queryKey: ['sales'] });
+      await queryClient.invalidateQueries({ queryKey: ['route-loads'] });
+      setShowSkippedModal(false);
+
+      if (pendingSaleLocation) {
+        create.mutate(pendingSaleLocation);
+      }
+    } catch (err: any) {
+      setSkippedModalError(err.message || 'Error al guardar la justificación del salto de paradas.');
+    } finally {
+      setIsSubmittingJustification(false);
+    }
+  };
 
   // ── Alta rápida de cliente provisional en ruta ─────────────────────────────
   const [showProvisionalModal, setShowProvisionalModal] = useState(false);
@@ -853,8 +1033,68 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
     return target.includes('garraf') || target.includes('gar-') || target.includes('jug') || target.includes('20l') || target.includes('19l');
   }
 
-  const presentations = products.data?.filter(product => product.active && product.controlsInventory)
-    .flatMap(product => product.presentations.filter(item => item.active).map(item => ({ ...item, product }))) ?? [];
+  // Cargas activas en camión para filtrar las presentaciones que realmente van a bordo
+  const loadedStockMap = useMemo(() => {
+    if (!loads.data || loads.data.length === 0) return null;
+
+    // Buscar cargas activas para la ruta seleccionada o del vendedor en sesión
+    const routeLoads = loads.data.filter(l => 
+      ['STARTED', 'RECEIVED'].includes(l.status) &&
+      (!routeId || l.routeId === routeId)
+    );
+
+    const effectiveLoads = routeLoads.length > 0
+      ? routeLoads
+      : (isSeller
+          ? loads.data.filter(l => 
+              ['STARTED', 'RECEIVED'].includes(l.status) &&
+              (l.sellerReceivedByUsername === user?.username || l.createdByUsername === user?.username)
+            )
+          : []);
+
+    if (effectiveLoads.length === 0) {
+      return null;
+    }
+
+    const map = new Map<string, { quantity: number; unit: string }>();
+    for (const load of effectiveLoads) {
+      for (const item of load.items || []) {
+        const prev = map.get(item.productId) || { quantity: 0, unit: item.baseUnitCode || 'UN' };
+        map.set(item.productId, {
+          quantity: prev.quantity + Number(item.quantityBaseUnits || 0),
+          unit: item.baseUnitCode || 'UN',
+        });
+        if (item.productCode) {
+          map.set(item.productCode, {
+            quantity: prev.quantity + Number(item.quantityBaseUnits || 0),
+            unit: item.baseUnitCode || 'UN',
+          });
+        }
+      }
+    }
+    return map;
+  }, [loads.data, routeId, isSeller, user?.username]);
+
+  const presentations = useMemo(() => {
+    if (!products.data) return [];
+
+    const activeProducts = products.data.filter(product => {
+      if (!product.active || !product.controlsInventory) return false;
+      // REGLA B2B: Si hay carga activa en el camión, SOLO mostrar los productos cargados
+      if (loadedStockMap !== null) {
+        return loadedStockMap.has(product.id) || loadedStockMap.has(product.code);
+      }
+      return true;
+    });
+
+    return activeProducts.flatMap(product => 
+      product.presentations.filter(item => item.active).map(item => ({
+        ...item,
+        product,
+        stockInfo: loadedStockMap?.get(product.id) || loadedStockMap?.get(product.code),
+      }))
+    );
+  }, [products.data, loadedStockMap]);
 
   const create = useMutation({
     mutationFn: (location: GeoLocationSnapshot) => apiRequest<Sale>('/sales', {
@@ -930,13 +1170,32 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
     }
   };
 
-  const visitAvailableCustomers = customers.data?.filter(c => c.status === 'ACTIVE' && c.routeId === visitRouteId) ?? [];
+  const serverCustomers = customers.data?.filter(customer => customer.status === 'ACTIVE' && customer.routeId === routeId) ?? [];
+  const serverCustomerIds = new Set(serverCustomers.map(c => c.id));
+  const availableCustomers = [
+    ...serverCustomers,
+    ...localProvisionalCustomers.filter(c => c.routeId === routeId && !serverCustomerIds.has(c.id)),
+  ];
+
+  const visitServerCustomers = customers.data?.filter(customer => customer.status === 'ACTIVE' && customer.routeId === visitRouteId) ?? [];
+  const visitServerCustomerIds = new Set(visitServerCustomers.map(c => c.id));
+  const visitAvailableCustomers = [
+    ...visitServerCustomers,
+    ...localProvisionalCustomers.filter(c => c.routeId === visitRouteId && !visitServerCustomerIds.has(c.id)),
+  ];
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setLocationError('');
     setIsCapturingLocation(true);
     try {
       const location = await captureCurrentLocation('confirmar la venta');
+      // Si la parada actual deja atrás paradas planificadas pendientes, exigir constancia
+      if (skippedPendingStops.length > 0) {
+        setPendingSaleLocation(location);
+        setShowSkippedModal(true);
+        return;
+      }
       create.mutate(location);
     } catch (error) {
       setLocationError(error instanceof Error ? error.message : 'No fue posible obtener la ubicación.');
@@ -944,12 +1203,6 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
       setIsCapturingLocation(false);
     }
   };
-  const serverCustomers = customers.data?.filter(customer => customer.status === 'ACTIVE' && customer.routeId === routeId) ?? [];
-  const serverCustomerIds = new Set(serverCustomers.map(c => c.id));
-  const availableCustomers = [
-    ...serverCustomers,
-    ...localProvisionalCustomers.filter(c => c.routeId === routeId && !serverCustomerIds.has(c.id)),
-  ];
   const selectedCustomer = availableCustomers.find(customer => customer.id === customerId);
   const isCreditAuthorized = Boolean(
     selectedCustomer?.creditAllowed ||
@@ -1093,7 +1346,7 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
       <h2>Nueva venta</h2>
       <div className="form-grid compact-grid">
         {!isSeller && (
-          <label>Ruta<select required value={routeId} onChange={event => { setRouteId(event.target.value); setCustomerId(''); setPayments([newPayment()]); setShowSaleJugReturn(false); setShowSaleAbono(false); }}>
+          <label>Ruta<select required value={routeId} onChange={event => { setRouteId(event.target.value); setVisitRouteId(event.target.value); setCustomerId(''); setVisitCustomerId(''); setPayments([newPayment()]); setShowSaleJugReturn(false); setShowSaleAbono(false); }}>
             <option value="">Seleccionar</option>{routes.data?.filter(route => route.status === 'ACTIVE').map(route => <option key={route.id} value={route.id}>{route.code} · {route.name}</option>)}
           </select></label>
         )}
@@ -1107,6 +1360,7 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
             selectedId={customerId}
             onSelect={selected => {
               setCustomerId(selected);
+              setVisitCustomerId(selected);
               setPayments([newPayment()]);
               setShowSaleJugReturn(false);
               setShowSaleAbono(false);
@@ -1132,6 +1386,36 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
             >
               <span>➕</span> Cliente nuevo en ruta (Provisional)
             </button>
+          )}
+
+          {/* ── Banner de advertencia de parada fuera de orden ── */}
+          {skippedPendingStops.length > 0 && currentItineraryStop && (
+            <div
+              style={{
+                marginTop: '0.65rem',
+                backgroundColor: '#fffbeb',
+                border: '1.5px solid #f59e0b',
+                borderRadius: '8px',
+                padding: '0.75rem 0.9rem',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '0.6rem',
+              }}
+            >
+              <AlertTriangle size={18} style={{ color: '#d97706', flexShrink: 0, marginTop: '2px' }} />
+              <div style={{ fontSize: '0.84rem', color: '#92400e' }}>
+                <strong style={{ display: 'block', marginBottom: '2px' }}>
+                  ⚠️ Parada fuera del orden de ruta (Parada #{currentItineraryStop.stopOrder})
+                </strong>
+                <span>
+                  Se está saltando <strong>{skippedPendingStops.length}</strong> parada(s) previa(s) pendiente(s):{' '}
+                  <strong>{skippedPendingStops.map(s => `#${s.stopOrder} ${s.customerName}`).join(', ')}</strong>.
+                </span>
+                <p style={{ margin: '0.3rem 0 0 0', fontSize: '0.78rem', color: '#b45309' }}>
+                  Al presionar "Confirmar venta", el sistema le solicitará dejar constancia del motivo de la omisión y evidencia fotográfica.
+                </p>
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -1179,9 +1463,32 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
       )}
 
       <h3>Productos</h3>
+      {loadedStockMap && (
+        <div style={{
+          fontSize: '0.8rem',
+          color: '#0369a1',
+          background: '#e0f2fe',
+          padding: '0.45rem 0.75rem',
+          borderRadius: '6px',
+          marginBottom: '0.65rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          fontWeight: 500
+        }}>
+          <span>🚚</span>
+          <span>Mostrando únicamente los <strong>{presentations.length} productos</strong> cargados en el camión.</span>
+        </div>
+      )}
       <div className="data-list">{items.map((item, index) => <div className="sale-item-editor" key={index}>
         <label>Presentación<select required value={item.presentationId} onChange={event => setItems(current => current.map((row, position) => position === index ? { ...row, presentationId: event.target.value } : row))}>
-          <option value="">Seleccionar</option>{presentations.map(presentation => <option key={presentation.id} value={presentation.id}>{presentation.product.code} · {presentation.product.name} · {presentation.name}</option>)}
+          <option value="">Seleccionar</option>
+          {presentations.map(presentation => (
+            <option key={presentation.id} value={presentation.id}>
+              {presentation.product.code} · {presentation.product.name} · {presentation.name}
+              {presentation.stockInfo ? ` (En camión: ${presentation.stockInfo.quantity} ${presentation.stockInfo.unit})` : ''}
+            </option>
+          ))}
         </select></label>
         <label>Cantidad<input required type="number" min="0.0001" step="0.0001" value={item.quantity} onChange={event => setItems(current => current.map((row, position) => position === index ? { ...row, quantity: Number(event.target.value) } : row))} /></label>
         <ItemPriceBadge customerId={customerId} presentationId={item.presentationId} quantity={item.quantity} />
@@ -1239,7 +1546,7 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
           <form onSubmit={e => void submitVisit(e)} className="form-grid compact-grid" style={{ marginTop: '1rem' }}>
             {!isSeller && (
               <label>Ruta
-                <select required value={visitRouteId} onChange={e => { setVisitRouteId(e.target.value); setVisitCustomerId(''); setShowVisitAbono(false); setShowVisitJugReturn(false); }}>
+                <select required value={visitRouteId} onChange={e => { setVisitRouteId(e.target.value); setRouteId(e.target.value); setVisitCustomerId(''); setCustomerId(''); setShowVisitAbono(false); setShowVisitJugReturn(false); }}>
                   <option value="">Seleccionar</option>
                   {routes.data?.filter(r => r.status === 'ACTIVE').map(r => (
                     <option key={r.id} value={r.id}>{r.code} · {r.name}</option>
@@ -1258,6 +1565,7 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
                 placeholder="Buscar cliente visitado por nombre, dirección o código..."
                 onSelect={selected => {
                   setVisitCustomerId(selected);
+                  setCustomerId(selected);
                   setShowVisitAbono(false);
                   setShowVisitJugReturn(false);
                 }}
@@ -1889,6 +2197,333 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
             >
               ✅ OK — Ir al Panel Operativo
             </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ── Modal Flotante: Justificación y Constancia Obligatoria por Salto de Paradas ── */}
+    {showSkippedModal && (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="skipped-modal-title"
+        style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.72)',
+          backdropFilter: 'blur(3px)',
+          zIndex: 1200,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1rem',
+        }}
+      >
+        <div
+          className="panel"
+          style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '14px',
+            padding: '1.5rem',
+            maxWidth: '480px',
+            width: '100%',
+            boxShadow: '0 25px 35px -5px rgba(0, 0, 0, 0.2)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1rem',
+            maxHeight: '92vh',
+            overflowY: 'auto',
+          }}
+        >
+          {/* Cabecera */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+            <div
+              style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '50%',
+                backgroundColor: '#fef3c7',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <AlertTriangle size={24} style={{ color: '#d97706' }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <h3 id="skipped-modal-title" style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
+                Constancia de Salto de Ruta
+              </h3>
+              <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.82rem', color: '#64748b' }}>
+                Debe registrar el motivo por el cual omitió las ubicaciones anteriores antes de vender a este cliente.
+              </p>
+            </div>
+          </div>
+
+          {/* Resumen del salto */}
+          <div
+            style={{
+              backgroundColor: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '10px',
+              padding: '0.85rem',
+              fontSize: '0.84rem',
+            }}
+          >
+            <div style={{ marginBottom: '0.5rem', color: '#334155' }}>
+              Vendiendo a: <strong>{currentItineraryStop?.customerName} (Parada #{currentItineraryStop?.stopOrder})</strong>
+            </div>
+            <div style={{ fontWeight: 600, color: '#b45309', marginBottom: '0.4rem', fontSize: '0.8rem' }}>
+              📍 {skippedPendingStops.length} Parada(s) previa(s) omitida(s):
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', maxHeight: '110px', overflowY: 'auto' }}>
+              {skippedPendingStops.map(s => (
+                <div
+                  key={s.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0.35rem 0.6rem',
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '6px',
+                    fontSize: '0.8rem',
+                  }}
+                >
+                  <span style={{ fontWeight: 600, color: '#0f172a' }}>
+                    <span style={{ color: '#0284c7', marginRight: '0.35rem' }}>#{s.stopOrder}</span>
+                    {s.customerName}
+                  </span>
+                  <span style={{ fontSize: '0.72rem', color: '#d97706', fontWeight: 600 }}>Omitida</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Formulario de Justificación */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', fontSize: '0.85rem', fontWeight: 600, color: '#0f172a' }}>
+              Motivo del desvío / omisión <span style={{ color: '#dc2626' }}>*</span>
+              <select
+                value={skippedReason}
+                onChange={e => {
+                  setSkippedReason(e.target.value);
+                  setSkippedModalError('');
+                }}
+                style={{ borderRadius: '8px', border: '1px solid #cbd5e1', padding: '0.6rem', fontSize: '0.875rem' }}
+              >
+                <optgroup label="Visitas sin compra (Cliente no compra hoy)">
+                  <option value="NO_ESTABA">El cliente no estaba / Negocio cerrado</option>
+                  <option value="NO_NECESITABA">El cliente no quiso agua / No necesitaba hoy</option>
+                </optgroup>
+                <optgroup label="Bloqueos en la vía (Requieren fotografía obligatoria)">
+                  <option value="CALLE_BLOQUEADA">Calle bloqueada / Obra o paso cerrado</option>
+                  <option value="ACCESO_INTRANSITABLE">Camión no cabe / Acceso intransitable</option>
+                </optgroup>
+                <optgroup label="Desvíos temporales de ruta">
+                  <option value="ENTREGA_URGENTE">Cliente actual solicitó entrega urgente (Las visitaré al regreso)</option>
+                  <option value="OTRO">Otro motivo operativo</option>
+                </optgroup>
+              </select>
+            </label>
+
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', fontSize: '0.85rem', fontWeight: 600, color: '#0f172a' }}>
+              Observaciones / Detalle
+              <textarea
+                rows={2}
+                value={skippedNotes}
+                onChange={e => setSkippedNotes(e.target.value)}
+                placeholder={
+                  skippedReason === 'NO_ESTABA' ? 'Ej. Portón cerrado con candado...' :
+                  skippedReason === 'NO_NECESITABA' ? 'Ej. Informa que aún tiene producto lleno de la semana pasada...' :
+                  'Ej. Obra municipal en la calle, se continúa con la siguiente parada...'
+                }
+                style={{
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  padding: '0.55rem',
+                  fontSize: '0.85rem',
+                  resize: 'vertical',
+                }}
+              />
+            </label>
+
+            {/* Fotografía de evidencia — Únicamente para causas de Bloqueo Vial */}
+            {(skippedReason === 'CALLE_BLOQUEADA' || skippedReason === 'ACCESO_INTRANSITABLE') ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>
+                    Fotografía de evidencia obligatoria para bloqueo <span style={{ color: '#dc2626' }}>*</span>
+                  </span>
+                  {skippedPhoto && (
+                    <span style={{ fontSize: '0.75rem', color: '#16a34a', fontWeight: 600 }}>✅ Foto lista</span>
+                  )}
+                </div>
+
+                {skippedPhoto ? (
+                  <div style={{ position: 'relative', borderRadius: '8px', overflow: 'hidden', border: '1px solid #cbd5e1', backgroundColor: '#0f172a' }}>
+                    <img
+                      src={skippedPhoto}
+                      alt="Evidencia fotográfica"
+                      style={{ width: '100%', maxHeight: '160px', objectFit: 'contain', display: 'block' }}
+                    />
+                    <button
+                      type="button"
+                      style={{
+                        position: 'absolute',
+                        top: '6px',
+                        right: '6px',
+                        padding: '0.25rem 0.6rem',
+                        backgroundColor: 'rgba(255,255,255,0.92)',
+                        color: '#b91c1c',
+                        border: '1px solid #fca5a5',
+                        borderRadius: '6px',
+                        fontSize: '0.78rem',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.3rem',
+                        cursor: 'pointer',
+                      }}
+                      onClick={() => setSkippedPhoto(null)}
+                    >
+                      <Trash2 size={13} />
+                      Quitar foto
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
+                    {/* Botón 1: Abrir cámara directamente */}
+                    <label
+                      style={{
+                        border: '1.5px solid #0284c7',
+                        borderRadius: '8px',
+                        padding: '0.85rem 0.5rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.35rem',
+                        cursor: 'pointer',
+                        backgroundColor: '#f0f9ff',
+                        color: '#0369a1',
+                        fontWeight: 700,
+                        fontSize: '0.82rem',
+                        textAlign: 'center',
+                        boxShadow: '0 1px 2px rgba(2,132,199,0.08)',
+                      }}
+                    >
+                      <Camera size={22} style={{ color: '#0284c7' }} />
+                      <span>Tomar foto con cámara</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        style={{ display: 'none' }}
+                        onChange={handlePhotoSelectedForSkipped}
+                      />
+                    </label>
+
+                    {/* Botón 2: Subir imagen desde la galería */}
+                    <label
+                      style={{
+                        border: '1.5px solid #64748b',
+                        borderRadius: '8px',
+                        padding: '0.85rem 0.5rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.35rem',
+                        cursor: 'pointer',
+                        backgroundColor: '#f8fafc',
+                        color: '#334155',
+                        fontWeight: 700,
+                        fontSize: '0.82rem',
+                        textAlign: 'center',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                      }}
+                    >
+                      <ImageIcon size={22} style={{ color: '#475569' }} />
+                      <span>Subir desde galería</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        onChange={handlePhotoSelectedForSkipped}
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div
+                style={{
+                  backgroundColor: '#f0fdf4',
+                  border: '1px solid #86efac',
+                  borderRadius: '8px',
+                  padding: '0.65rem 0.85rem',
+                  fontSize: '0.82rem',
+                  color: '#166534',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                }}
+              >
+                <CheckCircle2 size={16} style={{ color: '#16a34a', flexShrink: 0 }} />
+                <span>
+                  {skippedReason === 'NO_ESTABA' || skippedReason === 'NO_NECESITABA'
+                    ? 'No requiere foto de bloqueo. Las paradas se registrarán formalmente como "Visita sin compra" con sus coordenadas GPS auditadas.'
+                    : 'No requiere foto de bloqueo. Las paradas se registrarán como desvío temporal para ser atendidas al regreso.'}
+                </span>
+              </div>
+            )}
+
+            <p style={{ margin: 0, fontSize: '0.76rem', color: '#64748b', lineHeight: 1.35 }}>
+              {skippedReason === 'NO_ESTABA' || skippedReason === 'NO_NECESITABA'
+                ? 'ℹ️ El sistema registrará formalmente la visita sin compra para mantener el récord operativo de la ruta sin alterar el inventario.'
+                : 'ℹ️ Las paradas omitidas quedarán registradas formalmente como postergadas con este motivo. Si más tarde regresa a visitarlas, aún podrá atenderlas desde el itinerario.'}
+            </p>
+
+            {skippedModalError && (
+              <div className="alert error" style={{ fontSize: '0.82rem', margin: 0 }}>
+                {skippedModalError}
+              </div>
+            )}
+
+            {/* Acciones del Modal */}
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+              <button
+                type="button"
+                className="secondary"
+                disabled={isSubmittingJustification}
+                onClick={() => {
+                  setShowSkippedModal(false);
+                  setPendingSaleLocation(null);
+                  setSkippedModalError('');
+                }}
+              >
+                Volver a la venta
+              </button>
+              <button
+                type="button"
+                className="primary"
+                disabled={isSubmittingJustification}
+                style={{
+                  backgroundColor: '#0284c7',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                }}
+                onClick={handleConfirmSkippedJustification}
+              >
+                {isSubmittingJustification ? 'Guardando constancia…' : '✅ Guardar Constancia y Continuar'}
+              </button>
+            </div>
           </div>
         </div>
       </div>

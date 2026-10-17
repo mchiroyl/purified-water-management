@@ -42,8 +42,19 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiErrorResponse> integrity(DataIntegrityViolationException exception, HttpServletRequest request) {
+        String causeMsg = exception.getMostSpecificCause().getMessage();
         log.warn("Violación de integridad. correlationId={}, cause={}",
-                correlation(request), exception.getMostSpecificCause().getMessage(), exception);
+                correlation(request), causeMsg, exception);
+        if (causeMsg != null && causeMsg.contains("uq_route_load_open_initial_route")) {
+            return response(HttpStatus.CONFLICT, "DATA_CONFLICT",
+                    "Esta ruta ya cuenta con una carga inicial activa y no liquidada (en preparación, confirmada o en recorrido). No se pueden registrar dos cargas iniciales simultáneas para la misma ruta sin antes liquidar o finalizar la anterior.",
+                    request, null);
+        }
+        if (causeMsg != null && causeMsg.contains("daily_itinerary_run_route_load_id_key")) {
+            return response(HttpStatus.CONFLICT, "DATA_CONFLICT",
+                    "Esta carga ya tiene su lista de clientes y recorrido enviado al vendedor previamente.",
+                    request, null);
+        }
         return response(HttpStatus.CONFLICT, "DATA_CONFLICT", "La operación entra en conflicto con datos existentes.", request, null);
     }
 

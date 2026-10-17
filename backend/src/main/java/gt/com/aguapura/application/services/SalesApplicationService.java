@@ -10,6 +10,7 @@ import gt.com.aguapura.domain.exceptions.BusinessException;
 import gt.com.aguapura.domain.exceptions.ErrorCategory;
 import gt.com.aguapura.domain.payments.PaymentPolicy;
 import gt.com.aguapura.domain.sales.SaleLineCalculator;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,15 +31,25 @@ public class SalesApplicationService {
     private final InventoryApplicationService inventory;
     private final AuditApplicationService audit;
     private final RouteTrackingPort tracking;
+    private final gt.com.aguapura.application.ports.ItineraryPort itinerary;
 
+    @Autowired
     public SalesApplicationService(SalesPort persistence, PricingApplicationService pricing,
                                    InventoryApplicationService inventory, AuditApplicationService audit,
-                                   RouteTrackingPort tracking) {
+                                   RouteTrackingPort tracking,
+                                   gt.com.aguapura.application.ports.ItineraryPort itinerary) {
         this.persistence = persistence;
         this.pricing = pricing;
         this.inventory = inventory;
         this.audit = audit;
         this.tracking = tracking;
+        this.itinerary = itinerary;
+    }
+
+    public SalesApplicationService(SalesPort persistence, PricingApplicationService pricing,
+                                   InventoryApplicationService inventory, AuditApplicationService audit,
+                                   RouteTrackingPort tracking) {
+        this(persistence, pricing, inventory, audit, tracking, null);
     }
 
     @Transactional
@@ -86,9 +97,44 @@ public class SalesApplicationService {
                 context.inventoryLocationId(), context.sellerId(), request.customerId(), subtotal, subtotal,
                 actorId, deviceId, items, payments));
         var location = request.location();
-        tracking.recordSale(context.routeLoadId(), request.routeId(), saleId, new RouteTrackingPort.GeoLocation(
-                location.latitude(), location.longitude(), location.accuracyMeters(), location.capturedAt()),
-                actorId, deviceId);
+        if (location != null) {
+            tracking.recordSale(context.routeLoadId(), request.routeId(), saleId, new RouteTrackingPort.GeoLocation(
+                    location.latitude(), location.longitude(), location.accuracyMeters(), location.capturedAt()),
+                    actorId, deviceId);
+        }
+
+        if (itinerary != null) {
+            itinerary.findActiveItineraryByRouteId(request.routeId()).ifPresent(activeRun -> {
+                BigDecimal obsLat = location != null ? location.latitude() : null;
+                BigDecimal obsLon = location != null ? location.longitude() : null;
+                BigDecimal obsAcc = location != null ? location.accuracyMeters() : null;
+                BigDecimal distDev = null;
+                boolean mismatch = false;
+
+                if (location != null) {
+                    var targetStop = activeRun.stops().stream()
+                            .filter(s -> s.customerId().equals(request.customerId())).findFirst();
+                    if (targetStop.isPresent()) {
+                        var target = targetStop.get();
+                        if (target.targetLatitude() != null && target.targetLongitude() != null &&
+                                target.targetLatitude().compareTo(BigDecimal.ZERO) != 0) {
+                            double dMeters = haversineMeters(
+                                    location.latitude().doubleValue(), location.longitude().doubleValue(),
+                                    target.targetLatitude().doubleValue(), target.targetLongitude().doubleValue());
+                            distDev = BigDecimal.valueOf(dMeters).setScale(2, RoundingMode.HALF_UP);
+                            if (dMeters > 500.0) {
+                                mismatch = true;
+                                audit.record(actorId, deviceId, "LOCATION_MISMATCH_SUSPICIOUS", "SALE",
+                                        saleId, Map.of(), Map.of("deviationMeters", distDev, "customerId", request.customerId()));
+                            }
+                        }
+                    }
+                }
+
+                itinerary.recordStopSale(activeRun.id(), request.customerId(), saleId,
+                        obsLat, obsLon, obsAcc, distDev, mismatch);
+            });
+        }
         items.stream().sorted((left, right) -> left.productId().compareTo(right.productId())).forEach(item ->
                 inventory.consume(context.inventoryLocationId(), item.productId(), item.quantityBaseUnits(),
                         "SALE_OUT", "Venta " + sale.documentNumber(), "SALE", saleId, actorId, deviceId));
@@ -130,12 +176,24 @@ public class SalesApplicationService {
                 ? reasonLabel + ": " + request.visitNote().trim()
                 : reasonLabel;
 
-        // 5. Record the GPS point
+        // 5. Record the GPS point if available
         var loc = request.location();
-        tracking.recordNoPurchaseVisit(routeLoadId, request.routeId(), request.customerId(),
-                fullNote, new RouteTrackingPort.GeoLocation(
-                        loc.latitude(), loc.longitude(), loc.accuracyMeters(), loc.capturedAt()),
-                actorId, deviceId);
+        if (loc != null) {
+            tracking.recordNoPurchaseVisit(routeLoadId, request.routeId(), request.customerId(),
+                    fullNote, new RouteTrackingPort.GeoLocation(
+                            loc.latitude(), loc.longitude(), loc.accuracyMeters(), loc.capturedAt()),
+                    actorId, deviceId);
+        }
+
+        if (itinerary != null) {
+            itinerary.findActiveItineraryByRouteId(request.routeId()).ifPresent(activeRun -> {
+                BigDecimal obsLat = loc != null ? loc.latitude() : null;
+                BigDecimal obsLon = loc != null ? loc.longitude() : null;
+                BigDecimal obsAcc = loc != null ? loc.accuracyMeters() : null;
+                itinerary.recordStopNoPurchaseVisit(activeRun.id(), request.customerId(),
+                        request.visitReason(), request.visitNote(), obsLat, obsLon, obsAcc);
+            });
+        }
 
         // 6. Audit trail
         audit.record(actorId, deviceId, "NO_PURCHASE_VISIT", "ROUTE_TRACKING", routeLoadId,
@@ -148,7 +206,7 @@ public class SalesApplicationService {
                 request.routeId(), null,
                 request.customerId(), customer.customerName(),
                 request.visitReason(), fullNote,
-                loc.capturedAt(), java.time.Instant.now());
+                loc != null ? loc.capturedAt() : java.time.Instant.now(), java.time.Instant.now());
     }
 
     @Transactional(readOnly = true)
@@ -217,5 +275,16 @@ public class SalesApplicationService {
 
     private BusinessException forbidden(String code, String message) {
         return new BusinessException(code, message, ErrorCategory.FORBIDDEN);
+    }
+
+    private static double haversineMeters(double lat1, double lon1, double lat2, double lon2) {
+        final double R = 6371000.0;
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
     }
 }

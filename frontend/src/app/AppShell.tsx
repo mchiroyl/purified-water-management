@@ -29,6 +29,7 @@ import {
   LogOut,
   Menu,
   X,
+  ListOrdered,
 } from 'lucide-react';
 import { useSession } from '../features/auth/SessionContext';
 import { ConnectionIndicator } from '../features/connectivity/ConnectionIndicator';
@@ -119,6 +120,7 @@ export function AppShell() {
       items: [
         { to: '/inventory', label: 'Inventario', icon: <Warehouse size={17} strokeWidth={2} />, visible: canSeeInventory },
         { to: '/loads', label: 'Cargas', icon: <Inbox size={17} strokeWidth={2} />, visible: canSeeLoads },
+        { to: '/itinerary', label: 'Mi Recorrido', icon: <ListOrdered size={17} strokeWidth={2} />, visible: isSeller || isAdmin || Boolean(user?.roles.includes('SUPERVISOR')) },
         { to: '/sales', label: 'Ventas', icon: <ShoppingCart size={17} strokeWidth={2} />, visible: canSeeSales },
         { to: '/transfers', label: 'Transferencias', icon: <ArrowRightLeft size={17} strokeWidth={2} />, visible: canVerifyTransfers },
         { to: '/credit', label: 'Créditos y abonos', icon: <CreditCard size={17} strokeWidth={2} />, visible: canSeeCredit },
@@ -246,13 +248,13 @@ export function AppShell() {
         </NavLink>
         {isSeller ? (
           <>
+            <NavLink to="/itinerary">
+              <ListOrdered size={18} />
+              <span>Clientes</span>
+            </NavLink>
             <NavLink to="/loads">
               <Package size={18} />
               <span>Mi Carga</span>
-            </NavLink>
-            <NavLink to="/sales/list">
-              <Receipt size={18} />
-              <span>Mis Ventas</span>
             </NavLink>
           </>
         ) : (

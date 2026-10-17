@@ -17,11 +17,13 @@ type Dashboard = {
 };
 
 type RouteLoadItem = { id: string; productId: string; productCode: string; productName: string; baseUnitCode: string; quantityBaseUnits: number };
+type Correction = { id: string; productId: string; productCode: string; productName: string; quantityDelta: number; reason: string };
 type RouteLoad = {
   id: string; loadNumber: string; routeId: string; routeCode: string; routeName: string;
   sourceLocationId: string; sourceLocationName: string; targetLocationId: string; targetLocationName: string;
   plannedDate: string; loadType: 'INITIAL' | 'REPLENISHMENT'; status: string;
   sellerReceivedByUsername?: string; createdByUsername: string; items: RouteLoadItem[];
+  corrections?: Correction[];
 };
 
 type Balance = { productId: string; productCode: string; productName: string; baseUnitCode: string; quantityBaseUnits: number };
@@ -35,7 +37,7 @@ type Payment = { id: string; method: string; amount: number; status: string };
 type Sale = {
   id: string; documentNumber: string; routeId?: string; routeCode: string; routeName: string;
   sellerName: string; customerName: string; status?: string; total: number; createdAt: string;
-  items: SaleItem[]; payments?: Payment[];
+  items: SaleItem[]; payments?: Payment[]; createdByUsername?: string; routeLoadId?: string;
 };
 
 type ProductPresentation = { id: string; code: string; name: string; active: boolean };

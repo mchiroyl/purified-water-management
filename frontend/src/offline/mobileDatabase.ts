@@ -590,11 +590,48 @@ export async function replaceRoutePackage(db: MobileDatabase, routePackage: Rout
 
 const SESSION_OWNER_KEY = 'session-owner';
 
-export async function clearMobileData(db?: MobileDatabase): Promise<void> {
+export async function clearMobileData(db?: MobileDatabase, preservePendingOutbox = true): Promise<void> {
   const database = db ?? await openMobileDatabase();
   const names = Array.from(database.objectStoreNames) as MobileStoreName[];
+
+  if (!preservePendingOutbox) {
+    const transaction = database.transaction(names, 'readwrite');
+    for (const name of names) await transaction.objectStore(name).clear();
+    await transaction.done;
+    return;
+  }
+
+  const pendingOperations = await database.getAll('outboxOperations');
+  const unsyncedIds = new Set(
+    pendingOperations.filter(op => op.status !== 'SYNCED').map(op => op.aggregateLocalId)
+  );
+
   const transaction = database.transaction(names, 'readwrite');
-  for (const name of names) await transaction.objectStore(name).clear();
+  for (const name of names) {
+    if (name === 'outboxOperations') {
+      const allOps = await transaction.objectStore('outboxOperations').getAll();
+      for (const op of allOps) {
+        if (op.status === 'SYNCED') await transaction.objectStore('outboxOperations').delete(op.clientOperationId);
+      }
+    } else if (name === 'localSales') {
+      const allSales = await transaction.objectStore('localSales').getAll();
+      for (const s of allSales) {
+        if (!unsyncedIds.has(s.localSaleId)) await transaction.objectStore('localSales').delete(s.localSaleId);
+      }
+    } else if (name === 'localPayments') {
+      const allPay = await transaction.objectStore('localPayments').getAll();
+      for (const p of allPay) {
+        if (!unsyncedIds.has(p.localSaleId)) await transaction.objectStore('localPayments').delete(p.localPaymentId);
+      }
+    } else if (name === 'provisionalCustomers') {
+      const allProv = await transaction.objectStore('provisionalCustomers').getAll();
+      for (const pr of allProv) {
+        if (!unsyncedIds.has(pr.localCustomerId)) await transaction.objectStore('provisionalCustomers').delete(pr.localCustomerId);
+      }
+    } else {
+      await transaction.objectStore(name).clear();
+    }
+  }
   await transaction.done;
 }
 

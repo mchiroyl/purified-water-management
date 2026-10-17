@@ -118,6 +118,11 @@ public class PricingApplicationService {
         if (!current.expiresAt().isAfter(Instant.now())) {
             return discount(persistence.decideDiscount(id, "EXPIRED", actorId, Instant.now()));
         }
+        if ("APPROVED".equals(decision)) {
+            persistence.createSpecialPrice(new PricingPort.NewSpecialPrice(
+                    current.customerId(), current.presentationId(), current.requestedPrice(),
+                    Instant.now(), current.expiresAt(), actorId));
+        }
         return discount(persistence.decideDiscount(id, decision, actorId, Instant.now()));
     }
 

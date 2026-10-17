@@ -1,5 +1,6 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Truck,
   Package,
@@ -14,9 +15,24 @@ import {
   CheckCircle2,
   FileText,
   BadgeAlert,
+  Loader2,
+  MapPin,
+  ListOrdered,
+  Droplets,
+  ShieldCheck,
+  Check,
+  X,
+  RotateCcw,
+  Clock,
+  AlertTriangle,
+  ChevronRight,
 } from 'lucide-react';
 import { PageHeader } from '../PageHeader';
 import type { SessionUser } from '../../features/auth/types';
+import type { DailyItineraryRunResponse } from '../../features/routes/types';
+import type { JugRouteSummaryResponse } from '../../features/jugs/types';
+import { captureCurrentLocation } from '../../services/geolocation';
+import { apiRequest } from '../../services/apiClient';
 
 type DashboardAlert = { code: string; severity: string; title: string; count: number };
 type Dashboard = {
@@ -28,6 +44,7 @@ type Dashboard = {
   pendingReturns: number; pendingAuthorizations: number; openIncidents: number; alerts: DashboardAlert[];
 };
 
+type Correction = { id: string; productId: string; productCode: string; productName: string; quantityDelta: number; reason: string };
 type RouteLoadItem = { id: string; productId: string; productCode: string; productName: string; baseUnitCode: string; quantityBaseUnits: number };
 type RouteLoad = {
   id: string; loadNumber: string; routeId: string; routeCode: string; routeName: string;
@@ -36,6 +53,7 @@ type RouteLoad = {
   sellerReceivedByUsername?: string; sellerReceivedAt?: string;
   startedByUsername?: string; startedAt?: string;
   createdByUsername: string; createdAt?: string; items: RouteLoadItem[];
+  corrections?: Correction[];
 };
 
 type Balance = { productId: string; productCode: string; productName: string; baseUnitCode: string; quantityBaseUnits: number };
@@ -58,8 +76,8 @@ type SaleItem = {
 type Payment = { id: string; method: string; amount: number; status: string };
 type Sale = {
   id: string; documentNumber: string; routeId?: string; routeCode: string; routeName: string;
-  sellerName: string; customerName: string; status?: string; total: number; createdAt: string;
-  items: SaleItem[]; payments?: Payment[];
+  sellerName: string; customerId?: string; customerName: string; status?: string; total: number; createdAt: string;
+  items: SaleItem[]; payments?: Payment[]; createdByUsername?: string; routeLoadId?: string;
 };
 
 function money(value: number, currency = 'GTQ'): string {
@@ -73,6 +91,15 @@ function normalizeText(text?: string | null): string {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .trim();
+}
+
+function cleanDisplayText(text?: string | null): string {
+  if (!text) return '';
+  return text
+    .replace(/Abarroter\?\?a/gi, 'Abarrotería')
+    .replace(/Bendici\?\?n/gi, 'Bendición')
+    .replace(/\?\?/g, 'í')
+    .replace(/\uFFFD/g, 'í');
 }
 
 function getSaleDate(isoStr?: string | null): string {
@@ -144,6 +171,50 @@ export function SellerDashboard({
   const isPendingReceipt = sellerLoad?.status === 'WAREHOUSE_CONFIRMED' || sellerLoad?.status === 'PREPARED';
   const isActiveLoad = sellerLoad && (sellerLoad.status === 'STARTED' || sellerLoad.status === 'RECEIVED');
 
+  const [isReceiving, setIsReceiving] = useState(false);
+  const [receiveProgress, setReceiveProgress] = useState('');
+  const [receiveError, setReceiveError] = useState('');
+  const [receiptSuccessModal, setReceiptSuccessModal] = useState<{ loadNumber: string; itemsCount: number } | null>(null);
+
+  const handleConfirmReceipt = async () => {
+    if (!sellerLoad) return;
+    setIsReceiving(true);
+    setReceiveError('');
+    setReceiveProgress('Obteniendo coordenadas GPS…');
+    try {
+      const location = await captureCurrentLocation('confirmar recepción de la carga', {
+        onProgress: (p) => {
+          if (p.accuracyMeters !== null) {
+            setReceiveProgress(p.accuracyMeters <= 10 ? '¡Precisión alcanzada!' : `GPS: ±${Math.round(p.accuracyMeters)}m [${p.elapsedSeconds}s]`);
+          } else {
+            setReceiveProgress(`Buscando GPS (${p.elapsedSeconds}s)…`);
+          }
+        },
+      });
+      setReceiveProgress('Registrando recepción en camión…');
+      await apiRequest(`/loads/${sellerLoad.id}/receipt`, {
+        method: 'POST',
+        body: JSON.stringify({ location }),
+      });
+      if (sellerLoad.loadType !== 'REPLENISHMENT') {
+        try {
+          await apiRequest(`/loads/${sellerLoad.id}/start`, { method: 'POST' });
+        } catch {
+          // ignore if already started
+        }
+      }
+      setReceiptSuccessModal({
+        loadNumber: String(sellerLoad.loadNumber),
+        itemsCount: sellerLoad.items?.length || 0,
+      });
+    } catch (err) {
+      setReceiveError(err instanceof Error ? err.message : 'Error al confirmar la recepción');
+    } finally {
+      setIsReceiving(false);
+      setReceiveProgress('');
+    }
+  };
+
   let loadStartTime: string | undefined = undefined;
   if (sellerLoad) {
     loadStartTime = sellerLoad.startedAt || sellerLoad.sellerReceivedAt || sellerLoad.createdAt;
@@ -164,8 +235,11 @@ export function SellerDashboard({
         return false;
       }
 
-      // Coincidencia flexible de vendedor por usuario, nombre para mostrar o tokens de nombre (ej. 'amartinez' con 'Amilcar Israel Martinez')
-      if (s.sellerName && (!sellerLoad?.routeId && !sellerLoad?.routeCode)) {
+      // Coincidencia de vendedor (por usuario o nombre de vendedor)
+      if (s.createdByUsername && s.createdByUsername !== user.username) {
+        return false;
+      }
+      if (s.sellerName && !s.createdByUsername) {
         const sNorm = normalizeText(s.sellerName);
         const uNorm = normalizeText(user.username);
         const dNorm = normalizeText(user.displayName);
@@ -180,16 +254,29 @@ export function SellerDashboard({
         }
       }
 
-      // Validación por fecha de jornada (comparando YYYY-MM-DD)
+      // Validación por fecha de jornada (comparando YYYY-MM-DD):
       const saleDate = getSaleDate(s.createdAt);
-      const targetDate = (sellerLoad?.plannedDate || todayGuatemala).slice(0, 10);
-      if (saleDate && targetDate && saleDate !== targetDate) {
+      const isToday = saleDate === todayGuatemala;
+      const isLoadDate = sellerLoad?.plannedDate ? saleDate === sellerLoad.plannedDate.slice(0, 10) : false;
+      const isDirectlyLinked = Boolean(s.routeLoadId && sellerLoad?.id && s.routeLoadId === sellerLoad.id);
+
+      // Si la venta no es de hoy, ni de la fecha de la carga, ni está vinculada directamente, no pertenece a esta jornada
+      if (!isToday && !isLoadDate && !isDirectlyLinked) {
         return false;
+      }
+
+      // Protección adicional para descartar ventas históricas de meses pasados
+      if (loadStartTime) {
+        const loadStartMs = new Date(loadStartTime).getTime();
+        const saleMs = new Date(s.createdAt).getTime();
+        if (saleMs < loadStartMs - 12 * 3600 * 1000) {
+          return false;
+        }
       }
 
       return true;
     });
-  }, [sales, sellerLoad, user, todayGuatemala]);
+  }, [sales, sellerLoad, user, todayGuatemala, loadStartTime]);
 
   const routeReplenishments = loads.filter(l => 
     sellerLoad &&
@@ -207,8 +294,7 @@ export function SellerDashboard({
     // Si tenemos liquidación calculada oficial del backend para esta carga, usamos sus datos exactos
     const settlementItem = currentSettlement?.items?.find((it: any) => 
       (it.productId && item.productId && it.productId === item.productId) ||
-      (it.productName && item.productName && normalizeText(it.productName) === normalizeText(item.productName)) ||
-      (it.productCode && item.productCode && normalizeText(it.productCode) === normalizeText(item.productCode))
+      (it.productCode && item.productCode && it.productCode === item.productCode)
     );
 
     if (settlementItem) {
@@ -228,36 +314,32 @@ export function SellerDashboard({
     const replenishmentUnits = routeReplenishments.reduce((acc, rep) => {
       const match = rep.items?.find(it => 
         (it.productId && item.productId && it.productId === item.productId) ||
-        (it.productName && item.productName && normalizeText(it.productName) === normalizeText(item.productName)) ||
-        (it.productCode && item.productCode && normalizeText(it.productCode) === normalizeText(item.productCode))
+        (it.productCode && item.productCode && it.productCode === item.productCode)
       );
       return acc + Number(match?.quantityBaseUnits || 0);
     }, 0);
 
-    const totalItemLoaded = Number(item.quantityBaseUnits || 0) + replenishmentUnits;
+    const correctionUnits = (sellerLoad?.corrections ?? []).reduce((acc, corr) => {
+      const isMatch = (corr.productId && item.productId && corr.productId === item.productId) ||
+                      (corr.productCode && item.productCode && corr.productCode === item.productCode);
+      return isMatch ? acc + Number(corr.quantityDelta || 0) : acc;
+    }, 0);
 
+    const totalItemLoaded = Number(item.quantityBaseUnits || 0) + replenishmentUnits + correctionUnits;
+
+    // Coincidencia precisa por productId o productCode para no confundir productos distintos
     const rawSoldQty = sellerSales.reduce((acc, s) => {
       const matches = s.items?.filter(it => {
-        if (it.productId && item.productId && it.productId === item.productId) {
-          return true;
+        if (it.productId && item.productId) {
+          return it.productId === item.productId;
         }
-        const itemNorm = normalizeText(item.productName);
-        const codeNorm = normalizeText(item.productCode);
-        const itProdNorm = normalizeText(it.productName);
-        const itCodeNorm = normalizeText(it.productCode);
-        const itPresNorm = normalizeText(it.presentationName);
-
-        if (itemNorm && itProdNorm && (itemNorm === itProdNorm || itProdNorm.includes(itemNorm) || itemNorm.includes(itProdNorm))) {
-          return true;
+        if (it.productCode && item.productCode) {
+          return it.productCode === item.productCode;
         }
-        if (codeNorm && itCodeNorm && codeNorm === itCodeNorm) {
-          return true;
-        }
-        if (itemNorm && itPresNorm && itPresNorm.includes(itemNorm)) {
-          return true;
-        }
-        if (codeNorm && itPresNorm && itPresNorm.includes(codeNorm)) {
-          return true;
+        if (!it.productId && !it.productCode) {
+          const itemNorm = normalizeText(item.productName);
+          const itProdNorm = normalizeText(it.productName);
+          return Boolean(itemNorm && itProdNorm && itemNorm === itProdNorm);
         }
         return false;
       });
@@ -274,7 +356,7 @@ export function SellerDashboard({
       };
     }
 
-    const soldQty = Math.min(totalItemLoaded, rawSoldQty);
+    const soldQty = Number(rawSoldQty || 0);
     const remainingOnTruck = Math.max(0, totalItemLoaded - soldQty);
 
     return {
@@ -347,435 +429,838 @@ export function SellerDashboard({
       ? Number(currentSettlement.expectedCash)
       : Math.max(0, effectiveCash + creditCollectionsCash);
 
+  const effectiveRouteId = sellerLoad?.routeId;
+
+  const activeItinerary = useQuery({
+    queryKey: ['itineraries', 'active', effectiveRouteId],
+    queryFn: async () => {
+      const url = effectiveRouteId ? `/routes/${effectiveRouteId}/itineraries/active` : '/itineraries/my-active';
+      try {
+        const res = await apiRequest<DailyItineraryRunResponse>(url);
+        return res ?? null;
+      } catch {
+        return null;
+      }
+    },
+    enabled: Boolean(effectiveRouteId || user.roles?.includes('VENDEDOR')),
+    staleTime: 15_000,
+  });
+
+  const routeJugsQuery = useQuery({
+    queryKey: ['jugs', 'route-summary', effectiveRouteId],
+    queryFn: async () => {
+      if (!effectiveRouteId) return null;
+      try {
+        return await apiRequest<JugRouteSummaryResponse>(`/jugs/routes/${effectiveRouteId}/summary`);
+      } catch {
+        return null;
+      }
+    },
+    enabled: Boolean(effectiveRouteId),
+    staleTime: 30_000,
+  });
+
+  const routeTemplatesQuery = useQuery({
+    queryKey: ['routes', effectiveRouteId, 'templates'],
+    queryFn: async () => {
+      if (!effectiveRouteId) return [];
+      try {
+        return await apiRequest<any[]>(`/routes/${effectiveRouteId}/templates`);
+      } catch {
+        return [];
+      }
+    },
+    enabled: Boolean(effectiveRouteId),
+    staleTime: 60_000,
+  });
+
+  const routeCustomersQuery = useQuery({
+    queryKey: ['customers', 'route', effectiveRouteId, sellerLoad?.routeCode],
+    queryFn: async () => {
+      try {
+        const all = await apiRequest<any[]>('/customers');
+        return all.filter((c: any) => 
+          (effectiveRouteId && c.routeId === effectiveRouteId) || 
+          (sellerLoad?.routeCode && c.routeCode === sellerLoad.routeCode)
+        );
+      } catch {
+        return [];
+      }
+    },
+    enabled: Boolean(effectiveRouteId || sellerLoad?.routeCode),
+    staleTime: 60_000,
+  });
+
+  const itineraryData = activeItinerary.data;
+  const itineraryStops = itineraryData?.stops || [];
+
+  type SellerStopItem = {
+    id: string;
+    runId?: string;
+    customerId: string;
+    customerCode: string;
+    customerName: string;
+    stopOrder: number;
+    addressReference?: string | null;
+    status: 'PENDING' | 'ATTENDED_SALE' | 'ATTENDED_NO_PURCHASE' | 'POSTPONED_BLOCKED';
+    hasLocationMismatch?: boolean;
+  };
+
+  const effectiveStops = useMemo<SellerStopItem[]>(() => {
+    if (itineraryStops && itineraryStops.length > 0) {
+      return itineraryStops as SellerStopItem[];
+    }
+    const tStops = routeTemplatesQuery.data?.[0]?.stops;
+    if (tStops && tStops.length > 0) {
+      return tStops.map((ts: any, idx: number): SellerStopItem => {
+        const isSold = sellerSales.some(s => 
+          (s.customerId && ts.customerId && s.customerId === ts.customerId) ||
+          (s.customerName && ts.customerName && normalizeText(s.customerName) === normalizeText(ts.customerName))
+        );
+        return {
+          id: String(ts.id || `tpl-${idx}`),
+          runId: '',
+          customerId: String(ts.customerId || ''),
+          customerCode: String(ts.customerCode || ''),
+          customerName: String(ts.customerName || ''),
+          stopOrder: Number(ts.stopOrder || idx + 1),
+          addressReference: ts.addressReference ?? null,
+          status: isSold ? 'ATTENDED_SALE' : 'PENDING',
+          hasLocationMismatch: false,
+        };
+      });
+    }
+    const custs = routeCustomersQuery.data;
+    if (custs && custs.length > 0) {
+      return custs.map((c: any, idx: number): SellerStopItem => {
+        const isSold = sellerSales.some(s => 
+          (s.customerId && c.id && s.customerId === c.id) ||
+          (s.customerName && c.name && normalizeText(s.customerName) === normalizeText(c.name))
+        );
+        return {
+          id: String(c.id),
+          runId: '',
+          customerId: String(c.id),
+          customerCode: String(c.code || ''),
+          customerName: String(c.name || ''),
+          stopOrder: idx + 1,
+          addressReference: c.addressReference ?? null,
+          status: isSold ? 'ATTENDED_SALE' : 'PENDING',
+          hasLocationMismatch: false,
+        };
+      });
+    }
+    return [];
+  }, [itineraryStops, routeTemplatesQuery.data, routeCustomersQuery.data, sellerSales]);
+
+  const displayTotalStops = effectiveStops.length;
+  const attendedCount = effectiveStops.filter(
+    (s: SellerStopItem) => s.status === 'ATTENDED_SALE' || s.status === 'ATTENDED_NO_PURCHASE'
+  ).length;
+  const itineraryProgressPct = displayTotalStops > 0 ? Math.min(100, Math.round((attendedCount / displayTotalStops) * 100)) : 0;
+  const nextPendingStop = effectiveStops.find((s: SellerStopItem) => s.status === 'PENDING');
+
+  const specificJugItem = truckItems.find(it => {
+    const norm = normalizeText(it.productName);
+    return norm.includes('garrafon') || norm.includes('20l') || norm.includes('bidon');
+  });
+
+  const jugItem = specificJugItem;
+  const jugsLoaded = jugItem ? Number(jugItem.quantityBaseUnits || 0) : totalLoadedUnits;
+  const jugsRemaining = isSettled ? 0 : (jugItem ? Number(jugItem.remainingOnTruck || 0) : remainingTotalUnits);
+  const jugsSold = jugItem ? Number(jugItem.soldQty || 0) : totalSoldUnits;
+  const jugsEmptyRecovered = jugsSold;
+  const totalJugsLentOnRoute = routeJugsQuery.data?.totalJugsOutstanding ?? 0;
+
+  const handleRefreshAll = () => {
+    void activeItinerary.refetch();
+    void routeJugsQuery.refetch();
+    void routeTemplatesQuery.refetch();
+    void routeCustomersQuery.refetch();
+    onRefresh();
+  };
+
   return (
-    <div style={{ width: '100%', maxWidth: '1180px', margin: '0 auto', paddingBottom: '2.5rem', minWidth: 0, boxSizing: 'border-box' }}>
-      {/* ── Encabezado B2B Idéntico al Admin (Screenshot 4) ──────────────── */}
-      <div className="section-heading" style={{ marginBottom: '1rem', flexWrap: 'wrap' }}>
-        <PageHeader 
-          eyebrow="VENDEDOR EN RUTA"
-          title="Panel Operativo" 
-          description={`¡Hola, ${user.displayName || user.username}! ${sellerLoad ? `· ${sellerLoad.routeCode} (${sellerLoad.routeName || 'Ruta del día'})` : '· Monitoreo de ruta en vivo'}`} 
-        />
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
-          <span className="live-indicator" style={{
-            background: sellerLoad?.status === 'STARTED' ? '#ecfdf5' : '#f8fafc',
-            borderColor: sellerLoad?.status === 'STARTED' ? '#a7f3d0' : '#e2e8f0',
-            color: sellerLoad?.status === 'STARTED' ? '#047857' : '#64748b'
+    <div className="seller-cockpit-container">
+      <style>{`
+        .seller-cockpit-container {
+          width: 100%;
+          max-width: 480px;
+          margin: 0 auto;
+          padding: 0.35rem 0.5rem 5.5rem;
+          min-width: 0;
+          box-sizing: border-box;
+        }
+        @media (min-width: 640px) {
+          .seller-cockpit-container {
+            max-width: 720px;
+            padding: 0.75rem 1rem 5rem;
+          }
+        }
+        @media (min-width: 860px) {
+          .seller-cockpit-container {
+            max-width: 980px;
+            padding: 1rem 1.5rem 5rem;
+          }
+          .seller-cockpit-kpi-grid {
+            grid-template-columns: repeat(4, 1fr) !important;
+          }
+        }
+        @media (min-width: 1120px) {
+          .seller-cockpit-container {
+            max-width: 1240px;
+            padding: 1.25rem 2rem 4rem;
+          }
+        }
+        .seller-stop-node-link {
+          text-decoration: none !important;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: transform 0.15s ease, filter 0.15s ease;
+        }
+        .seller-stop-node-link:hover {
+          transform: translateY(-2px) scale(1.08);
+          filter: brightness(1.05);
+        }
+      `}</style>
+      {/* ── 1. Encabezado de Usuario y Estado (Idéntico a la Maqueta) ───── */}
+      <div style={{
+        background: '#ffffff',
+        borderRadius: '14px',
+        padding: '0.85rem 1rem',
+        marginBottom: '0.75rem',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+        border: '1px solid #f1f5f9',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '0.5rem'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          <div style={{
+            width: '38px',
+            height: '38px',
+            borderRadius: '50%',
+            background: '#0284c7',
+            color: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
           }}>
-            <span className="live-dot" style={{
-              background: sellerLoad?.status === 'STARTED' ? '#10b981' : '#94a3b8'
-            }} aria-hidden="true" />
-            {sellerLoad ? loadStatusLabel(sellerLoad.status) : 'En vivo'}
-          </span>
-          <button 
-            type="button"
-            className="secondary" 
-            onClick={onRefresh}
-            disabled={isRefreshing}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              fontSize: '0.82rem',
-              fontWeight: 500,
-              padding: '0.45rem 0.85rem'
-            }}
-          >
-            <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} strokeWidth={2} />
-            {isRefreshing ? 'Actualizando…' : 'Sincronizar'}
-          </button>
+            <Users size={20} />
+          </div>
+          <div>
+            <div style={{ fontSize: '0.72rem', color: '#0284c7', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Vendedor en ruta
+            </div>
+            <div style={{ fontSize: '0.98rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
+              ¡Hola, {user.displayName || user.username}! {sellerLoad ? `· ${sellerLoad.routeCode || sellerLoad.routeName}` : ''}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '3px' }}>
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '1px 7px',
+                borderRadius: '999px',
+                background: '#ecfdf5',
+                border: '1px solid #a7f3d0',
+                color: '#059669',
+                fontSize: '0.72rem',
+                fontWeight: 700
+              }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981' }} />
+                {sellerLoad ? loadStatusLabel(sellerLoad.status) : 'En línea'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleRefreshAll}
+          disabled={isRefreshing}
+          style={{
+            border: 'none',
+            background: '#f1f5f9',
+            color: '#475569',
+            borderRadius: '8px',
+            padding: '5px 9px',
+            fontSize: '0.76rem',
+            fontWeight: 600,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            cursor: 'pointer'
+          }}
+        >
+          <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
+          <span>{isRefreshing ? '…' : 'Sincronizar'}</span>
+        </button>
+      </div>
+
+      {/* ── 2. Indicadores Clave (2x2 Grid Exacto a la Maqueta en móvil, 4 col en pantallas grandes) ── */}
+      <div className="seller-cockpit-kpi-grid" style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '0.65rem',
+        marginBottom: '0.75rem'
+      }}>
+        {/* Card 1: Ventas de Hoy */}
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '14px',
+          padding: '0.85rem',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+          border: '1px solid #f1f5f9'
+        }}>
+          <div style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 600, marginBottom: '0.25rem' }}>
+            Ventas de Hoy
+          </div>
+          <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#0f172a', fontFeatureSettings: '"tnum"', lineHeight: 1.2 }}>
+            {money(effectiveSalesToday, dashboard.currencyCode)}
+          </div>
+          <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '0.25rem' }}>
+            Efec: {money(effectiveCash)}
+          </div>
+        </div>
+
+        {/* Card 2: Efectivo en Mano */}
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '14px',
+          padding: '0.85rem',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+          border: '1px solid #f1f5f9'
+        }}>
+          <div style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 600, marginBottom: '0.25rem' }}>
+            Efectivo en mano (A entregar)
+          </div>
+          <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#059669', fontFeatureSettings: '"tnum"', lineHeight: 1.2 }}>
+            {money(cashInHand, dashboard.currencyCode)}
+          </div>
+          <div style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '0.25rem' }}>
+            {isSettled ? 'Liquidado' : `${money(cashInHand)} a rendir`}
+          </div>
+        </div>
+
+        {/* Card 3: Garrafones o Unidades a Bordo */}
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '14px',
+          padding: '0.85rem',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+          border: '1px solid #f1f5f9'
+        }}>
+          <div style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 600, marginBottom: '0.25rem' }}>
+            {jugItem ? 'Garrafones a Bordo' : 'Unidades a Bordo'}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px' }}>
+            <span style={{ fontSize: '1.35rem', fontWeight: 900, color: '#0f172a', fontFeatureSettings: '"tnum"', lineHeight: 1.2 }}>
+              {jugsRemaining}
+            </span>
+            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+              restantes de {jugsLoaded || totalLoadedUnits}
+            </span>
+          </div>
+        </div>
+
+        {/* Card 4: Avance de Ruta */}
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '14px',
+          padding: '0.85rem',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+          border: '1px solid #f1f5f9'
+        }}>
+          <div style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 600, marginBottom: '0.25rem' }}>
+            Avance de Ruta
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px' }}>
+            <span style={{ fontSize: '1.35rem', fontWeight: 900, color: '#0f172a', fontFeatureSettings: '"tnum"', lineHeight: 1.2 }}>
+              {displayTotalStops > 0 ? `${attendedCount}/${displayTotalStops}` : '0/0'}
+            </span>
+            <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+              paradas atendidas {itineraryProgressPct}%
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* ── Indicadores Clave (KPIs) en Rejilla 2x2 (Idéntico a Admin) ──── */}
-      <div className="dashboard-kpis" style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-        gap: '0.85rem',
-        marginBottom: '1.5rem'
+      {/* ── 3. Route Itinerary Progress (Stepper Conectado con navegación directa a Ventas) ── */}
+      <div style={{
+        background: '#ffffff',
+        borderRadius: '14px',
+        padding: '0.9rem 1rem',
+        marginBottom: '0.75rem',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+        border: '1px solid #f1f5f9'
       }}>
-        {/* 1. Ventas de Hoy */}
-        <article className="kpi-card" style={{
-          background: '#ffffff',
-          border: '1px solid #e2e8f0',
-          borderRadius: '0.65rem',
-          padding: '1rem',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-        }}>
-          <div className="kpi-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#64748b', fontSize: '0.82rem', fontWeight: 600 }}>
-            <span>Ventas de hoy</span>
-            <TrendingUp size={16} strokeWidth={2} style={{ color: '#0284c7' }} />
-          </div>
-          <strong className="kpi-value" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#0f172a', fontFeatureSettings: '"tnum"', display: 'block', margin: '0.35rem 0 0.2rem' }}>
-            {money(effectiveSalesToday, dashboard.currencyCode)}
-          </strong>
-          <div className="kpi-subtext" style={{ fontSize: '0.74rem', color: '#64748b' }}>
-            Efec: {money(effectiveCash)} · Transf: {money(effectiveTransfers)} · Créd: {money(effectiveCredit)}
-          </div>
-        </article>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
+          <h3 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 800, color: '#0f172a' }}>
+            Route Itinerary Progress
+          </h3>
+          <Link
+            to="/itinerary"
+            style={{
+              fontSize: '0.76rem',
+              color: '#0284c7',
+              textDecoration: 'none',
+              fontWeight: 700,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '3px'
+            }}
+          >
+            <span>Ver lista</span>
+            <ChevronRight size={13} />
+          </Link>
+        </div>
 
-        {/* 2. Efectivo en mano */}
-        <article className="kpi-card" style={{
-          background: '#ffffff',
-          border: '1px solid #e2e8f0',
-          borderRadius: '0.65rem',
-          padding: '1rem',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-        }}>
-          <div className="kpi-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#64748b', fontSize: '0.82rem', fontWeight: 600 }}>
-            <span>Efectivo en mano (A entregar)</span>
-            <Wallet size={16} strokeWidth={2} style={{ color: '#047857' }} />
-          </div>
-          <strong className="kpi-value" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#047857', fontFeatureSettings: '"tnum"', display: 'block', margin: '0.35rem 0 0.2rem' }}>
-            {money(cashInHand, dashboard.currencyCode)}
-          </strong>
-          <div className="kpi-subtext" style={{ fontSize: '0.74rem', color: '#64748b' }}>
-            {isSettled
-              ? 'Liquidado y depositado en caja'
-              : creditCollectionsCash > 0
-                ? `Ventas efec: ${money(effectiveCash)} · Abonos: ${money(creditCollectionsCash)}`
-                : 'Total físico a rendir en caja central'}
-          </div>
-        </article>
+        {effectiveStops.length > 0 ? (
+          <div>
+            {/* Tira del Stepper horizontal con líneas conectoras y clic directo para vender */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              overflowX: 'auto',
+              padding: '0.25rem 0.2rem 0.6rem',
+              scrollbarWidth: 'none'
+            }}>
+              {effectiveStops.map((stop, idx) => {
+                const isAttendedSale = stop.status === 'ATTENDED_SALE';
+                const isNoPurchase = stop.status === 'ATTENDED_NO_PURCHASE';
+                const isNext = stop.id === nextPendingStop?.id;
+                const isPostponed = stop.status === 'POSTPONED_BLOCKED';
+                const isLast = idx === effectiveStops.length - 1;
+                const cleanName = cleanDisplayText(stop.customerName);
+                const targetUrl = stop.customerId
+                  ? `/sales?customerId=${encodeURIComponent(stop.customerId)}&routeId=${encodeURIComponent(effectiveRouteId || '')}`
+                  : '/sales';
 
-        {/* 3. Existencias en Camión */}
-        <article className="kpi-card" style={{
-          background: '#ffffff',
-          border: '1px solid #e2e8f0',
-          borderRadius: '0.65rem',
-          padding: '1rem',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-        }}>
-          <div className="kpi-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#64748b', fontSize: '0.82rem', fontWeight: 600 }}>
-            <span>Existencias a bordo</span>
-            <Truck size={16} strokeWidth={2} style={{ color: '#475569' }} />
-          </div>
-          <strong className="kpi-value" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#0f172a', fontFeatureSettings: '"tnum"', display: 'block', margin: '0.35rem 0 0.2rem' }}>
-            {remainingTotalUnits} <span style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: 500 }}>unidades</span>
-          </strong>
-          <div className="kpi-subtext" style={{ fontSize: '0.74rem', color: '#64748b' }}>
-            {totalSoldUnits} vendidas de {totalLoadedUnits} cargadas ({progressPct}%)
-          </div>
-        </article>
+                const tooltipText = isAttendedSale
+                  ? `Parada #${stop.stopOrder}: ${cleanName} - Venta realizada ✓`
+                  : isNoPurchase
+                    ? `Parada #${stop.stopOrder}: ${cleanName} - Visita sin compra registrada`
+                    : isNext
+                      ? `Parada #${stop.stopOrder}: ${cleanName} - Siguiente parada pendiente (Clic para vender)`
+                      : `Parada #${stop.stopOrder}: ${cleanName} - Clic para registrar venta`;
 
-        {/* 4. Cobros y transferencias */}
-        <article className="kpi-card" style={{
-          background: '#ffffff',
-          border: '1px solid #e2e8f0',
-          borderRadius: '0.65rem',
-          padding: '1rem',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-        }}>
-          <div className="kpi-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#64748b', fontSize: '0.82rem', fontWeight: 600 }}>
-            <span>Transferencias y crédito</span>
-            <ArrowRightLeft size={16} strokeWidth={2} style={{ color: '#0284c7' }} />
+                return (
+                  <div key={stop.id || idx} style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                    {/* Nodo de la parada interactivo */}
+                    <Link
+                      to={targetUrl}
+                      className="seller-stop-node-link"
+                      title={tooltipText}
+                    >
+                      <div
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: isAttendedSale ? '50%' : '8px',
+                          background: isAttendedSale
+                            ? '#64748b'
+                            : isNoPurchase
+                              ? '#f1f5f9'
+                              : isNext
+                                ? '#0284c7'
+                                : isPostponed
+                                  ? '#f59e0b'
+                                  : '#f8fafc',
+                          border: isAttendedSale
+                            ? 'none'
+                            : isNoPurchase
+                              ? '1.5px dashed #94a3b8'
+                              : isNext
+                                ? '2px solid #0284c7'
+                                : isPostponed
+                                  ? 'none'
+                                  : '1px solid #cbd5e1',
+                          color: isAttendedSale
+                            ? '#ffffff'
+                            : isNoPurchase
+                              ? '#64748b'
+                              : (isNext || isPostponed)
+                                ? '#ffffff'
+                                : '#334155',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontWeight: 800,
+                          fontSize: '0.86rem',
+                          boxShadow: isNext ? '0 2px 6px rgba(2, 132, 199, 0.35)' : 'none'
+                        }}
+                      >
+                        {isAttendedSale ? (
+                          <Check size={16} strokeWidth={3} />
+                        ) : isNoPurchase ? (
+                          <X size={15} strokeWidth={2.5} />
+                        ) : (
+                          stop.stopOrder
+                        )}
+                      </div>
+                    </Link>
+
+                    {/* Línea conectora entre nodos */}
+                    {!isLast && (
+                      <div style={{
+                        width: '20px',
+                        height: '3px',
+                        background: isAttendedSale ? '#94a3b8' : isNoPurchase ? '#cbd5e1' : '#e2e8f0',
+                        margin: '0 4px',
+                        flexShrink: 0
+                      }} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Sub-información de próxima parada con enlace directo a venta */}
+            <div style={{
+              marginTop: '0.35rem',
+              paddingTop: '0.45rem',
+              borderTop: '1px solid #f8fafc',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              fontSize: '0.76rem'
+            }}>
+              {nextPendingStop ? (
+                <Link
+                  to={nextPendingStop.customerId ? `/sales?customerId=${encodeURIComponent(nextPendingStop.customerId)}&routeId=${encodeURIComponent(effectiveRouteId || '')}` : '/sales'}
+                  style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: 'none' }}
+                  title={`Clic para registrar venta a ${cleanDisplayText(nextPendingStop.customerName)}`}
+                >
+                  <span style={{ color: '#0284c7', fontWeight: 800 }}>Próxima: </span>
+                  <span style={{ color: '#0f172a', fontWeight: 600 }}>#{nextPendingStop.stopOrder} {cleanDisplayText(nextPendingStop.customerName)}</span>
+                </Link>
+              ) : (
+                <span style={{ color: '#059669', fontWeight: 700 }}>¡Recorrido completado!</span>
+              )}
+              <Link to="/loads" style={{ color: '#64748b', textDecoration: 'underline', fontSize: '0.72rem', flexShrink: 0, marginLeft: '0.5rem' }}>
+                Mapa GPS
+              </Link>
+            </div>
           </div>
-          <strong className="kpi-value" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#0284c7', fontFeatureSettings: '"tnum"', display: 'block', margin: '0.35rem 0 0.2rem' }}>
-            {money(effectiveTransfers, dashboard.currencyCode)}
-          </strong>
-          <div className="kpi-subtext" style={{ fontSize: '0.74rem', color: '#64748b' }}>
-            Crédito: {money(effectiveCredit, dashboard.currencyCode)}
+        ) : (
+          <div style={{ textAlign: 'center', padding: '0.75rem 0.5rem', color: '#64748b', fontSize: '0.8rem' }}>
+            <span>Sin paradas registradas en esta ruta.</span>
+            <div style={{ marginTop: '0.35rem' }}>
+              <Link to="/loads" style={{ color: '#0284c7', fontWeight: 700, textDecoration: 'none' }}>
+                Consultar mapa de ruta →
+              </Link>
+            </div>
           </div>
-        </article>
+        )}
       </div>
 
-      {/* ── 1. Existencias a Bordo del Camión (Tarjetas Responsivas) ──────── */}
-      <section style={{
+      {/* ── 4. Control de Envases/Garrafones (3 Columnas de la Maqueta) ─── */}
+      <div style={{
         background: '#ffffff',
-        border: '1px solid #e2e8f0',
-        borderRadius: '0.65rem',
-        marginBottom: '1.5rem',
-        overflow: 'hidden',
-        boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
+        borderRadius: '14px',
+        padding: '0.9rem 1rem',
+        marginBottom: '0.75rem',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+        border: '1px solid #f1f5f9'
       }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+          <h3 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 800, color: '#0f172a' }}>
+            Control de Envases/Garrafones
+          </h3>
+          <Link to="/jugs" style={{ fontSize: '0.75rem', color: '#0284c7', textDecoration: 'none', fontWeight: 700 }}>
+            Ver detalle →
+          </Link>
+        </div>
+
         <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '0.5rem',
-          padding: '0.85rem 1.15rem',
-          borderBottom: '1px solid #f1f5f9',
-          background: '#f8fafc'
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr 1fr',
+          textAlign: 'center',
+          padding: '0.2rem 0'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Package size={17} strokeWidth={2} style={{ color: '#475569' }} />
-            <h2 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: '#0f172a' }}>
-              Existencias a Bordo del Camión
-            </h2>
+          <div>
+            <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#0891b2', fontFeatureSettings: '"tnum"', lineHeight: 1.1 }}>
+              {jugsLoaded}
+            </div>
+            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '3px' }}>
+              cargados
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+
+          <div>
+            <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#059669', fontFeatureSettings: '"tnum"', lineHeight: 1.1 }}>
+              {jugsEmptyRecovered}
+            </div>
+            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '3px' }}>
+              vacíos recogidos
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#d97706', fontFeatureSettings: '"tnum"', lineHeight: 1.1 }}>
+              {totalJugsLentOnRoute}
+            </div>
+            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '3px' }}>
+              pendientes
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── 5. Inventario en Camión (2 Columnas Exacto a la Maqueta) ─────── */}
+      <div style={{ marginBottom: '0.85rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem', padding: '0 0.2rem' }}>
+          <h3 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 800, color: '#0f172a' }}>
+            Inventario en Camión
+          </h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             {sellerLoad && (
-              <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 500 }}>
-                Carga #{sellerLoad.loadNumber}
+              <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>
+                Carga #{sellerLoad.loadNumber} ·
               </span>
             )}
-            <Link to="/loads" className="secondary" style={{ textDecoration: 'none', padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}>
+            <Link to="/loads" style={{ fontSize: '0.75rem', color: '#0284c7', textDecoration: 'none', fontWeight: 700 }}>
               Ver cargas
             </Link>
           </div>
         </div>
 
         {isSettled ? (
-          <div style={{ textAlign: 'center', padding: '2rem 1.25rem', background: '#f8fafc' }}>
-            <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '40px',
-              height: '40px',
-              borderRadius: '50%',
-              background: '#ecfdf5',
-              color: '#059669',
-              marginBottom: '0.75rem'
-            }}>
-              <CheckCircle2 size={24} strokeWidth={2} />
-            </div>
-            <h3 style={{ margin: '0 0 0.35rem', color: '#0f172a', fontSize: '1.05rem', fontWeight: 600 }}>
-              Jornada liquidada y conciliada
-            </h3>
-            <p style={{ color: '#64748b', fontSize: '0.85rem', maxWidth: '460px', margin: '0 auto 1rem' }}>
-              La carga #{sellerLoad?.loadNumber} ya fue liquidada ante administración. Las unidades sobrantes ingresaron a bodega (0 unidades activas en camión).
-            </p>
-            <Link to="/settlements" className="secondary" style={{ textDecoration: 'none', padding: '0.4rem 0.9rem', fontSize: '0.82rem' }}>
-              Ver comprobante de liquidación
-            </Link>
+          <div style={{ background: '#ffffff', borderRadius: '14px', padding: '1rem', textAlign: 'center', border: '1px solid #f1f5f9' }}>
+            <CheckCircle2 size={24} style={{ color: '#059669', margin: '0 auto 0.35rem' }} />
+            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>Jornada liquidada y conciliada</div>
+            <div style={{ fontSize: '0.76rem', color: '#64748b' }}>0 unidades activas en camión</div>
           </div>
         ) : isPendingReceipt ? (
-          <div style={{ textAlign: 'center', padding: '2rem 1.25rem', background: '#fffbeb' }}>
-            <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '40px',
-              height: '40px',
-              borderRadius: '50%',
-              background: '#fef3c7',
-              color: '#d97706',
-              marginBottom: '0.75rem'
-            }}>
-              <Package size={22} strokeWidth={2} />
-            </div>
-            <h3 style={{ margin: '0 0 0.35rem', color: '#92400e', fontSize: '1.05rem', fontWeight: 600 }}>
-              Carga preparada en bodega (Pendiente de recepción)
-            </h3>
-            <p style={{ color: '#b45309', fontSize: '0.85rem', maxWidth: '460px', margin: '0 auto 1rem' }}>
-              La carga está lista para subir al camión. Para iniciar ruta y habilitar ventas, confirma la recepción física.
+          <div style={{ background: '#fffbeb', borderRadius: '14px', padding: '1rem', textAlign: 'center', border: '1px solid #fef3c7' }}>
+            <Package size={24} style={{ color: '#d97706', margin: '0 auto 0.35rem' }} />
+            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#92400e' }}>Carga lista para recibir</div>
+            <p style={{ fontSize: '0.78rem', color: '#b45309', margin: '0.25rem 0 0.75rem' }}>
+              Confirma la recepción física para subir las existencias a tu camión.
             </p>
-            <Link to="/loads" className="primary" style={{ textDecoration: 'none', padding: '0.45rem 1rem', fontSize: '0.85rem' }}>
-              Confirmar recepción en Cargas
-            </Link>
+            <button
+              type="button"
+              className="primary"
+              disabled={isReceiving}
+              onClick={() => void handleConfirmReceipt()}
+              style={{ padding: '0.45rem 1rem', fontSize: '0.82rem', fontWeight: 700 }}
+            >
+              {isReceiving ? (receiveProgress || 'Confirmando…') : 'Confirmar Recepción'}
+            </button>
           </div>
-        ) : sellerLoad && isActiveLoad ? (
-          <div>
-            {/* Rejilla de productos en camión: 1 col en móvil, 2 cols en tablet, 3 cols en desktop */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: '0.85rem',
-              padding: '1rem'
-            }}>
-              {truckItems.map((item, idx) => {
-                const isLow = item.remainingOnTruck <= 10 && item.remainingOnTruck > 0;
-                const itemPct = item.quantityBaseUnits > 0 ? Math.round((item.soldQty / item.quantityBaseUnits) * 100) : 0;
-                return (
-                  <article key={item.id || idx} style={{
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '0.55rem',
-                    padding: '0.85rem',
+        ) : truckItems.length > 0 ? (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+            gap: '0.65rem'
+          }}>
+            {truckItems.map((item, idx) => {
+              const itemPct = item.quantityBaseUnits > 0 
+                ? Math.min(100, Math.round(((item.soldQty) / item.quantityBaseUnits) * 100))
+                : 0;
+              const barColor = idx % 2 === 0 ? '#0284c7' : '#059669';
+
+              return (
+                <div
+                  key={item.id || idx}
+                  style={{
                     background: '#ffffff',
+                    borderRadius: '14px',
+                    padding: '0.9rem',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                    border: '1px solid #f1f5f9',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '0.65rem'
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <strong style={{ fontSize: '0.98rem', color: '#0f172a' }}>
-                        {item.productName}
-                      </strong>
-                      <span style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '0.25rem',
-                        padding: '0.15rem 0.5rem',
-                        borderRadius: '0.375rem',
-                        fontSize: '0.78rem',
-                        fontWeight: 700,
-                        background: isLow ? '#fef3f2' : item.remainingOnTruck === 0 ? '#f1f5f9' : '#ecfdf5',
-                        color: isLow ? '#b91c1c' : item.remainingOnTruck === 0 ? '#64748b' : '#047857',
-                        border: `1px solid ${isLow ? '#fecaca' : item.remainingOnTruck === 0 ? '#e2e8f0' : '#a7f3d0'}`
-                      }}>
-                        {isLow && <BadgeAlert size={12} strokeWidth={2.5} />}
-                        {item.remainingOnTruck} en camión
-                      </span>
-                    </div>
-
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.76rem', color: '#64748b', marginBottom: '0.25rem' }}>
-                        <span>Progreso de entrega</span>
-                        <strong>{itemPct}% ({item.soldQty} de {item.quantityBaseUnits} {item.baseUnitCode || 'u.'})</strong>
-                      </div>
-                      <div style={{ width: '100%', height: '5px', background: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
-                        <div style={{ width: `${itemPct}%`, height: '100%', background: '#0284c7' }} />
-                      </div>
-                    </div>
-
-                    {/* Franja de 3 estadísticas (Idéntico al panel de Administrador) */}
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(3, 1fr)',
-                      gap: '0.4rem',
-                      background: '#f8fafc',
-                      padding: '0.55rem 0.65rem',
-                      borderRadius: '0.45rem',
-                      textAlign: 'center'
-                    }}>
-                      <div>
-                        <span style={{ display: 'block', fontSize: '0.7rem', color: '#64748b' }}>Cargado</span>
-                        <strong style={{ fontSize: '0.95rem', color: '#334155', fontFeatureSettings: '"tnum"' }}>{item.quantityBaseUnits}</strong>
-                      </div>
-                      <div>
-                        <span style={{ display: 'block', fontSize: '0.7rem', color: '#64748b' }}>Vendido</span>
-                        <strong style={{ fontSize: '0.95rem', color: '#0284c7', fontFeatureSettings: '"tnum"' }}>{item.soldQty}</strong>
-                      </div>
-                      <div>
-                        <span style={{ display: 'block', fontSize: '0.7rem', color: '#64748b' }}>En Camión</span>
-                        <strong style={{ fontSize: '0.95rem', color: isLow ? '#b91c1c' : '#047857', fontFeatureSettings: '"tnum"' }}>
-                          {item.remainingOnTruck}
-                        </strong>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-
-            {/* Barra de resumen inferior con wrap seguro */}
-            <div style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: '0.5rem',
-              padding: '0.75rem 1.15rem',
-              background: '#f8fafc',
-              borderTop: '1px solid #e2e8f0',
-              fontSize: '0.82rem'
-            }}>
-              <span style={{ color: '#64748b' }}>
-                Progreso del camión: <strong>{progressPct}%</strong> ({totalSoldUnits} de {totalLoadedUnits} u.)
-              </span>
-              <span style={{ color: '#0f172a', fontWeight: 600 }}>
-                Restante a bordo: <strong style={{ color: '#047857', fontSize: '0.92rem' }}>{remainingTotalUnits} unidades</strong>
-              </span>
-            </div>
-          </div>
-        ) : (
-          <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#64748b' }}>
-            <p style={{ margin: '0 0 0.75rem', fontSize: '0.9rem' }}>No hay carga activa asignada hoy a tu usuario.</p>
-            <Link to="/loads" className="primary" style={{ textDecoration: 'none', padding: '0.45rem 1rem', fontSize: '0.85rem' }}>
-              Consultar Cargas de Ruta
-            </Link>
-          </div>
-        )}
-      </section>
-
-      {/* ── 2. Ventas de la Jornada (Idéntico a Últimas Ventas en Admin) ─── */}
-      <section style={{
-        background: '#ffffff',
-        border: '1px solid #e2e8f0',
-        borderRadius: '0.65rem',
-        marginBottom: '1.5rem',
-        overflow: 'hidden',
-        boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
-      }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '0.5rem',
-          padding: '0.85rem 1.15rem',
-          borderBottom: '1px solid #f1f5f9',
-          background: '#f8fafc'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <FileText size={17} strokeWidth={2} style={{ color: '#475569' }} />
-            <h2 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: '#0f172a' }}>
-              Ventas de la Jornada
-            </h2>
-          </div>
-          <Link to="/sales/list" className="secondary" style={{ textDecoration: 'none', padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}>
-            Ver todas ({sellerSales.length})
-          </Link>
-        </div>
-
-        {sellerSales.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#64748b' }}>
-            <p style={{ margin: '0 0 0.5rem', fontSize: '0.88rem' }}>No hay ventas registradas en esta jornada.</p>
-            <Link to="/sales" className="primary" style={{ display: 'inline-block', textDecoration: 'none', padding: '0.45rem 1rem', fontSize: '0.82rem', marginTop: '0.35rem' }}>
-              Registrar primera venta
-            </Link>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', padding: '1rem' }}>
-            {sellerSales.slice(0, 8).map((sale, index) => {
-              const saleTime = new Date(sale.createdAt).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' });
-              return (
-                <article 
-                  key={sale.id || index}
-                  style={{
-                    display: 'flex',
                     justifyContent: 'space-between',
-                    alignItems: 'center',
-                    gap: '0.75rem',
-                    padding: '0.75rem 0.85rem',
-                    borderRadius: '0.45rem',
-                    border: '1px solid #f1f5f9',
-                    background: '#ffffff'
                   }}
                 >
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <strong style={{ fontSize: '0.88rem', color: '#0f172a', display: 'block', wordBreak: 'break-word' }}>
-                      {sale.customerName}
-                    </strong>
-                    <span style={{ fontSize: '0.76rem', color: '#64748b', display: 'block', marginTop: '0.15rem' }}>
-                      Doc: {sale.documentNumber} · {saleTime}
-                    </span>
-                    <div style={{ fontSize: '0.74rem', color: '#475569', marginTop: '0.15rem', wordBreak: 'break-word' }}>
-                      {sale.items.map(it => `${Number(it.presentationQuantity || it.quantityBaseUnits)}x ${it.productName}`).join(', ')}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.35rem' }}>
+                      <div style={{
+                        fontSize: '0.92rem',
+                        fontWeight: 800,
+                        color: '#0f172a',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}>
+                        {item.productName}
+                      </div>
+                      {item.productCode && (
+                        <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600, background: '#f1f5f9', padding: '1px 6px', borderRadius: '4px' }}>
+                          {item.productCode}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Barra de progreso de ventas */}
+                    <div style={{
+                      width: '100%',
+                      height: '6px',
+                      background: '#e2e8f0',
+                      borderRadius: '3px',
+                      overflow: 'hidden',
+                      marginBottom: '0.65rem'
+                    }}>
+                      <div style={{
+                        width: `${itemPct}%`,
+                        height: '100%',
+                        background: barColor,
+                        borderRadius: '3px'
+                      }} />
                     </div>
                   </div>
 
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <strong style={{
-                      fontWeight: 700,
-                      fontSize: '1rem',
-                      color: '#047857',
-                      fontFeatureSettings: '"tnum"',
-                      display: 'block'
-                    }}>
-                      {money(sale.total)}
-                    </strong>
-                    <Link 
-                      to="/sales/list"
-                      style={{
-                        fontSize: '0.72rem',
-                        color: '#0284c7',
-                        textDecoration: 'none',
-                        fontWeight: 500,
-                        display: 'inline-block',
-                        marginTop: '0.2rem'
-                      }}
-                    >
-                      Recibo
-                    </Link>
+                  {/* Resumen 3 columnas: Cargado | Vendido | Restante */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr 1fr',
+                    textAlign: 'center',
+                    padding: '0.45rem 0.2rem',
+                    background: '#f8fafc',
+                    borderRadius: '10px',
+                    border: '1px solid #e2e8f0'
+                  }}>
+                    <div>
+                      <div style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 600 }}>Cargado</div>
+                      <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', fontFeatureSettings: '"tnum"' }}>
+                        {item.quantityBaseUnits}
+                      </div>
+                    </div>
+                    <div style={{ borderLeft: '1px solid #e2e8f0', borderRight: '1px solid #e2e8f0' }}>
+                      <div style={{ fontSize: '0.68rem', color: '#0284c7', fontWeight: 600 }}>Vendido</div>
+                      <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0284c7', fontFeatureSettings: '"tnum"' }}>
+                        {item.soldQty}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.68rem', color: item.remainingOnTruck > 0 ? '#059669' : '#dc2626', fontWeight: 600 }}>Restante</div>
+                      <div style={{ fontSize: '1.05rem', fontWeight: 800, color: item.remainingOnTruck > 0 ? '#059669' : '#dc2626', fontFeatureSettings: '"tnum"' }}>
+                        {item.remainingOnTruck}
+                      </div>
+                    </div>
                   </div>
-                </article>
+                </div>
               );
             })}
           </div>
+        ) : (
+          <div style={{ background: '#ffffff', borderRadius: '14px', padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', border: '1px solid #f1f5f9' }}>
+            No hay existencias cargadas a bordo hoy.
+          </div>
         )}
-      </section>
+      </div>
+
+      {/* ── 6. Últimas Ventas (Lista Limpia de la Maqueta) ───────────────── */}
+      <div style={{ marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem', padding: '0 0.2rem' }}>
+          <h3 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 800, color: '#0f172a' }}>
+            Últimas Ventas
+          </h3>
+          <Link to="/sales/list" style={{ fontSize: '0.75rem', color: '#0284c7', textDecoration: 'none', fontWeight: 700 }}>
+            Ver todas ({sellerSales.length}) →
+          </Link>
+        </div>
+
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '14px',
+          padding: '0.2rem 1rem',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+          border: '1px solid #f1f5f9'
+        }}>
+          {sellerSales.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '1.25rem 0.5rem', color: '#64748b', fontSize: '0.82rem' }}>
+              <p style={{ margin: '0 0 0.5rem' }}>Sin ventas registradas hoy en esta jornada.</p>
+              <Link
+                to="/sales"
+                className="primary"
+                style={{
+                  display: 'inline-block',
+                  padding: '0.4rem 0.95rem',
+                  fontSize: '0.8rem',
+                  textDecoration: 'none',
+                  borderRadius: '6px',
+                  fontWeight: 700
+                }}
+              >
+                + Registrar primera venta
+              </Link>
+            </div>
+          ) : (
+            sellerSales.slice(0, 5).map((sale, i) => (
+              <div
+                key={sale.id || i}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '0.75rem 0',
+                  borderBottom: i < Math.min(sellerSales.length, 5) - 1 ? '1px solid #f1f5f9' : 'none'
+                }}
+              >
+                <div style={{ minWidth: 0, flex: 1, paddingRight: '0.5rem' }}>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {sale.customerName}
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '1px' }}>
+                    {new Date(sale.createdAt).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })} · Doc: {sale.documentNumber}
+                  </div>
+                </div>
+                <div style={{ fontSize: '0.98rem', fontWeight: 800, color: '#0f172a', fontFeatureSettings: '"tnum"' }}>
+                  {money(sale.total)}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Modal de confirmación de recepción exitosa */}
+      {receiptSuccessModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(3px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '1rem', zIndex: 9999
+        }}>
+          <div style={{
+            background: '#ffffff', borderRadius: '12px', maxWidth: '420px', width: '100%',
+            padding: '1.75rem 1.5rem', textAlign: 'center', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15)'
+          }}>
+            <div style={{
+              width: '56px', height: '56px', borderRadius: '50%',
+              background: '#ecfdf5', color: '#059669', display: 'inline-flex',
+              alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem'
+            }}>
+              <CheckCircle2 size={32} />
+            </div>
+            <h3 style={{ margin: '0 0 0.5rem', color: '#0f172a', fontSize: '1.25rem', fontWeight: 700 }}>
+              ¡Carga #{receiptSuccessModal.loadNumber} Recibida!
+            </h3>
+            <p style={{ margin: '0 0 1.25rem', color: '#475569', fontSize: '0.9rem', lineHeight: 1.5 }}>
+              Se confirmó la recepción física a bordo del camión. Las existencias han sido cargadas a tu inventario y el recorrido de clientes ya está activo para registrar ventas.
+            </p>
+            <button
+              type="button"
+              className="primary"
+              style={{ width: '100%', minHeight: '46px', fontSize: '0.95rem', fontWeight: 700, background: '#059669', borderColor: '#059669' }}
+              onClick={() => {
+                setReceiptSuccessModal(null);
+                onRefresh();
+              }}
+            >
+              Ver Existencias a Bordo
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

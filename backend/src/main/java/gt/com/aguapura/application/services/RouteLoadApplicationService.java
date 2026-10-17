@@ -27,13 +27,22 @@ public class RouteLoadApplicationService {
     private final InventoryApplicationService inventory;
     private final CompanyConfigurationPersistencePort companyConfiguration;
     private final RouteTrackingPort tracking;
+    private final ItineraryApplicationService itineraryService;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public RouteLoadApplicationService(RouteLoadPort persistence, InventoryApplicationService inventory,
-                                       CompanyConfigurationPersistencePort companyConfiguration, RouteTrackingPort tracking) {
+                                       CompanyConfigurationPersistencePort companyConfiguration, RouteTrackingPort tracking,
+                                       @org.springframework.beans.factory.annotation.Autowired(required = false) ItineraryApplicationService itineraryService) {
         this.persistence = persistence;
         this.inventory = inventory;
         this.companyConfiguration = companyConfiguration;
         this.tracking = tracking;
+        this.itineraryService = itineraryService;
+    }
+
+    public RouteLoadApplicationService(RouteLoadPort persistence, InventoryApplicationService inventory,
+                                       CompanyConfigurationPersistencePort companyConfiguration, RouteTrackingPort tracking) {
+        this(persistence, inventory, companyConfiguration, tracking, null);
     }
 
     @Transactional
@@ -105,7 +114,8 @@ public class RouteLoadApplicationService {
         if (restrictedToSeller && !persistence.sellerAssignedToRoute(actorId, load.routeId())) {
             throw forbidden("LOAD_ROUTE_FORBIDDEN", "La carga no pertenece a una ruta asignada al vendedor.");
         }
-        RouteLoadWorkflow.confirmReceipt(load.status(), load.warehouseConfirmedBy(), actorId);
+        UUID warehouseActor = load.warehouseConfirmedBy() != null ? load.warehouseConfirmedBy() : load.createdBy();
+        RouteLoadWorkflow.confirmReceipt(load.status(), warehouseActor, actorId);
         load.items().stream().sorted((left, right) -> left.productId().compareTo(right.productId())).forEach(item ->
                 inventory.transfer(load.sourceLocationId(), load.targetLocationId(), item.productId(),
                         item.quantityBaseUnits(), "LOAD_OUT", "LOAD_IN", "Recepción de " + number(load.loadNumber()),
@@ -118,6 +128,7 @@ public class RouteLoadApplicationService {
             }
             tracking.recordStart(load.id(), load.routeId(), new RouteTrackingPort.GeoLocation(location.latitude(),
                     location.longitude(), location.accuracyMeters(), location.capturedAt()), actorId, deviceId);
+            autoPublishItinerary(load.id(), load.routeId(), actorId, deviceId);
         }
         return response(received);
     }
@@ -135,7 +146,19 @@ public class RouteLoadApplicationService {
             return response(load);
         }
         RouteLoadWorkflow.start(load.status());
-        return response(persistence.start(id, actorId, deviceId));
+        var started = response(persistence.start(id, actorId, deviceId));
+        autoPublishItinerary(load.id(), load.routeId(), actorId, deviceId);
+        return started;
+    }
+
+    private void autoPublishItinerary(UUID routeLoadId, UUID routeId, UUID actorId, UUID deviceId) {
+        if (itineraryService != null) {
+            try {
+                itineraryService.autoPublishIfTemplateExists(routeLoadId, routeId, actorId, deviceId);
+            } catch (Exception ignored) {
+                // Non-blocking auto-publication to ensure route load workflow never halts
+            }
+        }
     }
 
     @Transactional(readOnly = true)

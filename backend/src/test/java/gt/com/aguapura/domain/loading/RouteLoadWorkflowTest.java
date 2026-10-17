@@ -30,8 +30,16 @@ class RouteLoadWorkflowTest {
     }
 
     @Test
-    void rejectsSkippingWarehouseConfirmation() {
-        assertThatThrownBy(() -> RouteLoadWorkflow.confirmReceipt("PREPARED", warehouseActor, sellerActor))
+    void allowsReceptionWhenPreparedOrWarehouseConfirmed() {
+        assertThat(RouteLoadWorkflow.confirmReceipt("PREPARED", warehouseActor, sellerActor))
+                .isEqualTo("RECEIVED");
+        assertThat(RouteLoadWorkflow.confirmReceipt("WAREHOUSE_CONFIRMED", warehouseActor, sellerActor))
+                .isEqualTo("RECEIVED");
+    }
+
+    @Test
+    void rejectsInvalidStatusForReception() {
+        assertThatThrownBy(() -> RouteLoadWorkflow.confirmReceipt("SETTLED", warehouseActor, sellerActor))
                 .isInstanceOf(BusinessException.class)
                 .extracting("code").isEqualTo("INVALID_LOAD_STATUS");
     }

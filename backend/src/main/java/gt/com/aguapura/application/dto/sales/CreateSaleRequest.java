@@ -19,7 +19,7 @@ public record CreateSaleRequest(
         @NotNull UUID customerId,
         @NotEmpty @Size(max = 100) List<@Valid ItemRequest> items,
         @NotEmpty @Size(max = 3) List<@Valid PaymentRequest> payments,
-        @NotNull @Valid GeoLocationRequest location
+        @Valid GeoLocationRequest location
 ) {
     public record ItemRequest(
             @NotNull UUID presentationId,

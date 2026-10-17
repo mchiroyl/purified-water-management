@@ -19,9 +19,17 @@ import java.util.UUID;
 @Service
 public class SettlementApplicationService {
     private final SettlementPort persistence;
+    private final ItineraryApplicationService itineraryService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public SettlementApplicationService(SettlementPort persistence,
+                                        @org.springframework.beans.factory.annotation.Autowired(required = false) ItineraryApplicationService itineraryService) {
+        this.persistence = persistence;
+        this.itineraryService = itineraryService;
+    }
 
     public SettlementApplicationService(SettlementPort persistence) {
-        this.persistence = persistence;
+        this(persistence, null);
     }
 
     @Transactional
@@ -55,7 +63,15 @@ public class SettlementApplicationService {
         SettlementClosePolicy.validate(source.loadStatus(), role, pendingLocalOperations,
                 calculated.blockingReasons().stream().filter(reason -> !reason.startsWith("LOCAL_OUTBOX:"))
                         .toList(), notes);
-        return response(persistence.close(loadId, actorId, deviceId, notes.trim()));
+        var closed = response(persistence.close(loadId, actorId, deviceId, notes.trim()));
+        if (itineraryService != null) {
+            try {
+                itineraryService.closeItineraryOnSettlement(loadId);
+            } catch (Exception ignored) {
+                // Non-blocking auto-closure to ensure settlement close completes
+            }
+        }
+        return closed;
     }
 
     @Transactional

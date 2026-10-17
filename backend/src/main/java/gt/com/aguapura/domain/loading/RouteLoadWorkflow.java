@@ -15,7 +15,11 @@ public final class RouteLoadWorkflow {
     }
 
     public static String confirmReceipt(String currentStatus, UUID warehouseActor, UUID receivingActor) {
-        require(currentStatus, "WAREHOUSE_CONFIRMED");
+        if (!"WAREHOUSE_CONFIRMED".equals(currentStatus) && !"PREPARED".equals(currentStatus)) {
+            throw new BusinessException("INVALID_LOAD_STATUS",
+                    String.format("La carga se encuentra en estado '%s' pero se requiere 'PREPARED' o 'WAREHOUSE_CONFIRMED' para esta operación.",
+                            currentStatus), ErrorCategory.CONFLICT);
+        }
         if (warehouseActor != null && warehouseActor.equals(receivingActor)) {
             throw new BusinessException("LOAD_CONFIRMATION_ACTOR_CONFLICT",
                     "La recepción debe confirmarla un usuario distinto de quien entregó la carga.",

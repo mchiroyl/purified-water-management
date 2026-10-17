@@ -14,5 +14,5 @@ public record NoPurchaseVisitRequest(
         @NotNull @Pattern(regexp = "NO_ESTABA|NO_NECESITABA|OTRO")
         String visitReason,
         @Size(max = 300) String visitNote,
-        @NotNull @Valid GeoLocationRequest location
+        @Valid GeoLocationRequest location
 ) {}

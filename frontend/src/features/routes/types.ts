@@ -19,3 +19,47 @@ export function localDate(): string {
   const offset = now.getTimezoneOffset() * 60_000;
   return new Date(now.getTime() - offset).toISOString().slice(0, 10);
 }
+
+export type DailyItineraryStopResponse = {
+  id: string;
+  runId: string;
+  customerId: string;
+  customerCode: string;
+  customerName: string;
+  contactPhone?: string | null;
+  addressReference?: string | null;
+  targetLatitude?: number | null;
+  targetLongitude?: number | null;
+  stopOrder: number;
+  instructions?: string | null;
+  status: 'PENDING' | 'ATTENDED_SALE' | 'ATTENDED_NO_PURCHASE' | 'POSTPONED_BLOCKED';
+  attendedAt?: string | null;
+  saleId?: string | null;
+  noPurchaseReason?: string | null;
+  noPurchaseNote?: string | null;
+  postponeReason?: string | null;
+  observedLatitude?: number | null;
+  observedLongitude?: number | null;
+  observedAccuracyMeters?: number | null;
+  hasLocationMismatch: boolean;
+  distanceDeviationMeters?: number | null;
+  evidencePhoto?: string | null;
+  evidencePhotoCapturedAt?: string | null;
+};
+
+export type DailyItineraryRunResponse = {
+  id: string;
+  routeId: string;
+  routeCode?: string | null;
+  routeName?: string | null;
+  routeLoadId?: string | null;
+  sellerUserId: string;
+  planDate: string;
+  status: 'PUBLISHED' | 'IN_PROGRESS' | 'COMPLETED' | 'CLOSED_INCOMPLETE';
+  totalStops: number;
+  completedStops: number;
+  publishedAt: string;
+  closedAt?: string | null;
+  stops: DailyItineraryStopResponse[];
+};
+

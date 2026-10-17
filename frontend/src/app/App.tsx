@@ -28,6 +28,7 @@ import { CreditPage } from '../features/credit/CreditPage';
 import { JugsPage } from '../features/jugs/JugsPage';
 import { AppShell } from './AppShell';
 import { DashboardPage } from './DashboardPage';
+import { VendorItineraryPage } from '../features/routes/VendorItineraryPage';
 
 export function App() {
   const { user, initializing } = useSession();
@@ -92,6 +93,7 @@ export function App() {
         <Route path="loads/list" element={canSeeLoads ? <RouteLoadsPage canPrepare={isAdmin || isWarehouse} canConfirmWarehouse={isAdmin || isWarehouse} canReceive={isAdmin || isSeller} canStart={isAdmin || isSeller} canCorrect={isAdmin || isWarehouse} view="list" /> : <Navigate to="/" replace />} />
         <Route path="sales" element={canSeeSales ? <SalesPage canSell={isAdmin || isSeller} canViewLocation={isAdmin || user.roles.includes('SUPERVISOR')} view="create" /> : <Navigate to="/" replace />} />
         <Route path="sales/list" element={canSeeSales ? <SalesPage canSell={isAdmin || isSeller} canViewLocation={isAdmin || user.roles.includes('SUPERVISOR')} view="list" /> : <Navigate to="/" replace />} />
+        <Route path="itinerary" element={<VendorItineraryPage />} />
         <Route path="transfers" element={canVerifyTransfers ? <TransfersPage /> : <Navigate to="/" replace />} />
         <Route path="credit" element={canSeeCredit ? <CreditPage canRecord={isAdmin || isCreditAdmin || isSeller} canVerify={canVerifyCredit} currentUserId={user.id} isAdmin={isAdmin} /> : <Navigate to="/" replace />} />
         <Route path="jugs" element={canSeeJugs ? <JugsPage canRecord={canRecordJugs} canViewSummary={isAdmin || isCreditAdmin} /> : <Navigate to="/" replace />} />
