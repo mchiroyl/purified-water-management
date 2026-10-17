@@ -123,9 +123,9 @@ export function VendorItineraryMap({
   const mapContainerId = useRef(`itinerary-map-${Math.random().toString(36).slice(2)}`);
   const mapRef = useRef<L.Map | null>(null);
 
-  // Filter stops with valid coordinates and sort by stopOrder
+  // Filter stops with valid non-zero coordinates and sort by stopOrder
   const sortedStops = [...stops]
-    .filter((s) => s.targetLatitude != null && s.targetLongitude != null)
+    .filter((s) => s.targetLatitude != null && s.targetLongitude != null && Number(s.targetLatitude) !== 0 && Number(s.targetLongitude) !== 0)
     .sort((a, b) => (a.stopOrder || 0) - (b.stopOrder || 0));
 
   const allStopsAttended = sortedStops.length > 0 && sortedStops.every(

@@ -170,7 +170,8 @@ public class CustomerRouteApplicationService {
         return new CustomerResponse(item.id(), item.code(), item.name(), item.contactName(), item.phone(),
                 item.whatsapp(), item.addressReference(), item.customerType(), item.status(), item.creditAllowed(),
                 item.creditLimit(), item.currentBalance(), item.routeId(), item.routeCode(), item.routeName(),
-                item.sellerId(), item.sellerName(), item.registrationState(), item.createdAt());
+                item.sellerId(), item.sellerName(), item.registrationState(), item.createdAt(),
+                item.confirmedLatitude(), item.confirmedLongitude());
     }
 
     private RouteResponse route(CustomerRoutePort.RouteView item) {

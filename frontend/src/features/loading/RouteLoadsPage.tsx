@@ -165,19 +165,23 @@ export function RouteLoadsPage({
             totalStops: routeCusts.length,
             completedStops: 0,
             status: 'IN_PROGRESS',
-            stops: routeCusts.map((c: any, idx: number) => ({
-              id: c.id,
-              runId: 'cust-run',
-              customerId: c.id,
-              customerCode: c.code || 'CLI',
-              customerName: c.name,
-              addressReference: c.addressReference,
-              targetLatitude: c.confirmedLatitude ?? 14.534 + (idx * 0.003),
-              targetLongitude: c.confirmedLongitude ?? -91.503 + (idx * 0.003),
-              stopOrder: idx + 1,
-              status: 'PENDING',
-              hasLocationMismatch: false,
-            })),
+            stops: routeCusts.map((c: any, idx: number) => {
+              const hasLat = c.confirmedLatitude != null && Number(c.confirmedLatitude) !== 0;
+              const hasLon = c.confirmedLongitude != null && Number(c.confirmedLongitude) !== 0;
+              return {
+                id: c.id,
+                runId: 'cust-run',
+                customerId: c.id,
+                customerCode: c.code || 'CLI',
+                customerName: c.name,
+                addressReference: c.addressReference,
+                targetLatitude: (hasLat && hasLon) ? Number(c.confirmedLatitude) : null,
+                targetLongitude: (hasLat && hasLon) ? Number(c.confirmedLongitude) : null,
+                stopOrder: idx + 1,
+                status: 'PENDING',
+                hasLocationMismatch: false,
+              };
+            }),
           } as unknown as DailyItineraryRunResponse;
         }
       } catch {
@@ -625,35 +629,56 @@ export function RouteLoadsPage({
                       {mapLoadId === load.id && (
                         <tr key={`${load.id}-map`}>
                           <td colSpan={6} style={{ padding: '1rem', background: '#f8fafc' }}>
-                            {itineraryMapQuery.data && itineraryMapQuery.data.stops && itineraryMapQuery.data.stops.length > 0 ? (
-                              <div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
-                                  <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>
-                                    📍 Recorrido de Clientes Planificado ({itineraryMapQuery.data.stops.length} clientes numerados)
-                                  </strong>
-                                  <Link to="/itinerary" style={{ fontSize: '0.82rem', color: '#0284c7', fontWeight: 600, textDecoration: 'none' }}>
-                                    Ver Detalle en Lista ➔
-                                  </Link>
+                            {itineraryMapQuery.data && itineraryMapQuery.data.stops && itineraryMapQuery.data.stops.length > 0 ? (() => {
+                              const rawStops = itineraryMapQuery.data.stops || [];
+                              const locatedCount = rawStops.filter((s: any) => s.targetLatitude != null && Number(s.targetLatitude) !== 0 && s.targetLongitude != null && Number(s.targetLongitude) !== 0).length;
+                              const pendingCount = rawStops.length - locatedCount;
+
+                              return (
+                                <div>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                      <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>
+                                        📍 Recorrido de Clientes Planificado ({rawStops.length} clientes numerados)
+                                      </strong>
+                                      {pendingCount > 0 ? (
+                                        <span style={{ fontSize: '0.75rem', background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: '12px', fontWeight: 600 }}>
+                                          {locatedCount} geolocalizados · {pendingCount} sin coordenadas
+                                        </span>
+                                      ) : (
+                                        <span style={{ fontSize: '0.75rem', background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontWeight: 600 }}>
+                                          100% geolocalizados
+                                        </span>
+                                      )}
+                                    </div>
+                                    <Link to="/itinerary" style={{ fontSize: '0.82rem', color: '#0284c7', fontWeight: 600, textDecoration: 'none' }}>
+                                      Ver Detalle en Lista ➔
+                                    </Link>
+                                  </div>
+                                  <VendorItineraryMap
+                                    start={{
+                                      latitude: Number((itineraryMapQuery.data as any).startLatitude || 14.534),
+                                      longitude: Number((itineraryMapQuery.data as any).startLongitude || -91.503),
+                                      label: (itineraryMapQuery.data as any).startAddressReference || 'Inicio de ruta',
+                                    }}
+                                    stops={rawStops.map((s: any, idx: number) => {
+                                      const hasLat = s.targetLatitude != null && Number(s.targetLatitude) !== 0;
+                                      const hasLon = s.targetLongitude != null && Number(s.targetLongitude) !== 0;
+                                      return {
+                                        ...s,
+                                        stopOrder: Number(s.stopOrder ?? s.plannedOrder ?? idx + 1),
+                                        customerName: String(s.customerName ?? s.customerNameSnapshot ?? 'Cliente'),
+                                        customerCode: String(s.customerCode ?? s.customer_code ?? 'CLI'),
+                                        addressReference: String(s.addressReference ?? s.addressReferenceSnapshot ?? ''),
+                                        targetLatitude: (hasLat && hasLon) ? Number(s.targetLatitude) : null,
+                                        targetLongitude: (hasLat && hasLon) ? Number(s.targetLongitude) : null,
+                                      };
+                                    })}
+                                    height="360px"
+                                  />
                                 </div>
-                                <VendorItineraryMap
-                                  start={{
-                                    latitude: Number((itineraryMapQuery.data as any).startLatitude || 14.534),
-                                    longitude: Number((itineraryMapQuery.data as any).startLongitude || -91.503),
-                                    label: (itineraryMapQuery.data as any).startAddressReference || 'Inicio de ruta',
-                                  }}
-                                  stops={(itineraryMapQuery.data.stops || []).map((s: any, idx: number) => ({
-                                    ...s,
-                                    stopOrder: Number(s.stopOrder ?? s.plannedOrder ?? idx + 1),
-                                    customerName: String(s.customerName ?? s.customerNameSnapshot ?? 'Cliente'),
-                                    customerCode: String(s.customerCode ?? s.customer_code ?? 'CLI'),
-                                    addressReference: String(s.addressReference ?? s.addressReferenceSnapshot ?? ''),
-                                    targetLatitude: s.targetLatitude != null ? Number(s.targetLatitude) : 14.534 + ((idx + 1) * 0.0035),
-                                    targetLongitude: s.targetLongitude != null ? Number(s.targetLongitude) : -91.503 + ((idx + 1) * 0.0035),
-                                  }))}
-                                  height="360px"
-                                />
-                              </div>
-                            ) : (
+                              );
+                            })() : (
                               <>
                                 {routeMapQuery.isLoading && <p className="muted">Cargando mapa de ruta…</p>}
                                 {routeMapQuery.error && <p className="alert error">{(routeMapQuery.error as Error).message}</p>}

@@ -475,16 +475,15 @@ export function VendorItineraryPanel({ routeId, isSeller = false }: VendorItiner
 
   const rawStops = run.stops || [];
   const stops: DailyItineraryStopResponse[] = rawStops.map((s: any, idx: number) => {
-    const fallbackLat = 14.534 + ((idx + 1) * 0.0035);
-    const fallbackLon = -91.503 + ((idx + 1) * 0.0035);
+    const hasValidCoords = s.targetLatitude != null && Number(s.targetLatitude) !== 0 && s.targetLongitude != null && Number(s.targetLongitude) !== 0;
     return {
       ...s,
       stopOrder: Number(s.stopOrder ?? s.plannedOrder ?? idx + 1),
       customerName: cleanDisplayText(String(s.customerName ?? s.customerNameSnapshot ?? 'Cliente')),
       customerCode: String(s.customerCode ?? s.customer_code ?? 'CLI'),
       addressReference: String(s.addressReference ?? s.addressReferenceSnapshot ?? ''),
-      targetLatitude: s.targetLatitude != null ? Number(s.targetLatitude) : fallbackLat,
-      targetLongitude: s.targetLongitude != null ? Number(s.targetLongitude) : fallbackLon,
+      targetLatitude: hasValidCoords ? Number(s.targetLatitude) : undefined,
+      targetLongitude: hasValidCoords ? Number(s.targetLongitude) : undefined,
     };
   });
 

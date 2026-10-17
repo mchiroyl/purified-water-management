@@ -331,7 +331,8 @@ public class JdbcCustomerRouteAdapter implements CustomerRoutePort {
                 SELECT c.id, c.code, c.name, c.contact_name, c.phone, c.whatsapp, c.address_reference,
                        c.customer_type, c.status, c.credit_allowed, c.credit_limit, c.current_balance,
                        c.registration_state, c.created_at, r.id AS route_id, r.code AS route_code,
-                       r.name AS route_name, s.id AS seller_id, s.display_name AS seller_name
+                       r.name AS route_name, s.id AS seller_id, s.display_name AS seller_name,
+                       loc.latitude AS confirmed_latitude, loc.longitude AS confirmed_longitude
                 FROM customer c
                 LEFT JOIN LATERAL (
                     SELECT route_id FROM customer_route cr
@@ -346,6 +347,7 @@ public class JdbcCustomerRouteAdapter implements CustomerRoutePort {
                     ORDER BY CASE WHEN ra0.valid_from <= current_date THEN 0 ELSE 1 END, ra0.valid_from DESC LIMIT 1
                 ) ra ON true
                 LEFT JOIN seller s ON s.id = ra.seller_id
+                LEFT JOIN customer_confirmed_location loc ON loc.customer_id = c.id AND loc.status = 'ACTIVE'
                 WHERE 1=1
                 """;
     }
@@ -376,7 +378,7 @@ public class JdbcCustomerRouteAdapter implements CustomerRoutePort {
                 rs.getBoolean("credit_allowed"), rs.getBigDecimal("credit_limit"), rs.getBigDecimal("current_balance"),
                 rs.getObject("route_id", UUID.class), rs.getString("route_code"), rs.getString("route_name"),
                 rs.getObject("seller_id", UUID.class), rs.getString("seller_name"), rs.getString("registration_state"),
-                instant(rs, "created_at"));
+                instant(rs, "created_at"), rs.getBigDecimal("confirmed_latitude"), rs.getBigDecimal("confirmed_longitude"));
     }
 
     private RouteView routeRow(ResultSet rs) throws SQLException {

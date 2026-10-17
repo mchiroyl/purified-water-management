@@ -3,6 +3,7 @@ export type Customer = {
   addressReference: string; customerType: string; status: string; creditAllowed: boolean;
   creditLimit: number; currentBalance: number; routeId?: string; routeCode?: string; routeName?: string;
   sellerId?: string; sellerName?: string; registrationState: string; createdAt: string;
+  confirmedLatitude?: number | null; confirmedLongitude?: number | null;
 };
 export type Route = {
   id: string; code: string; name: string; description: string; status: string; sellerId?: string;
