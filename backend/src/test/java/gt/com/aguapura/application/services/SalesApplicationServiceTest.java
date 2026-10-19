@@ -18,7 +18,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import gt.com.aguapura.application.exceptions.BusinessException;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -80,6 +83,27 @@ class SalesApplicationServiceTest {
                 .contains("location");
         assertThat(outOfRangeLocation).extracting(violation -> violation.getPropertyPath().toString())
                 .contains("location.latitude");
+    }
+
+    @Test
+    void throwsRouteLoadNotStartedWhenStartedRouteLoadIsMissing() {
+        when(persistence.findSaleContext(routeId, customerId)).thenReturn(Optional.empty());
+        when(persistence.findStartedRouteLoadId(routeId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.create(validRequest(location), actorId, deviceId, false))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("No hay una carga de inventario activa para esta ruta");
+    }
+
+    @Test
+    void throwsCustomerNotInRouteWhenCustomerNotFoundInRoute() {
+        when(persistence.findSaleContext(routeId, customerId)).thenReturn(Optional.empty());
+        when(persistence.findStartedRouteLoadId(routeId)).thenReturn(Optional.of(UUID.randomUUID()));
+        when(persistence.findCustomerInRoute(customerId, routeId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.create(validRequest(location), actorId, deviceId, false))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("El cliente seleccionado no está asignado a la ruta");
     }
 
     private CreateSaleRequest validRequest(GeoLocationRequest requestedLocation) {
