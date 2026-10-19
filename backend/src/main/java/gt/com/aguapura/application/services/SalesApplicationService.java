@@ -54,8 +54,21 @@ public class SalesApplicationService {
 
     @Transactional
     public SaleResponse create(CreateSaleRequest request, UUID actorId, UUID deviceId, boolean restrictedToSeller) {
-        var context = persistence.findSaleContext(request.routeId(), request.customerId()).orElseThrow(() ->
-                validation("SALE_CONTEXT_INVALID", "La ruta, el cliente o el inventario de ruta no son válidos."));
+        var context = persistence.findSaleContext(request.routeId(), request.customerId()).orElseThrow(() -> {
+            if (persistence.findStartedRouteLoadId(request.routeId()).isEmpty()) {
+                return validation("ROUTE_LOAD_NOT_STARTED",
+                        "No hay una carga de inventario activa para esta ruta. Debe confirmar la recepción de su carga en 'Mi Carga' antes de poder registrar ventas.");
+            }
+            if (persistence.findCustomerInRoute(request.customerId(), request.routeId()).isEmpty()) {
+                return validation("CUSTOMER_NOT_IN_ROUTE",
+                        "El cliente seleccionado no está asignado a la ruta activa o no se encuentra activo.");
+            }
+            if (restrictedToSeller && !persistence.sellerAssignedToRoute(actorId, request.routeId())) {
+                return forbidden("SALE_ROUTE_FORBIDDEN",
+                        "El vendedor no está asignado a la ruta seleccionada para la fecha actual.");
+            }
+            return validation("SALE_CONTEXT_INVALID", "La ruta, el cliente o el inventario de ruta no son válidos.");
+        });
         if (restrictedToSeller && !persistence.sellerAssignedToRoute(actorId, request.routeId())) {
             throw forbidden("SALE_ROUTE_FORBIDDEN", "El vendedor no está asignado a la ruta seleccionada.");
         }

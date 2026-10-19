@@ -746,6 +746,11 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
 
   // ── Verificación de Itinerario Activo y Salto de Paradas ───────────────────
   const effectiveRouteId = routeId || assignedRoute?.id || '';
+  const hasStartedLoad = useMemo(() => {
+    if (!loads.data || loads.isLoading) return true;
+    return loads.data.some(l => l.status === 'STARTED' && (!routeId || l.routeId === routeId));
+  }, [loads.data, loads.isLoading, routeId]);
+
   const activeItinerary = useQuery({
     queryKey: ['itineraries', 'active', effectiveRouteId],
     queryFn: async () => {
@@ -1214,6 +1219,49 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
       </div>
     )}
 
+    {isSeller && assignedRoute && !loads.isLoading && !hasStartedLoad && (
+      <div
+        style={{
+          margin: '0.75rem 0 1.25rem 0',
+          backgroundColor: '#fffbeb',
+          border: '1.5px solid #fde68a',
+          borderRadius: '8px',
+          padding: '0.75rem 1rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '0.75rem',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          <span style={{ fontSize: '1.4rem' }}>🚚</span>
+          <div>
+            <strong style={{ color: '#92400e', fontSize: '0.9rem', display: 'block' }}>
+              Carga de camión pendiente de iniciar
+            </strong>
+            <span style={{ color: '#b45309', fontSize: '0.82rem' }}>
+              Para registrar ventas con inventario legal en ruta, primero confirma la recepción de tu carga en <strong>Mi Carga</strong>.
+            </span>
+          </div>
+        </div>
+        <button
+          type="button"
+          className="primary"
+          style={{
+            backgroundColor: '#d97706',
+            borderColor: '#b45309',
+            fontSize: '0.82rem',
+            padding: '0.4rem 0.8rem',
+            fontWeight: 700,
+          }}
+          onClick={() => navigate('/loads')}
+        >
+          Ir a Mi Carga →
+        </button>
+      </div>
+    )}
+
     {canSell && <form className="panel section-panel" onSubmit={submit}>
       <h2>Nueva venta</h2>
       <div className="form-grid compact-grid">
@@ -1395,7 +1443,82 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
       <button type="button" className="secondary add-payment" disabled={!nextPaymentMethod} onClick={() => nextPaymentMethod && setPayments(current => [...current, newPayment(nextPaymentMethod)])}>Dividir pago</button>
       <div className="form-actions"><button type="button" className="secondary" onClick={() => setItems(current => [...current, { presentationId: '', quantity: 1 }])}>Agregar producto</button><button className="primary" disabled={isCapturingLocation || create.isPending || saleBlocked}>{isCapturingLocation ? 'Refinando precisión GPS…' : create.isPending ? 'Confirmando…' : 'Confirmar venta'}</button></div>
       {isCapturingLocation && <p className="muted" style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>Buscando señal GPS de alta precisión. Puede tomar hasta 30 segundos.</p>}
-      {(locationError || create.error) && <div className="alert error">{locationError || create.error?.message}</div>}
+      {locationError && (
+        <div style={{ marginTop: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+          <div className="alert error" style={{ margin: 0 }}>{locationError}</div>
+          <div
+            style={{
+              backgroundColor: '#eff6ff',
+              border: '1.5px solid #93c5fd',
+              borderRadius: '8px',
+              padding: '0.7rem 0.9rem',
+              fontSize: '0.83rem',
+              color: '#1e3a8a',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '0.55rem',
+              lineHeight: 1.45,
+            }}
+          >
+            <span style={{ fontSize: '1.2rem', flexShrink: 0, marginTop: '-2px' }}>💡</span>
+            <div>
+              <strong style={{ color: '#1d4ed8', display: 'block', marginBottom: '0.15rem' }}>
+                Consejo práctico para activar el GPS:
+              </strong>
+              Si estás bajo techo o la señal satelital tardó en responder, abre la app de <strong>Google Maps</strong> por 3 a 5 segundos para que el teléfono calibre la antena GPS; luego regresa aquí y vuelve a presionar <strong>Confirmar venta</strong>.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!locationError && create.error && (
+        <div style={{ marginTop: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+          <div className="alert error" style={{ margin: 0 }}>{create.error.message}</div>
+          {(create.error.message.includes('carga') ||
+            create.error.message.includes('inventario') ||
+            create.error.message.includes('La ruta, el cliente o el inventario')) && (
+            <div
+              style={{
+                backgroundColor: '#fffbeb',
+                border: '1.5px solid #fde68a',
+                borderRadius: '8px',
+                padding: '0.7rem 0.9rem',
+                fontSize: '0.83rem',
+                color: '#92400e',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.4rem',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+                <span style={{ fontSize: '1.2rem', flexShrink: 0 }}>🚚</span>
+                <div>
+                  <strong>¿Falta iniciar la carga de hoy?</strong>
+                  <p style={{ margin: '0.2rem 0 0', lineHeight: 1.4 }}>
+                    Para que la venta sea válida y ética, debes confirmar primero la recepción del producto asignado al camión.
+                  </p>
+                </div>
+              </div>
+              <div style={{ alignSelf: 'flex-end', marginTop: '0.2rem' }}>
+                <button
+                  type="button"
+                  className="primary"
+                  style={{
+                    backgroundColor: '#d97706',
+                    borderColor: '#b45309',
+                    fontSize: '0.82rem',
+                    padding: '0.35rem 0.75rem',
+                    fontWeight: 700,
+                  }}
+                  onClick={() => navigate('/loads')}
+                >
+                  Ir a "Mi Carga" para confirmar recepción →
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </form>}
 
     {/* ── Visita sin compra ─────────────────────────────────────────────── */}
@@ -1549,7 +1672,29 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
             {visitCapturing && (
               <p className="muted wide" style={{ fontSize: '0.85rem' }}>Buscando señal GPS de alta precisión. Puede tomar hasta 30 segundos.</p>
             )}
-            {visitError && <div className="alert error wide">{visitError}</div>}
+            {visitError && (
+              <div className="wide" style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <div className="alert error" style={{ margin: 0 }}>{visitError}</div>
+                <div
+                  style={{
+                    backgroundColor: '#eff6ff',
+                    border: '1.5px solid #93c5fd',
+                    borderRadius: '8px',
+                    padding: '0.65rem 0.85rem',
+                    fontSize: '0.82rem',
+                    color: '#1e3a8a',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '0.5rem',
+                  }}
+                >
+                  <span style={{ fontSize: '1.15rem', flexShrink: 0 }}>💡</span>
+                  <div>
+                    <strong>Consejo para el GPS:</strong> Si la señal satelital no responde, abre <strong>Google Maps</strong> por unos segundos para calibrar la antena y vuelve a intentar.
+                  </div>
+                </div>
+              </div>
+            )}
             {registerVisit.error && <div className="alert error wide">{(registerVisit.error as Error).message}</div>}
             {visitSuccess && <div className="alert success wide">{visitSuccess}</div>}
           </form>
