@@ -55,6 +55,21 @@ public class GlobalExceptionHandler {
                     "Esta carga ya tiene su lista de clientes y recorrido enviado al vendedor previamente.",
                     request, null);
         }
+        if (causeMsg != null && causeMsg.contains("ck_inventory_balance_non_negative")) {
+            return response(HttpStatus.CONFLICT, "INSUFFICIENT_STOCK",
+                    "No hay suficiente inventario disponible en el camión para despachar la cantidad solicitada.",
+                    request, null);
+        }
+        if (causeMsg != null && causeMsg.contains("sale_document_number_key")) {
+            return response(HttpStatus.CONFLICT, "DUPLICATE_DOCUMENT_NUMBER",
+                    "El número de comprobante ya fue emitido previamente. Verifique la configuración de correlativos de la empresa.",
+                    request, null);
+        }
+        if (causeMsg != null && causeMsg.contains("customer_confirmed_location")) {
+            return response(HttpStatus.CONFLICT, "LOCATION_CONFLICT",
+                    "Conflicto al registrar la ubicación confirmada del cliente en ruta.",
+                    request, null);
+        }
         return response(HttpStatus.CONFLICT, "DATA_CONFLICT", "La operación entra en conflicto con datos existentes.", request, null);
     }
 

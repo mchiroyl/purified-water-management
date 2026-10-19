@@ -521,7 +521,7 @@ public class JdbcItineraryAdapter implements ItineraryPort {
                     )
                     SELECT :customerId, CAST(:obsLat AS numeric), CAST(:obsLon AS numeric), CAST(:obsAcc AS numeric),
                            'SALE', CAST(:saleId AS uuid),
-                           (SELECT seller_id FROM daily_itinerary_run WHERE id = :runId),
+                           (SELECT s.user_id FROM daily_itinerary_run dir JOIN seller s ON s.id = dir.seller_id WHERE dir.id = :runId),
                            now(), 'Auto-confirmado por venta en ruta', 'ACTIVE'
                     WHERE NOT EXISTS (
                         SELECT 1 FROM customer_confirmed_location
