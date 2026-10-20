@@ -42,7 +42,7 @@ class RefreshUnavailableError extends Error {
   }
 }
 
-class RefreshRejectedError extends Error {
+export class RefreshRejectedError extends Error {
   constructor() {
     super('La sesión ya no está vigente.');
     this.name = 'RefreshRejectedError';

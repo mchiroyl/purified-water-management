@@ -1,9 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { apiRequest, setAccessToken } from '../../services/apiClient';
+import { ApiError } from '../../types/api';
+import { apiRequest, setAccessToken, RefreshRejectedError } from '../../services/apiClient';
 import type { AuthResponse, SessionUser } from './types';
 import { clearMobileData, prepareMobileDataForSession } from '../../offline/mobileDatabase';
 import { getKnownDeviceId, saveKnownDeviceId } from './deviceIdentity';
 import { getDeviceName } from './deviceIdentity';
+import {
+  clearOfflineAuth,
+  getCachedOfflineUser,
+  saveOfflineAuthProfile,
+  verifyOfflineCredentials,
+} from './offlineAuth';
 
 interface SessionContextValue {
   user: SessionUser | null;
@@ -19,25 +26,72 @@ interface SessionContextValue {
 const SessionContext = createContext<SessionContextValue | null>(null);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<SessionUser | null>(null);
+  const [user, setUser] = useState<SessionUser | null>(() => getCachedOfflineUser());
   const [busy, setBusy] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const bootstrapAttempted = useRef(false);
 
-  const applyAuth = useCallback(async (auth: AuthResponse) => {
+  const applyAuth = useCallback(async (auth: AuthResponse, password?: string) => {
     await prepareMobileDataForSession(auth.user.id, auth.user.deviceId);
     saveKnownDeviceId(auth.user.deviceId);
     setAccessToken(auth.accessToken);
     setUser(auth.user);
+    await saveOfflineAuthProfile(auth.user, password);
   }, []);
 
   const login = useCallback(async (username: string, password: string, deviceName = getDeviceName()) => {
     setBusy(true);
     try {
-      await applyAuth(await apiRequest<AuthResponse>('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ username, password, deviceName, appVersion: 'web', knownDeviceId: getKnownDeviceId() })
-      }));
+      const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+      if (!isOffline) {
+        try {
+          const timeoutController = new AbortController();
+          const timer = setTimeout(() => timeoutController.abort(), 4_000);
+          try {
+            const auth = await apiRequest<AuthResponse>('/auth/login', {
+              method: 'POST',
+              signal: timeoutController.signal,
+              body: JSON.stringify({
+                username,
+                password,
+                deviceName,
+                appVersion: 'web',
+                knownDeviceId: getKnownDeviceId(),
+              }),
+            });
+            await applyAuth(auth, password);
+            return;
+          } finally {
+            clearTimeout(timer);
+          }
+        } catch (onlineError) {
+          // Si el servidor rechazó expresamente las credenciales (HTTP 401 / 403), lanzar el error del servidor
+          if (onlineError instanceof ApiError && onlineError.status < 500) {
+            throw onlineError;
+          }
+          // Si falló por red/timeout/Failed to fetch, proceder al intento de verificación offline local
+        }
+      }
+
+      // Verificación segura en el dispositivo con hash criptográfico SHA-256
+      const check = await verifyOfflineCredentials(username, password);
+      if (check.valid && check.user) {
+        await prepareMobileDataForSession(check.user.id, check.user.deviceId);
+        saveKnownDeviceId(check.user.deviceId);
+        setUser(check.user);
+        return;
+      }
+
+      if (check.reason === 'INVALID_CREDENTIALS') {
+        throw new Error('Contraseña incorrecta para el usuario guardado en este dispositivo.');
+      }
+      if (check.reason === 'DIFFERENT_USER') {
+        throw new Error('Este dispositivo tiene registrada la sesión de otro usuario en modo local. Conéctese a internet para ingresar.');
+      }
+      if (check.reason === 'NO_PROFILE') {
+        throw new Error('Sin conexión al servidor. Para ingresar por primera vez debe tener señal o internet.');
+      }
+      throw new Error('No fue posible iniciar sesión en modo local.');
     } finally {
       setBusy(false);
     }
@@ -63,9 +117,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (bootstrapAttempted.current) return;
     bootstrapAttempted.current = true;
     void refresh()
-      .catch(() => {
-        setAccessToken(null);
-        setUser(null);
+      .catch((err) => {
+        // Solo si el servidor rechazó expresamente la sesión (401/403: token revocado o usuario bloqueado)
+        if (err instanceof RefreshRejectedError) {
+          setAccessToken(null);
+          setUser(null);
+          clearOfflineAuth();
+          return;
+        }
+        // Si falló por error de red/timeout/Failed to fetch:
+        // CONSERVAR la sesión local del usuario para no sacarlo del sistema en campo
+        const cached = getCachedOfflineUser();
+        if (cached) {
+          setUser(cached);
+          void prepareMobileDataForSession(cached.id, cached.deviceId);
+        }
       })
       .finally(() => setInitializing(false));
   }, [refresh]);
@@ -74,6 +140,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const handleExpired = () => {
       setAccessToken(null);
       setUser(null);
+      clearOfflineAuth();
       void clearMobileData();
     };
     window.addEventListener('agua-pura:session-expired', handleExpired);
@@ -85,6 +152,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       await apiRequest<void>('/auth/logout', { method: 'POST' });
     } finally {
       await clearMobileData();
+      clearOfflineAuth();
       setAccessToken(null);
       setUser(null);
     }
@@ -97,6 +165,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         method: 'POST', body: JSON.stringify({ currentPassword, newPassword }),
       });
       await clearMobileData();
+      clearOfflineAuth();
       setAccessToken(null);
       setUser(null);
     } finally {
