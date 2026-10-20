@@ -1,12 +1,44 @@
 import type { GeoLocationSnapshot } from '../offline/mobileDatabase';
 
+export const LAST_KNOWN_GPS_KEY = 'agua_pura:last_known_gps';
+
+/**
+ * Obtiene la última ubicación GPS válida almacenada en el dispositivo.
+ */
+export function getLastKnownLocation(): GeoLocationSnapshot | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(LAST_KNOWN_GPS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.latitude === 'number' && typeof parsed.longitude === 'number') {
+      return parsed;
+    }
+  } catch {
+    // Ignorar errores de análisis
+  }
+  return null;
+}
+
+/**
+ * Guarda la ubicación GPS más reciente en el almacenamiento local para respaldo offline.
+ */
+export function saveLastKnownLocation(snapshot: GeoLocationSnapshot): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(LAST_KNOWN_GPS_KEY, JSON.stringify(snapshot));
+  } catch {
+    // Ignorar si la cuota de almacenamiento está llena
+  }
+}
+
 /** Precisión objetivo en metros (rango 5 a 10 metros para máxima certeza). Si se obtiene <= 10 m se resuelve de inmediato. */
 const TARGET_ACCURACY_METERS = 10;
-/** Tiempo máximo de espera en milisegundos antes de resolver con la mejor lectura obtenida. */
+/** Tiempo máximo de espera en milisegundos antes de resolver con la mejor lectura obtenida o posición previa. */
 const MAX_WAIT_MS = 25_000;
 
-function locationError(label: string, error: GeolocationPositionError) {
-  if (error.code === 1) {
+function locationError(label: string, error?: GeolocationPositionError | { code?: number }) {
+  if (error && error.code === 1) {
     return `Se requiere permitir el acceso a la ubicación para ${label}. Active el permiso e intente nuevamente.`;
   }
   return `No fue posible obtener la ubicación para ${label}. Verifique la señal GPS e intente nuevamente.`;
@@ -21,17 +53,20 @@ export interface CaptureLocationOptions {
   targetAccuracyMeters?: number;
   maxWaitMs?: number;
   onProgress?: (progress: CaptureLocationProgress) => void;
+  fallbackLocation?: GeoLocationSnapshot | null;
 }
 
 /**
  * Captura la ubicación actual con la máxima precisión posible (5 a 10 metros).
  *
- * Estrategia:
- * 1. Activa `watchPosition` con `enableHighAccuracy: true` y `maximumAge: 10_000`.
- * 2. Cada lectura recibida se compara con la mejor anterior; se conserva la de menor accuracy.
+ * Estrategia offline-resilient:
+ * 1. Activa `watchPosition` con `enableHighAccuracy: true` y `maximumAge: 120_000` (reutiliza fix satelital reciente).
+ * 2. Cada lectura recibida se compara con la mejor anterior; se conserva la de menor accuracy y se guarda en localStorage.
  * 3. Si la precisión alcanza <= TARGET_ACCURACY_METERS (10 m), se resuelve de inmediato.
- * 4. Tras maxWaitMs (25 s) se resuelve con la mejor lectura obtenida.
- * 5. Si expira sin ninguna lectura válida, rechaza con mensaje descriptivo.
+ * 4. Tras 4 s, si ya hay una lectura aceptable o getCurrentPosition devuelve fix en caché, resuelve.
+ * 5. Si la señal satelital no responde (offline bajo techo) y no hay lectura activa tras la ventana, recurre
+ *    a fallbackLocation (ej. coordenadas del cliente) o a la última ubicación guardada en la ruta.
+ * 6. Si se deniega expresamente el permiso (código 1), siempre rechaza con mensaje de permiso.
  */
 export function captureCurrentLocation(
   label: string,
@@ -44,7 +79,7 @@ export function captureCurrentLocation(
   }
 
   const targetAccuracy = options?.targetAccuracyMeters ?? TARGET_ACCURACY_METERS;
-  const maxWait = options?.maxWaitMs ?? 8_000;
+  const maxWait = options?.maxWaitMs ?? MAX_WAIT_MS;
 
   return new Promise((resolve, reject) => {
     let watchId: number | null = null;
@@ -67,7 +102,34 @@ export function captureCurrentLocation(
       if (settled) return;
       settled = true;
       cleanup();
+      saveLastKnownLocation(snapshot);
       resolve(snapshot);
+    };
+
+    const resolveFallbackOrReject = (error?: GeolocationPositionError | { code?: number }) => {
+      if (settled) return;
+      if (best) {
+        finish(best);
+        return;
+      }
+      if (options?.fallbackLocation) {
+        finish({
+          ...options.fallbackLocation,
+          capturedAt: new Date().toISOString(),
+        });
+        return;
+      }
+      const cached = getLastKnownLocation();
+      if (cached) {
+        finish({
+          ...cached,
+          capturedAt: new Date().toISOString(),
+        });
+        return;
+      }
+      settled = true;
+      cleanup();
+      reject(new Error(locationError(label, error)));
     };
 
     tickerId = setInterval(() => {
@@ -84,76 +146,91 @@ export function captureCurrentLocation(
       if (best) {
         finish(best);
       } else if (typeof navigator.geolocation.getCurrentPosition === 'function') {
-        // Si a los 4s no hay fix de satélite, intentar lectura de red/WiFi directa
+        // Intentar lectura con caché amplio del dispositivo si el satélite puro está tardando
         navigator.geolocation.getCurrentPosition(
           (pos) => {
             if (settled) return;
-            finish({
+            const snap: GeoLocationSnapshot = {
               latitude: pos.coords.latitude,
               longitude: pos.coords.longitude,
               accuracyMeters: Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : null,
               capturedAt: new Date().toISOString(),
-            });
+            };
+            finish(snap);
           },
           () => {
-            // Si también falla, dejar que continúe hasta maxWait
+            // Si falla, dejar que continúe hasta maxWait
           },
-          { enableHighAccuracy: false, timeout: 3_000, maximumAge: 30_000 },
+          { enableHighAccuracy: false, timeout: 3_000, maximumAge: 300_000 },
         );
       }
     }, 4_000);
 
     const timeoutId = setTimeout(() => {
-      if (settled) return;
-      if (best) {
-        finish(best);
-      } else {
-        settled = true;
-        cleanup();
-        reject(new Error(`No fue posible obtener la ubicación para ${label}. Verifique la señal GPS e intente nuevamente.`));
-      }
+      resolveFallbackOrReject();
     }, maxWait);
 
-    watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        const snapshot: GeoLocationSnapshot = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracyMeters: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
-          capturedAt: new Date().toISOString(),
-        };
+    try {
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          const snapshot: GeoLocationSnapshot = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracyMeters: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
+            capturedAt: new Date().toISOString(),
+          };
 
-        // Conservar la lectura más precisa
-        if (
-          best === null ||
-          (snapshot.accuracyMeters !== null &&
-            (best.accuracyMeters === null || snapshot.accuracyMeters < best.accuracyMeters))
-        ) {
-          best = snapshot;
-        }
+          // Conservar la lectura más precisa
+          if (
+            best === null ||
+            (snapshot.accuracyMeters !== null &&
+              (best.accuracyMeters === null || snapshot.accuracyMeters < best.accuracyMeters))
+          ) {
+            best = snapshot;
+            saveLastKnownLocation(snapshot);
+          }
 
-        options?.onProgress?.({
-          elapsedSeconds,
-          accuracyMeters: best.accuracyMeters,
-        });
+          options?.onProgress?.({
+            elapsedSeconds,
+            accuracyMeters: best.accuracyMeters,
+          });
 
-        // Resolver inmediatamente si se alcanzó la precisión objetivo (<= 10 m)
-        if (snapshot.accuracyMeters !== null && snapshot.accuracyMeters <= targetAccuracy) {
-          finish(best);
-        }
-      },
-      (error) => {
-        // Si ocurrió timeout de watchPosition pero ya tenemos una lectura previa aceptable, usarla
-        if (best && (error.code === 3 || error.code === 2)) {
-          finish(best);
-          return;
-        }
-        if (settled) return;
-        settled = true;
-        cleanup();
-        reject(new Error(locationError(label, error)));
-      },
-      { enableHighAccuracy: true, maximumAge: 10_000, timeout: maxWait },
-    );
+          // Resolver inmediatamente si se alcanzó la precisión objetivo (<= 10 m)
+          if (snapshot.accuracyMeters !== null && snapshot.accuracyMeters <= targetAccuracy) {
+            finish(best);
+          }
+        },
+        (error) => {
+          // Si el usuario denegó expresamente el permiso (código 1), rechazar de inmediato
+          if (error.code === 1) {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            reject(new Error(locationError(label, error)));
+            return;
+          }
+
+          // Si ocurrió timeout de watchPosition o señal no disponible (códigos 2 o 3)
+          if (best) {
+            finish(best);
+            return;
+          }
+
+          // Si hay fallback configurado o última ubicación conocida, resolver
+          if (options?.fallbackLocation || getLastKnownLocation()) {
+            resolveFallbackOrReject(error);
+            return;
+          }
+
+          // Si aún no vence el tiempo máximo, esperar a que el temporizador o reintento resuelva
+          if (elapsedSeconds * 1000 >= maxWait) {
+            resolveFallbackOrReject(error);
+          }
+        },
+        { enableHighAccuracy: true, maximumAge: 120_000, timeout: maxWait },
+      );
+    } catch {
+      resolveFallbackOrReject();
+    }
   });
 }

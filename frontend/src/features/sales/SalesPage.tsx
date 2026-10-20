@@ -60,6 +60,8 @@ type Customer = {
   contactName?: string;
   phone?: string;
   whatsapp?: string;
+  confirmedLatitude?: number | null;
+  confirmedLongitude?: number | null;
 };
 type Presentation = { id: string; code: string; name: string; active: boolean; productId?: string };
 type Product = { id: string; code: string; name: string; active: boolean; controlsInventory: boolean; presentations: Presentation[] };
@@ -1298,8 +1300,19 @@ export function SalesPage({
     setVisitError('');
     setVisitSuccess('');
     setVisitCapturing(true);
+    const visitCust = visitAvailableCustomers.find(c => c.id === visitCustomerId);
+    const visitFallback = (visitCust?.confirmedLatitude != null && visitCust?.confirmedLongitude != null)
+      ? {
+          latitude: Number(visitCust.confirmedLatitude),
+          longitude: Number(visitCust.confirmedLongitude),
+          accuracyMeters: 20,
+          capturedAt: new Date().toISOString(),
+        }
+      : null;
     try {
-      const location = await captureCurrentLocation('registrar la visita sin compra');
+      const location = await captureCurrentLocation('registrar la visita sin compra', {
+        fallbackLocation: visitFallback,
+      });
       registerVisit.mutate(location);
     } catch (err) {
       setVisitError(err instanceof Error ? err.message : 'No fue posible obtener la ubicación.');
@@ -1326,8 +1339,19 @@ export function SalesPage({
     event.preventDefault();
     setLocationError('');
     setIsCapturingLocation(true);
+    const currentCustomer = availableCustomers.find(customer => customer.id === customerId);
+    const customerFallback = (currentCustomer?.confirmedLatitude != null && currentCustomer?.confirmedLongitude != null)
+      ? {
+          latitude: Number(currentCustomer.confirmedLatitude),
+          longitude: Number(currentCustomer.confirmedLongitude),
+          accuracyMeters: 20,
+          capturedAt: new Date().toISOString(),
+        }
+      : null;
     try {
-      const location = await captureCurrentLocation('confirmar la venta');
+      const location = await captureCurrentLocation('confirmar la venta', {
+        fallbackLocation: customerFallback,
+      });
       create.mutate(location);
     } catch (error) {
       setLocationError(error instanceof Error ? error.message : 'No fue posible obtener la ubicación.');

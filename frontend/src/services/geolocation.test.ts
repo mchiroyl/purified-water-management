@@ -4,6 +4,11 @@ import { captureCurrentLocation } from './geolocation';
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  try {
+    localStorage.clear();
+  } catch {
+    // ignorar si no está disponible
+  }
 });
 
 describe('captureCurrentLocation', () => {
@@ -75,7 +80,7 @@ describe('captureCurrentLocation', () => {
     expect(clearWatch).toHaveBeenCalledWith(3);
   });
 
-  it('rechaza si el timeout expira sin ninguna lectura', async () => {
+  it('rechaza si el timeout expira sin ninguna lectura ni posición previa', async () => {
     vi.useFakeTimers();
     vi.stubGlobal('navigator', {
       geolocation: {
@@ -90,7 +95,67 @@ describe('captureCurrentLocation', () => {
     await assertion;
   });
 
-  it('explica cómo resolver un permiso de ubicación denegado', async () => {
+  it('utiliza la última ubicación guardada en localStorage si la señal GPS no responde offline', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-16T18:30:00.000Z'));
+    localStorage.setItem('agua_pura:last_known_gps', JSON.stringify({
+      latitude: 14.6400,
+      longitude: -90.5100,
+      accuracyMeters: 15,
+      capturedAt: '2026-08-16T18:00:00.000Z',
+    }));
+
+    let errorCallback: PositionErrorCallback | null = null;
+    const watchPosition = vi.fn((_success: PositionCallback, failure: PositionErrorCallback) => {
+      errorCallback = failure;
+      return 6;
+    });
+    vi.stubGlobal('navigator', { geolocation: { watchPosition, clearWatch: vi.fn() } });
+
+    const promise = captureCurrentLocation('confirmar la venta');
+    errorCallback!({ code: 3 } as GeolocationPositionError); // TIMEOUT sin satélite
+
+    await expect(promise).resolves.toMatchObject({
+      latitude: 14.6400,
+      longitude: -90.5100,
+      accuracyMeters: 15,
+    });
+  });
+
+  it('utiliza fallbackLocation proporcionado si no hay señal satelital en vivo', async () => {
+    vi.useFakeTimers();
+    let errorCallback: PositionErrorCallback | null = null;
+    const watchPosition = vi.fn((_success: PositionCallback, failure: PositionErrorCallback) => {
+      errorCallback = failure;
+      return 7;
+    });
+    vi.stubGlobal('navigator', { geolocation: { watchPosition, clearWatch: vi.fn() } });
+
+    const promise = captureCurrentLocation('confirmar la venta', {
+      fallbackLocation: {
+        latitude: 14.6500,
+        longitude: -90.5200,
+        accuracyMeters: 20,
+        capturedAt: '2026-08-16T17:00:00.000Z',
+      },
+    });
+    errorCallback!({ code: 2 } as GeolocationPositionError); // POSITION_UNAVAILABLE
+
+    await expect(promise).resolves.toMatchObject({
+      latitude: 14.6500,
+      longitude: -90.5200,
+      accuracyMeters: 20,
+    });
+  });
+
+  it('explica cómo resolver un permiso de ubicación denegado incluso si hay ubicación previa', async () => {
+    localStorage.setItem('agua_pura:last_known_gps', JSON.stringify({
+      latitude: 14.6400,
+      longitude: -90.5100,
+      accuracyMeters: 15,
+      capturedAt: '2026-08-16T18:00:00.000Z',
+    }));
+
     let errorCallback: PositionErrorCallback | null = null;
     const watchPosition = vi.fn((_success: PositionCallback, failure: PositionErrorCallback) => {
       errorCallback = failure;
