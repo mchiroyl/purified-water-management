@@ -5,9 +5,9 @@ import * as mobileDatabase from '../../offline/mobileDatabase';
 import { apiRequest, setAccessToken } from '../../services/apiClient';
 import { clearOfflineAuth, saveOfflineAuthProfile } from './offlineAuth';
 
-afterEach(() => {
+afterEach(async () => {
   setAccessToken(null);
-  clearOfflineAuth();
+  await clearOfflineAuth();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });

@@ -6,7 +6,6 @@ import { clearMobileData, prepareMobileDataForSession } from '../../offline/mobi
 import { getKnownDeviceId, saveKnownDeviceId } from './deviceIdentity';
 import { getDeviceName } from './deviceIdentity';
 import {
-  clearOfflineAuth,
   getCachedOfflineUser,
   saveOfflineAuthProfile,
   verifyOfflineCredentials,
@@ -42,38 +41,37 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (username: string, password: string, deviceName = getDeviceName()) => {
     setBusy(true);
     try {
-      const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-      if (!isOffline) {
+      // 1. Intentar primero autenticación en línea si hay conectividad (timeout corto de 3.5s)
+      try {
+        const timeoutController = new AbortController();
+        const timer = setTimeout(() => timeoutController.abort(), 3_500);
         try {
-          const timeoutController = new AbortController();
-          const timer = setTimeout(() => timeoutController.abort(), 4_000);
-          try {
-            const auth = await apiRequest<AuthResponse>('/auth/login', {
-              method: 'POST',
-              signal: timeoutController.signal,
-              body: JSON.stringify({
-                username,
-                password,
-                deviceName,
-                appVersion: 'web',
-                knownDeviceId: getKnownDeviceId(),
-              }),
-            });
-            await applyAuth(auth, password);
-            return;
-          } finally {
-            clearTimeout(timer);
-          }
-        } catch (onlineError) {
-          // Si el servidor rechazó expresamente las credenciales (HTTP 401 / 403), lanzar el error del servidor
-          if (onlineError instanceof ApiError && onlineError.status < 500) {
-            throw onlineError;
-          }
-          // Si falló por red/timeout/Failed to fetch, proceder al intento de verificación offline local
+          const auth = await apiRequest<AuthResponse>('/auth/login', {
+            method: 'POST',
+            signal: timeoutController.signal,
+            body: JSON.stringify({
+              username,
+              password,
+              deviceName,
+              appVersion: 'web',
+              knownDeviceId: getKnownDeviceId(),
+            }),
+          });
+          await applyAuth(auth, password);
+          return;
+        } finally {
+          clearTimeout(timer);
         }
+      } catch (onlineError) {
+        // Si el servidor HTTP respondió explícitamente 401 Credenciales incorrectas,
+        // respetar la respuesta del servidor (no es fallo de red, es contraseña errónea)
+        if (onlineError instanceof ApiError && onlineError.status === 401) {
+          throw onlineError;
+        }
+        // Si falló por red/timeout/Failed to fetch/AbortError, proceder a verificación offline local
       }
 
-      // Verificación segura en el dispositivo con hash criptográfico SHA-256
+      // 2. Verificación offline segura en el dispositivo con hash criptográfico SHA-256
       const check = await verifyOfflineCredentials(username, password);
       if (check.valid && check.user) {
         await prepareMobileDataForSession(check.user.id, check.user.deviceId);
@@ -122,7 +120,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         if (err instanceof RefreshRejectedError) {
           setAccessToken(null);
           setUser(null);
-          clearOfflineAuth();
           return;
         }
         // Si falló por error de red/timeout/Failed to fetch:
@@ -140,7 +137,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const handleExpired = () => {
       setAccessToken(null);
       setUser(null);
-      clearOfflineAuth();
       void clearMobileData();
     };
     window.addEventListener('agua-pura:session-expired', handleExpired);
@@ -150,9 +146,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     try {
       await apiRequest<void>('/auth/logout', { method: 'POST' });
+    } catch {
+      // Ignorar error si no hay internet al cerrar sesión
     } finally {
-      await clearMobileData();
-      clearOfflineAuth();
+      // IMPORTANTE: NO borrar las credenciales offline ni los datos locales al cerrar sesión normal.
+      // El vendedor asignado a este dispositivo debe poder volver a ingresar con su contraseña
+      // sin necesidad de internet en ruta.
       setAccessToken(null);
       setUser(null);
     }
@@ -164,8 +163,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       await apiRequest<void>('/auth/change-password', {
         method: 'POST', body: JSON.stringify({ currentPassword, newPassword }),
       });
-      await clearMobileData();
-      clearOfflineAuth();
       setAccessToken(null);
       setUser(null);
     } finally {

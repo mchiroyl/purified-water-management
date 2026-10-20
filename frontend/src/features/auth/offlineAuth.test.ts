@@ -7,8 +7,8 @@ import {
   verifyOfflineCredentials,
 } from './offlineAuth';
 
-afterEach(() => {
-  clearOfflineAuth();
+afterEach(async () => {
+  await clearOfflineAuth();
 });
 
 describe('offlineAuth', () => {
