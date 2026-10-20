@@ -631,7 +631,14 @@ export function SellerDashboard({
   const jugsEmptyRecovered = jugsSold;
   const totalJugsLentOnRoute = routeJugsQuery.data?.totalJugsOutstanding ?? 0;
 
-  const handleRefreshAll = () => {
+  const handleRefreshAll = async () => {
+    if (syncContext) {
+      try {
+        await syncContext.syncNow();
+      } catch {
+        // el motor de sincronización gestiona reintentos y estados internamente
+      }
+    }
     void activeItinerary.refetch();
     void routeJugsQuery.refetch();
     void routeTemplatesQuery.refetch();

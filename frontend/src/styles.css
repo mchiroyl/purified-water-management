@@ -166,7 +166,8 @@ aside a:hover:not(.active) { background: #f1f5f9; color: #0f172a; }
 .mode-btn:hover { color: #f8fafc; }
 .mode-btn.active-online { background: #0284c7; color: #ffffff; box-shadow: 0 1px 4px rgba(2,132,199,.5); }
 .mode-btn.active-offline { background: #1e3a8a; color: #bfdbfe; box-shadow: 0 1px 4px rgba(30,58,138,.5); }
-.status-pill { display: inline-flex; align-items: center; gap: .4rem; padding: .28rem .65rem; border-radius: 999px; font-size: .72rem; font-weight: 700; background: #0f172a; border: 1px solid #334155; white-space: nowrap; min-height: 28px; }
+.status-pill { display: inline-flex; align-items: center; gap: .4rem; padding: .28rem .65rem; border-radius: 999px; font-size: .72rem; font-weight: 700; background: #0f172a; border: 1px solid #334155; white-space: nowrap; min-height: 28px; cursor: pointer; font-family: inherit; transition: opacity .18s ease; }
+.status-pill:disabled { cursor: default; }
 .status-pill .status-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
 .status-pill.active-net { color: #4ade80; }
 .status-pill.active-net .status-dot { background: #22c55e; box-shadow: 0 0 6px #22c55e; }

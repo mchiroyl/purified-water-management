@@ -1,9 +1,11 @@
+import { useNavigate } from 'react-router-dom';
 import { useConnection } from './ConnectionContext';
 import { useSyncOptional } from '../../offline/SyncContext';
 
 export function ConnectionIndicator() {
   const { manager, snapshot } = useConnection();
   const syncContext = useSyncOptional();
+  const navigate = useNavigate();
   const isForceOffline = snapshot.mode === 'FORCE_OFFLINE';
 
   const unfinishedCount = syncContext?.operations.filter(op => op.status !== 'SYNCED').length ?? 0;
@@ -64,34 +66,30 @@ export function ConnectionIndicator() {
         </button>
       </div>
 
-      {/* Indicador de Estado con Luz Testigo */}
-      <div className={`status-pill ${badgeClass}`} title={`Estado del enlace: ${label}`}>
-        <span className="status-dot" aria-hidden="true" />
-        <span className="status-text">{badgeText}</span>
-      </div>
-
-      {/* Botón de comprobación manual (conserva compatibilidad de tests y accesibilidad) */}
+      {/* Indicador de Estado único interactivo (elimina duplicidad) */}
       <button
         type="button"
-        className={`connection ${snapshot.state.toLowerCase()}`}
+        role="button"
+        className={`connection status-pill ${snapshot.state.toLowerCase()} ${badgeClass}`}
         disabled={snapshot.state === 'CHECKING' || isForceOffline}
         onClick={() => void manager.manualCheck()}
-        title={isForceOffline ? 'Modo local activado' : 'Comprobar conexión ahora'}
+        title={isForceOffline ? 'Modo local activado' : 'Toca para comprobar conexión'}
+        aria-label={label}
         aria-live="polite"
       >
-        {label}
+        <span className="status-dot" aria-hidden="true" />
+        <span className="status-text">{badgeText}</span>
       </button>
 
-      {/* Badge/Botón de operaciones pendientes de subir al servidor */}
+      {/* Badge/Botón de operaciones pendientes: lleva a la pantalla de pendientes */}
       {unfinishedCount > 0 && (
         <button
           type="button"
           className="pending-sync-badge"
-          disabled={isSyncing || isForceOffline}
-          onClick={() => void syncContext?.syncNow()}
+          onClick={() => navigate('/pending')}
           title={isForceOffline
-            ? `${unfinishedCount} operación(es) guardadas en el teléfono. Cambia a Conectado (Online) para sincronizar.`
-            : `${unfinishedCount} operación(es) pendientes. Toca para sincronizar ahora.`}
+            ? `${unfinishedCount} operación(es) guardadas en el teléfono. Toca para ver detalle.`
+            : `${unfinishedCount} operación(es) pendientes. Toca para ver detalle y sincronizar.`}
         >
           {isSyncing ? '🔄 Sincronizando…' : `⏳ ${unfinishedCount} pendiente${unfinishedCount > 1 ? 's' : ''}`}
         </button>

@@ -57,7 +57,9 @@ public class SecurityConfiguration {
         var configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(properties.allowedOrigins());
         configuration.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(java.util.List.of("Authorization", "Content-Type", "X-Correlation-Id"));
+        configuration.setAllowedHeaders(java.util.List.of(
+                "Authorization", "Content-Type", "X-Correlation-Id", "Cache-Control", "Pragma", "Accept", "X-Requested-With", "Origin"
+        ));
         configuration.setExposedHeaders(java.util.List.of("X-Correlation-Id"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
