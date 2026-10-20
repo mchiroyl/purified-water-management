@@ -2,9 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiRequest, resolveApiUrl, setAccessToken } from './apiClient';
 
 describe('apiClient', () => {
-  beforeEach(() => setAccessToken('expired-token'));
+  beforeEach(() => {
+    setAccessToken('expired-token');
+    localStorage.clear();
+  });
   afterEach(() => {
     setAccessToken(null);
+    localStorage.clear();
     vi.unstubAllGlobals();
   });
 
@@ -163,5 +167,25 @@ describe('apiClient', () => {
     expect(resolveApiUrl('https://custom.host/img.png')).toBe('https://custom.host/img.png');
     expect(resolveApiUrl('/api/company-configuration/logo')).toBe('/api/company-configuration/logo');
     expect(resolveApiUrl('/connectivity')).toBe('/api/connectivity');
+  });
+
+  it('guarda en caché local las peticiones GET y las devuelve cuando está en modo offline o sin señal', async () => {
+    const mockRoutes = [{ id: 'r-1', name: 'Ruta Central' }];
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify(mockRoutes), { status: 200 }));
+    vi.stubGlobal('fetch', fetcher);
+
+    // 1. Primera llamada online: guarda en localStorage
+    const onlineResult = await apiRequest<typeof mockRoutes>('/routes');
+    expect(onlineResult).toEqual(mockRoutes);
+
+    // 2. Simulamos modo local / sin señal (offline)
+    const { registerOfflineCheck } = await import('./apiClient');
+    registerOfflineCheck(() => true);
+
+    // La siguiente llamada debe devolver la caché de localStorage sin hacer fetch ni arrojar error
+    const offlineResult = await apiRequest<typeof mockRoutes>('/routes');
+    expect(offlineResult).toEqual(mockRoutes);
+
+    registerOfflineCheck(() => false);
   });
 });

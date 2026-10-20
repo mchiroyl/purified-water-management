@@ -982,7 +982,7 @@ export function SalesPage({
     const activeProducts = products.data.filter(product => {
       if (!product.active || !product.controlsInventory) return false;
       // REGLA B2B: Si hay carga activa en el camión, SOLO mostrar los productos cargados
-      if (loadedStockMap !== null) {
+      if (loadedStockMap !== null && loadedStockMap.size > 0) {
         return loadedStockMap.has(product.id) || loadedStockMap.has(product.code);
       }
       return true;
@@ -1584,7 +1584,7 @@ export function SalesPage({
       )}
 
       <h3>Productos</h3>
-      {loadedStockMap && (
+      {loadedStockMap && loadedStockMap.size > 0 && (
         <div style={{
           fontSize: '0.8rem',
           color: '#0369a1',

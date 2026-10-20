@@ -33,7 +33,7 @@ import {
 } from 'lucide-react';
 import { useSession } from '../features/auth/SessionContext';
 import { ConnectionIndicator } from '../features/connectivity/ConnectionIndicator';
-import { apiRequest, resolveApiUrl } from '../services/apiClient';
+import { apiRequest, preloadOfflineCatalogs, resolveApiUrl } from '../services/apiClient';
 
 type NavigationItem = {
   to: string;
@@ -56,6 +56,13 @@ export function AppShell() {
   const mobileMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const mobileMenuCloseRef = useRef<HTMLButtonElement>(null);
   const mobileMenuWasOpen = useRef(false);
+
+  useEffect(() => {
+    if (user) {
+      void preloadOfflineCatalogs();
+    }
+  }, [user]);
+
   const handleLogout = () => {
     setMobileMenuOpen(false);
     navigate('/', { replace: true });

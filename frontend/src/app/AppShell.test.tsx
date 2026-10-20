@@ -12,7 +12,8 @@ vi.mock('../features/connectivity/ConnectionIndicator', () => ({
   ConnectionIndicator: () => <span>online</span>
 }));
 vi.mock('../services/apiClient', () => ({
-  apiRequest: vi.fn().mockResolvedValue({ commercialName: 'Agua Pura Demo', version: 1 })
+  apiRequest: vi.fn().mockResolvedValue({ commercialName: 'Agua Pura Demo', version: 1 }),
+  preloadOfflineCatalogs: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe('AppShell navegación móvil', () => {

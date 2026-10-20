@@ -169,12 +169,66 @@ async function throwApiError(response: Response, fallbackMessage: string): Promi
   throw new ApiError(response.status, payload);
 }
 
+const CACHE_PREFIX = 'agua_pura:cache:';
+
+export function getLocalCache<T>(path: string): T | null {
+  if (typeof window === 'undefined' || !window.localStorage) return null;
+  try {
+    const raw = window.localStorage.getItem(`${CACHE_PREFIX}${path}`);
+    if (!raw) return null;
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+export function setLocalCache<T>(path: string, data: T): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(`${CACHE_PREFIX}${path}`, JSON.stringify(data));
+  } catch {
+    // Ignore quota errors if storage is full
+  }
+}
+
+export async function preloadOfflineCatalogs(): Promise<void> {
+  if (typeof window === 'undefined' || !navigator.onLine || isOfflineOverride?.()) return;
+  const endpoints = ['/routes', '/customers', '/products', '/loads', '/itineraries/my-active'];
+  await Promise.allSettled(endpoints.map(ep => apiRequest(ep)));
+}
+
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetchWithRefresh(path, init, 'application/json');
-  if (response.status >= 500) publish('agua-pura:request-failure');
-  if (response.status === 204) return undefined as T;
-  if (!response.ok) return throwApiError(response, 'No fue posible completar la solicitud.');
-  return response.json() as Promise<T>;
+  const isGet = !init.method || init.method.toUpperCase() === 'GET';
+
+  // Si estamos en modo offline forzado y es lectura (GET), responder de inmediato desde la caché local
+  if (isGet && isOfflineOverride?.() && !path.startsWith('/auth/')) {
+    const cached = getLocalCache<T>(path);
+    if (cached !== null) {
+      return cached;
+    }
+  }
+
+  try {
+    const response = await fetchWithRefresh(path, init, 'application/json');
+    if (response.status >= 500) publish('agua-pura:request-failure');
+    if (response.status === 204) return undefined as T;
+    if (!response.ok) {
+      return throwApiError(response, 'No fue posible completar la solicitud.');
+    }
+    const data = await response.json() as T;
+    if (isGet) {
+      setLocalCache(path, data);
+    }
+    return data;
+  } catch (err) {
+    if (isGet && (err instanceof TypeError || (err as DOMException)?.name === 'TimeoutError' || (typeof navigator !== 'undefined' && !navigator.onLine))) {
+      const cached = getLocalCache<T>(path);
+      if (cached !== null) {
+        return cached;
+      }
+    }
+    throw err;
+  }
 }
 
 export async function apiBlob(path: string, init: RequestInit = {}): Promise<Blob> {
