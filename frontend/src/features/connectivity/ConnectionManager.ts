@@ -29,6 +29,7 @@ type ConnectionManagerOptions = {
   minimumIntervalMs?: number;
   retryBaseMs?: number;
   retryMaximumMs?: number;
+  failureThreshold?: number;
   lifecycleTarget?: EventTarget;
   visibilityTarget?: EventTarget & Partial<Pick<Document, 'visibilityState'>>;
   now?: () => number;
@@ -52,6 +53,8 @@ export class ConnectionManager {
   private readonly minimumIntervalMs: number;
   private readonly retryBaseMs: number;
   private readonly retryMaximumMs: number;
+  /** How many consecutive probe failures are required before going OFFLINE/DEGRADED */
+  private readonly failureThreshold: number;
   private readonly lifecycleTarget?: EventTarget;
   private readonly visibilityTarget?: EventTarget & Partial<Pick<Document, 'visibilityState'>>;
   private readonly now: () => number;
@@ -64,17 +67,22 @@ export class ConnectionManager {
   private lastStartedAt = Number.NEGATIVE_INFINITY;
   private retryTimer?: number;
   private retryCount = 0;
+  private consecutiveFailures = 0;
   private requestSuccessGeneration = 0;
   private activeAbort?: AbortController;
   private started = false;
+  private requestFailureDebounceTimer?: number;
 
   constructor(options: ConnectionManagerOptions = {}) {
     this.endpoint = options.endpoint ?? resolveApiUrl('/connectivity');
     this.fetcher = options.fetcher ?? fetch;
-    this.timeoutMs = options.timeoutMs ?? 7_000;
-    this.minimumIntervalMs = options.minimumIntervalMs ?? 1_000;
-    this.retryBaseMs = options.retryBaseMs ?? 2_000;
-    this.retryMaximumMs = options.retryMaximumMs ?? 20_000;
+    this.timeoutMs = options.timeoutMs ?? 8_000;
+    // Minimum 5 s between probes – prevents hammering from multiple sync triggers
+    this.minimumIntervalMs = options.minimumIntervalMs ?? 5_000;
+    this.retryBaseMs = options.retryBaseMs ?? 5_000;
+    this.retryMaximumMs = options.retryMaximumMs ?? 60_000;
+    // Require 2 consecutive probe failures before marking offline (avoids single-packet loss)
+    this.failureThreshold = options.failureThreshold ?? 2;
     this.lifecycleTarget = options.lifecycleTarget ?? (typeof window !== 'undefined' ? window : undefined);
     this.visibilityTarget = options.visibilityTarget ?? (typeof document !== 'undefined' ? document : undefined);
     this.now = options.now ?? Date.now;
@@ -181,7 +189,17 @@ export class ConnectionManager {
 
   afterRequestFailure() {
     if (this.mode === 'FORCE_OFFLINE') return Promise.resolve(this.snapshot);
-    return this.check('REQUEST_FAILURE');
+    // Debounce: do NOT re-probe on every individual API failure – only after 3 s of silence
+    // to avoid rapid state oscillation when multiple queries fail simultaneously.
+    if (this.requestFailureDebounceTimer !== undefined) return Promise.resolve(this.snapshot);
+    this.requestFailureDebounceTimer = this.setTimer(() => {
+      this.requestFailureDebounceTimer = undefined;
+      // Only re-probe if still not ONLINE
+      if (this.snapshot.state !== 'ONLINE') {
+        void this.check('REQUEST_FAILURE');
+      }
+    }, 3_000);
+    return Promise.resolve(this.snapshot);
   }
 
   check(reason: ConnectionCheckReason, force = false): Promise<ConnectionSnapshot> {
@@ -261,18 +279,29 @@ export class ConnectionManager {
     const controller = new AbortController();
     this.activeAbort = controller;
     const timeout = this.setTimer(() => controller.abort(), this.timeoutMs);
+    // Append cache-busting param instead of cache:'no-store' to avoid CORS preflight on mobile browsers
+    const probeUrl = `${this.endpoint}${this.endpoint.includes('?') ? '&' : '?'}_t=${startedAt}`;
     try {
-      const response = await this.fetcher(this.endpoint, {
-        cache: 'no-store',
+      const response = await this.fetcher(probeUrl, {
+        method: 'GET',
         headers: { Accept: 'application/json' },
         signal: controller.signal,
       });
       if (generation !== this.requestSuccessGeneration) return this.snapshot;
       if (!response.ok) {
+        // A non-ok response means the server is reachable but degraded
+        this.consecutiveFailures += 1;
+        if (this.consecutiveFailures < this.failureThreshold) {
+          // Not yet at threshold – keep current state, schedule a fast retry
+          this.scheduleRetry(2_000);
+          return this.snapshot;
+        }
         return this.markUnavailable('DEGRADED', reason, startedAt);
       }
       const payload = await response.json().catch(() => ({})) as { serverTime?: string };
       if (generation !== this.requestSuccessGeneration) return this.snapshot;
+      // Success – reset failure counters
+      this.consecutiveFailures = 0;
       this.retryCount = 0;
       this.clearRetry();
       const online: ConnectionSnapshot = {
@@ -287,6 +316,13 @@ export class ConnectionManager {
       return online;
     } catch {
       if (generation !== this.requestSuccessGeneration) return this.snapshot;
+      this.consecutiveFailures += 1;
+      if (this.consecutiveFailures < this.failureThreshold) {
+        // First failure: keep current state, schedule a fast retry silently
+        this.scheduleRetry(3_000);
+        return this.snapshot;
+      }
+      // Multiple consecutive failures → go OFFLINE
       return this.markUnavailable('OFFLINE', reason, startedAt);
     } finally {
       this.clearTimer(timeout);
@@ -308,9 +344,9 @@ export class ConnectionManager {
     return unavailable;
   }
 
-  private scheduleRetry() {
+  private scheduleRetry(overrideDelayMs?: number) {
     if (this.retryTimer !== undefined) return;
-    const delay = Math.min(this.retryBaseMs * 2 ** this.retryCount, this.retryMaximumMs);
+    const delay = overrideDelayMs ?? Math.min(this.retryBaseMs * 2 ** this.retryCount, this.retryMaximumMs);
     this.retryCount += 1;
     this.publish({ ...this.snapshot, retryCount: this.retryCount });
     this.retryTimer = this.setTimer(() => {
@@ -322,6 +358,8 @@ export class ConnectionManager {
   private clearRetry() {
     if (this.retryTimer !== undefined) this.clearTimer(this.retryTimer);
     this.retryTimer = undefined;
+    if (this.requestFailureDebounceTimer !== undefined) this.clearTimer(this.requestFailureDebounceTimer);
+    this.requestFailureDebounceTimer = undefined;
   }
 
   private publish(snapshot: ConnectionSnapshot) {

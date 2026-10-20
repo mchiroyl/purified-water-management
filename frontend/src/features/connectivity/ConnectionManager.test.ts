@@ -16,17 +16,23 @@ describe('ConnectionManager', () => {
 
     expect(result).toMatchObject({ state: 'ONLINE', serverTime: '2026-08-11T02:00:00Z', reason: 'MANUAL' });
     expect(states).toEqual(['UNKNOWN', 'CHECKING', 'ONLINE']);
-    expect(fetcher).toHaveBeenCalledWith('/api/connectivity', expect.objectContaining({ cache: 'no-store' }));
+    // Verify probe uses _t cache-busting param instead of cache:no-store
+    expect(fetcher).toHaveBeenCalledWith(
+      expect.stringContaining('/api/connectivity'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(fetcher.mock.calls[0][0]).toMatch(/_t=\d+/);
     unsubscribe();
     manager.stop();
   });
 
   it('distingue DEGRADED de OFFLINE sin usar navigator.onLine como autoridad', async () => {
-    const degraded = new ConnectionManager({ fetcher: vi.fn().mockResolvedValue(new Response(null, { status: 503 })) });
+    // failureThreshold: 1 so a single failure immediately marks unavailable (needed for this unit test)
+    const degraded = new ConnectionManager({ fetcher: vi.fn().mockResolvedValue(new Response(null, { status: 503 })), failureThreshold: 1 });
     expect((await degraded.check('STARTUP', true)).state).toBe('DEGRADED');
     degraded.stop();
 
-    const offline = new ConnectionManager({ fetcher: vi.fn().mockRejectedValue(new TypeError('network unavailable')) });
+    const offline = new ConnectionManager({ fetcher: vi.fn().mockRejectedValue(new TypeError('network unavailable')), failureThreshold: 1 });
     expect((await offline.check('STARTUP', true)).state).toBe('OFFLINE');
     offline.stop();
   });
@@ -39,6 +45,8 @@ describe('ConnectionManager', () => {
       fetcher,
       lifecycleTarget: lifecycle,
       retryBaseMs: 1_000,
+      // failureThreshold:1 so first failure goes OFFLINE immediately in this test
+      failureThreshold: 1,
     });
 
     manager.start();
@@ -123,7 +131,8 @@ describe('ConnectionManager', () => {
     const fetcher = vi.fn().mockImplementation((_url, init: RequestInit) => new Promise((_resolve, reject) => {
       init.signal?.addEventListener('abort', () => reject(new DOMException('Timeout', 'AbortError')));
     }));
-    const manager = new ConnectionManager({ fetcher, timeoutMs: 100, retryBaseMs: 1_000, retryMaximumMs: 2_000 });
+    // failureThreshold:1 so single timeout immediately goes OFFLINE
+    const manager = new ConnectionManager({ fetcher, timeoutMs: 100, retryBaseMs: 1_000, retryMaximumMs: 2_000, failureThreshold: 1 });
 
     const checking = manager.check('STARTUP', true);
     await vi.advanceTimersByTimeAsync(100);

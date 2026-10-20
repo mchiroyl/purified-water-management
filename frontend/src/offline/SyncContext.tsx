@@ -18,7 +18,16 @@ export function getMobileDatabase() {
 
 const syncEngine = new SyncEngine({
   database: getMobileDatabase,
-  checkConnection: async () => (await connectionManager.beforeSync()).state,
+  checkConnection: async () => {
+    // If we already know we're ONLINE (from the most recent probe), trust that
+    // and avoid firing an additional HTTP probe that could bounce the state.
+    const current = connectionManager.getSnapshot();
+    if (current.state === 'ONLINE' && current.mode !== 'FORCE_OFFLINE') {
+      return 'ONLINE';
+    }
+    // State is uncertain: do a real probe
+    return (await connectionManager.beforeSync()).state;
+  },
   transport: {
     send: (operations: SyncRequestOperation[]) => apiRequest<SyncBatchResult[]>('/sync/batch', {
       method: 'POST',
@@ -63,6 +72,8 @@ export function SyncProvider({
 }) {
   const [snapshot, setSnapshot] = useState(engine.getSnapshot());
   const [operations, setOperations] = useState<OutboxRecord[]>([]);
+  // Track last auto-sync time to avoid hammering the server with probes
+  const lastAutoSyncRef = { current: 0 };
 
   const refresh = useCallback(async () => {
     const db = await database();
@@ -75,23 +86,44 @@ export function SyncProvider({
     await refresh();
   }, [engine, refresh]);
 
+  // Rate-limited auto-sync: waits at least 15 s between automatic sync triggers
+  // to avoid triggering repeated HTTP probes that would bounce the connection state.
+  const autoSync = useCallback(() => {
+    const now = Date.now();
+    if (now - lastAutoSyncRef.current < 15_000) return;
+    lastAutoSyncRef.current = now;
+    void syncNow();
+  }, [syncNow]);
+
   useEffect(() => engine.subscribe(setSnapshot), [engine]);
 
   useEffect(() => {
-    const handleOnline = () => void syncNow();
-    const handleOutbox = async () => {
-      await refresh();
+    let previousConnectionState = connectionManager.getSnapshot().state;
+
+    const handleOnline = () => {
+      lastAutoSyncRef.current = 0; // browser came back online: reset rate limit
       void syncNow();
     };
+    const handleOutbox = async () => {
+      await refresh();
+      autoSync();
+    };
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible') void syncNow();
+      if (document.visibilityState === 'visible') autoSync();
     };
     const handleServiceWorkerMessage = (event: MessageEvent) => {
       if (event.data?.type === 'AGUA_PURA_SYNC_REQUESTED') void syncNow();
     };
 
+    // Only trigger sync on TRANSITION to ONLINE (not on every ONLINE publish)
+    // This is the key fix: prevents the probe loop that was bouncing the state
     const unsubscribeConnection = connectionManager.subscribe((connSnap) => {
-      if (connSnap.state === 'ONLINE') {
+      const wasOnline = previousConnectionState === 'ONLINE';
+      const isNowOnline = connSnap.state === 'ONLINE';
+      previousConnectionState = connSnap.state;
+      if (!wasOnline && isNowOnline) {
+        // Genuine transition to online: reset rate limiter and sync
+        lastAutoSyncRef.current = 0;
         void syncNow();
       }
     });
@@ -101,7 +133,7 @@ export function SyncProvider({
     document.addEventListener('visibilitychange', handleVisibility);
     navigator.serviceWorker?.addEventListener('message', handleServiceWorkerMessage);
     void refresh();
-    void syncNow();
+    autoSync();
     return () => {
       unsubscribeConnection();
       window.removeEventListener('online', handleOnline);
@@ -109,7 +141,7 @@ export function SyncProvider({
       document.removeEventListener('visibilitychange', handleVisibility);
       navigator.serviceWorker?.removeEventListener('message', handleServiceWorkerMessage);
     };
-  }, [syncNow, refresh]);
+  }, [syncNow, refresh, autoSync]);
 
   const value = useMemo(() => ({ snapshot, operations, syncNow, refresh }), [snapshot, operations, syncNow, refresh]);
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;

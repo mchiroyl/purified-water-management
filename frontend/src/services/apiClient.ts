@@ -100,7 +100,10 @@ function headersFor(init: RequestInit, accept: string): Headers {
 
 async function fetchWithRefresh(path: string, init: RequestInit, accept: string): Promise<Response> {
   if (isOfflineOverride?.() && !path.startsWith('/auth/')) {
-    publish('agua-pura:request-failure');
+    // NOTE: Do NOT publish 'agua-pura:request-failure' here.
+    // This is intentional FORCE_OFFLINE mode, not a real network failure.
+    // Publishing the failure event would trigger afterRequestFailure() in ConnectionManager
+    // causing repeated state bouncing even when the user chose offline mode.
     throw new TypeError('Modo local activo: conexión externa suspendida.');
   }
 
