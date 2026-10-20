@@ -71,10 +71,10 @@ export class ConnectionManager {
   constructor(options: ConnectionManagerOptions = {}) {
     this.endpoint = options.endpoint ?? resolveApiUrl('/connectivity');
     this.fetcher = options.fetcher ?? fetch;
-    this.timeoutMs = options.timeoutMs ?? 10_000;
-    this.minimumIntervalMs = options.minimumIntervalMs ?? 2_000;
-    this.retryBaseMs = options.retryBaseMs ?? 10_000;
-    this.retryMaximumMs = options.retryMaximumMs ?? 60_000;
+    this.timeoutMs = options.timeoutMs ?? 3_000;
+    this.minimumIntervalMs = options.minimumIntervalMs ?? 1_000;
+    this.retryBaseMs = options.retryBaseMs ?? 3_000;
+    this.retryMaximumMs = options.retryMaximumMs ?? 30_000;
     this.lifecycleTarget = options.lifecycleTarget ?? (typeof window !== 'undefined' ? window : undefined);
     this.visibilityTarget = options.visibilityTarget ?? (typeof document !== 'undefined' ? document : undefined);
     this.now = options.now ?? Date.now;
@@ -91,11 +91,14 @@ export class ConnectionManager {
   setMode = (mode: OperationalMode) => {
     if (this.mode === mode) return;
     this.mode = mode;
+    this.activeAbort?.abort();
+    this.activeAbort = undefined;
+    this.inFlight = undefined;
+    this.clearRetry();
+    this.retryCount = 0;
+    this.lastStartedAt = Number.NEGATIVE_INFINITY;
+
     if (mode === 'FORCE_OFFLINE') {
-      this.activeAbort?.abort();
-      this.activeAbort = undefined;
-      this.inFlight = undefined;
-      this.clearRetry();
       this.publish({
         ...this.snapshot,
         state: 'OFFLINE',
@@ -104,9 +107,13 @@ export class ConnectionManager {
         checkedAt: new Date(this.now()).toISOString(),
       });
     } else {
+      const isBrowserOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
       this.publish({
         ...this.snapshot,
         mode: 'AUTO',
+        state: isBrowserOnline ? 'ONLINE' : 'OFFLINE',
+        reason: 'MANUAL',
+        checkedAt: new Date(this.now()).toISOString(),
       });
       void this.check('MANUAL', true);
     }
