@@ -1,6 +1,7 @@
-import { resolveApiUrl } from '../../services/apiClient';
+import { registerOfflineCheck, resolveApiUrl } from '../../services/apiClient';
 
 export type ConnectionState = 'UNKNOWN' | 'CHECKING' | 'OFFLINE' | 'DEGRADED' | 'ONLINE';
+export type OperationalMode = 'AUTO' | 'FORCE_OFFLINE';
 export type ConnectionCheckReason =
   | 'STARTUP'
   | 'FOREGROUND'
@@ -18,6 +19,7 @@ export type ConnectionSnapshot = {
   checkedAt: string | null;
   serverTime: string | null;
   retryCount: number;
+  mode: OperationalMode;
 };
 
 type ConnectionManagerOptions = {
@@ -40,6 +42,7 @@ const initialSnapshot: ConnectionSnapshot = {
   checkedAt: null,
   serverTime: null,
   retryCount: 0,
+  mode: 'AUTO',
 };
 
 export class ConnectionManager {
@@ -56,6 +59,7 @@ export class ConnectionManager {
   private readonly clearTimer: typeof window.clearTimeout;
   private readonly listeners = new Set<(snapshot: ConnectionSnapshot) => void>();
   private snapshot: ConnectionSnapshot = initialSnapshot;
+  private mode: OperationalMode = 'AUTO';
   private inFlight?: Promise<ConnectionSnapshot>;
   private lastStartedAt = Number.NEGATIVE_INFINITY;
   private retryTimer?: number;
@@ -80,6 +84,40 @@ export class ConnectionManager {
 
   getSnapshot = () => this.snapshot;
 
+  getMode = () => this.mode;
+
+  isForceOffline = () => this.mode === 'FORCE_OFFLINE';
+
+  setMode = (mode: OperationalMode) => {
+    if (this.mode === mode) return;
+    this.mode = mode;
+    if (mode === 'FORCE_OFFLINE') {
+      this.activeAbort?.abort();
+      this.activeAbort = undefined;
+      this.inFlight = undefined;
+      this.clearRetry();
+      this.publish({
+        ...this.snapshot,
+        state: 'OFFLINE',
+        mode: 'FORCE_OFFLINE',
+        reason: 'MANUAL',
+        checkedAt: new Date(this.now()).toISOString(),
+      });
+    } else {
+      this.publish({
+        ...this.snapshot,
+        mode: 'AUTO',
+      });
+      void this.check('MANUAL', true);
+    }
+  };
+
+  toggleMode = (): OperationalMode => {
+    const next: OperationalMode = this.mode === 'FORCE_OFFLINE' ? 'AUTO' : 'FORCE_OFFLINE';
+    this.setMode(next);
+    return next;
+  };
+
   subscribe = (listener: (snapshot: ConnectionSnapshot) => void) => {
     this.listeners.add(listener);
     listener(this.snapshot);
@@ -96,7 +134,9 @@ export class ConnectionManager {
     this.lifecycleTarget?.addEventListener('agua-pura:request-failure', this.handleRequestFailure);
     this.lifecycleTarget?.addEventListener('agua-pura:request-success', this.handleRequestSuccess);
     this.visibilityTarget?.addEventListener('visibilitychange', this.handleVisibilityChange);
-    void this.check('STARTUP', true);
+    if (this.mode !== 'FORCE_OFFLINE') {
+      void this.check('STARTUP', true);
+    }
   }
 
   stop() {
@@ -114,18 +154,22 @@ export class ConnectionManager {
   }
 
   manualCheck() {
+    if (this.mode === 'FORCE_OFFLINE') return Promise.resolve(this.snapshot);
     return this.check('MANUAL', true);
   }
 
   beforeSync() {
+    if (this.mode === 'FORCE_OFFLINE') return Promise.resolve(this.snapshot);
     return this.check('BEFORE_SYNC', true);
   }
 
   afterRequestFailure() {
+    if (this.mode === 'FORCE_OFFLINE') return Promise.resolve(this.snapshot);
     return this.check('REQUEST_FAILURE');
   }
 
   check(reason: ConnectionCheckReason, force = false): Promise<ConnectionSnapshot> {
+    if (this.mode === 'FORCE_OFFLINE') return Promise.resolve(this.snapshot);
     if (this.inFlight) return this.inFlight;
     const startedAt = this.now();
     if (!force && startedAt - this.lastStartedAt < this.minimumIntervalMs) return Promise.resolve(this.snapshot);
@@ -141,10 +185,12 @@ export class ConnectionManager {
   }
 
   private readonly handleOnline = () => {
+    if (this.mode === 'FORCE_OFFLINE') return;
     void this.check('ONLINE_EVENT', true);
   };
 
   private readonly handleOffline = () => {
+    if (this.mode === 'FORCE_OFFLINE') return;
     this.publish({
       ...this.snapshot,
       state: 'OFFLINE',
@@ -156,10 +202,12 @@ export class ConnectionManager {
   };
 
   private readonly handleRequestFailure = () => {
+    if (this.mode === 'FORCE_OFFLINE') return;
     void this.afterRequestFailure();
   };
 
   private readonly handleRequestSuccess = () => {
+    if (this.mode === 'FORCE_OFFLINE') return;
     this.requestSuccessGeneration += 1;
     this.retryCount = 0;
     this.clearRetry();
@@ -174,6 +222,7 @@ export class ConnectionManager {
   };
 
   private readonly handleVisibilityChange = () => {
+    if (this.mode === 'FORCE_OFFLINE') return;
     if (this.visibilityTarget?.visibilityState === 'visible') void this.check('FOREGROUND');
   };
 
@@ -201,6 +250,7 @@ export class ConnectionManager {
         checkedAt: new Date(startedAt).toISOString(),
         serverTime: payload.serverTime ?? null,
         retryCount: 0,
+        mode: this.mode,
       };
       this.publish(online);
       return online;
@@ -220,6 +270,7 @@ export class ConnectionManager {
       checkedAt: new Date(checkedAt).toISOString(),
       serverTime: null,
       retryCount: this.retryCount,
+      mode: this.mode,
     };
     this.publish(unavailable);
     this.scheduleRetry();
@@ -249,3 +300,4 @@ export class ConnectionManager {
 }
 
 export const connectionManager = new ConnectionManager();
+registerOfflineCheck(() => connectionManager.isForceOffline());

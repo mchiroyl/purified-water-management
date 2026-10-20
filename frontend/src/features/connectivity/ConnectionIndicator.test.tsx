@@ -21,4 +21,30 @@ describe('ConnectionIndicator', () => {
 
     view.unmount();
   });
+
+  it('permite alternar a modo local (Sin Señal) y regresar a modo conectado', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ status: 'ONLINE' }), { status: 200 }));
+    const manager = new ConnectionManager({ fetcher, minimumIntervalMs: 0 });
+    const view = render(
+      <ConnectionProvider manager={manager}>
+        <ConnectionIndicator />
+      </ConnectionProvider>,
+    );
+
+    expect(await screen.findByText('Estado: Red Activa')).toBeInTheDocument();
+
+    const offlineBtn = screen.getByRole('radio', { name: /Sin Señal/i });
+    fireEvent.click(offlineBtn);
+
+    expect(await screen.findByText('Estado: Modo Local')).toBeInTheDocument();
+    expect(manager.isForceOffline()).toBe(true);
+
+    const onlineBtn = screen.getByRole('radio', { name: /Conectado/i });
+    fireEvent.click(onlineBtn);
+
+    expect(manager.isForceOffline()).toBe(false);
+    expect(await screen.findByText('Estado: Red Activa')).toBeInTheDocument();
+
+    view.unmount();
+  });
 });

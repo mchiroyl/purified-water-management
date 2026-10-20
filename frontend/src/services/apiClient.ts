@@ -81,6 +81,12 @@ async function refreshOnce(): Promise<string> {
   return refreshPromise;
 }
 
+let isOfflineOverride: (() => boolean | null) | null = null;
+
+export function registerOfflineCheck(check: () => boolean | null): void {
+  isOfflineOverride = check;
+}
+
 function headersFor(init: RequestInit, accept: string): Headers {
   const headers = new Headers(init.headers);
   headers.set('Accept', accept);
@@ -93,27 +99,55 @@ function headersFor(init: RequestInit, accept: string): Headers {
 }
 
 async function fetchWithRefresh(path: string, init: RequestInit, accept: string): Promise<Response> {
+  if (isOfflineOverride?.() && !path.startsWith('/auth/')) {
+    publish('agua-pura:request-failure');
+    throw new TypeError('Modo local activo: conexión externa suspendida.');
+  }
+
+  const timeoutMs = 8_000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new DOMException('Tiempo de espera de red agotado.', 'TimeoutError')), timeoutMs);
+
+  let combinedSignal: AbortSignal = controller.signal;
+  if (init.signal) {
+    if (typeof AbortSignal.any === 'function') {
+      combinedSignal = AbortSignal.any([init.signal, controller.signal]);
+    } else {
+      init.signal.addEventListener('abort', () => controller.abort());
+    }
+  }
+
   let response: Response;
   try {
     response = await fetch(`${baseUrl}${path}`, {
       ...init,
+      signal: combinedSignal,
       headers: headersFor(init, accept),
       credentials: 'include',
     });
   } catch (error) {
     publish('agua-pura:request-failure');
     throw error;
+  } finally {
+    clearTimeout(timer);
   }
   if (response.status < 500) publish('agua-pura:request-success');
 
   if (response.status === 401 && accessToken && !isAuthEndpoint(path)) {
     try {
       await refreshOnce();
-      response = await fetch(`${baseUrl}${path}`, {
-        ...init,
-        headers: headersFor(init, accept),
-        credentials: 'include',
-      });
+      const retryController = new AbortController();
+      const retryTimer = setTimeout(() => retryController.abort(new DOMException('Tiempo de espera de red agotado.', 'TimeoutError')), timeoutMs);
+      try {
+        response = await fetch(`${baseUrl}${path}`, {
+          ...init,
+          signal: retryController.signal,
+          headers: headersFor(init, accept),
+          credentials: 'include',
+        });
+      } finally {
+        clearTimeout(retryTimer);
+      }
       if (response.status < 500) publish('agua-pura:request-success');
     } catch (error) {
       // Transport and backend outages are surfaced as request failures without expiring the session.

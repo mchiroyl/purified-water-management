@@ -299,4 +299,49 @@ describe('SalesPage', () => {
     expect(screen.getByRole('button', { name: /descargar pdf/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /listo \/ continuar/i })).toBeInTheDocument();
   });
+
+  it('guarda la venta en Modo Local (Outbox e IndexedDB) cuando la red falla o la señal es inestable', async () => {
+    let resolvePosition!: PositionCallback;
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: {
+        watchPosition: vi.fn((success: PositionCallback) => {
+          resolvePosition = success;
+          return 1;
+        }),
+        clearWatch: vi.fn(),
+      },
+    });
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = input.toString();
+      if (path.endsWith('/sales') && init?.method === 'POST') {
+        return Promise.reject(new TypeError('Failed to fetch (señal inestable 1 barrita)'));
+      }
+      return formFetchMock()(input, init);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <MemoryRouter>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <SalesPage canSell={true} canViewLocation={false} />
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+
+    await screen.findByRole('option', { name: /r-01.*ruta norte/i });
+    fireEvent.change(screen.getByLabelText('Ruta'), { target: { value: 'route-1' } });
+    await waitFor(() => expect(screen.getByLabelText('Cliente')).not.toBeDisabled());
+    fireEvent.change(screen.getByLabelText('Cliente'), { target: { value: 'customer-1' } });
+    fireEvent.change(screen.getByLabelText('Presentación'), { target: { value: 'presentation-1' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar venta' }));
+
+    await screen.findByRole('button', { name: 'Refinando precisión GPS…' });
+    resolvePosition({ coords: { latitude: 14.6349, longitude: -90.5069, accuracy: 7 } } as GeolocationPosition);
+
+    // Se muestra el modal de venta confirmada con número local asignado
+    expect(await screen.findByText(/¡venta confirmada exitosamente!/i)).toBeInTheDocument();
+  });
 });

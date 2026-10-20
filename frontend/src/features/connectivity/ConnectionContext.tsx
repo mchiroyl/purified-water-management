@@ -33,8 +33,8 @@ export function ConnectionProvider({
   return <ConnectionContext.Provider value={{ manager, snapshot }}>{children}</ConnectionContext.Provider>;
 }
 
-export function useConnection() {
+export function useConnection(): ConnectionContextValue {
   const context = useContext(ConnectionContext);
-  if (!context) throw new Error('useConnection debe utilizarse dentro de ConnectionProvider');
-  return context;
+  if (context) return context;
+  return { manager: connectionManager, snapshot: connectionManager.getSnapshot() };
 }

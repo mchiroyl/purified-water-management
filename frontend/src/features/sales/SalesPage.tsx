@@ -35,6 +35,9 @@ import { cacheReceipt, findCachedReceipt, markReceiptPending } from './receiptOf
 import { downloadReceiptFile, shareReceiptFile } from './receiptSharing';
 import { useOptionalSession } from '../auth/SessionContext';
 import { queueProvisionalCustomer } from '../routes/provisionalCustomerOffline';
+import { queueSale, type SaleOfflineItemInput, type SaleOfflinePaymentInput } from './saleOffline';
+import { useConnection } from '../connectivity/ConnectionContext';
+import { notifyOutboxChanged } from '../../offline/SyncContext';
 import { CustomerCombobox } from './CustomerCombobox';
 import type { JugBalanceResponse } from '../jugs/types';
 import type { CreditBalanceResponse, CreditPaymentMethod, CreditPaymentResponse } from '../credit/types';
@@ -58,7 +61,7 @@ type Customer = {
   phone?: string;
   whatsapp?: string;
 };
-type Presentation = { id: string; code: string; name: string; active: boolean };
+type Presentation = { id: string; code: string; name: string; active: boolean; productId?: string };
 type Product = { id: string; code: string; name: string; active: boolean; controlsInventory: boolean; presentations: Presentation[] };
 type SaleItem = { id: string; productName: string; presentationName: string; presentationQuantity: number; quantityBaseUnits: number; unitPrice: number; lineTotal: number; priceSource: string };
 type Payment = { id: string; method: string; amount: number; status: string; reference: string; bank: string };
@@ -555,10 +558,26 @@ function InlineJugReturnForm({
 }
 
 
-export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean; canViewLocation: boolean; view?: 'create' | 'list' }) {
+export function SalesPage({
+  canSell,
+  canViewLocation,
+  view,
+  deviceId,
+  sellerId,
+}: {
+  canSell: boolean;
+  canViewLocation: boolean;
+  view?: 'create' | 'list';
+  deviceId?: string;
+  sellerId?: string;
+}) {
   const currentView = view ?? (canSell ? 'create' : 'list');
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const session = useOptionalSession();
+  const { snapshot } = useConnection();
+  const effectiveDeviceId = deviceId ?? session?.user?.deviceId ?? 'browser-device';
+  const effectiveSellerId = sellerId ?? session?.user?.id ?? '';
   const sales = useQuery({ queryKey: ['sales'], queryFn: () => apiRequest<Sale[]>('/sales'), staleTime: 60_000 });
   const routes = useQuery({ queryKey: ['routes'], queryFn: () => apiRequest<Route[]>('/routes'), enabled: canSell, staleTime: 300_000 });
   const customers = useQuery({ queryKey: ['customers'], queryFn: () => apiRequest<Customer[]>('/customers'), enabled: canSell, staleTime: 300_000 });
@@ -725,7 +744,6 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
   const [showVisitJugReturn, setShowVisitJugReturn] = useState(false);
 
   // ── Contexto de sesión y ruta asignada al vendedor ────────────────────────
-  const session = useOptionalSession();
   const user = session?.user;
   const isAdminOrSupervisor = Boolean(user?.roles.some(r => r === 'ADMINISTRADOR' || r === 'SUPERVISOR'));
   const isSeller = Boolean(user?.roles.includes('VENDEDOR') && !isAdminOrSupervisor);
@@ -973,6 +991,7 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
     return activeProducts.flatMap(product => 
       product.presentations.filter(item => item.active).map(item => ({
         ...item,
+        productId: product.id,
         product,
         stockInfo: loadedStockMap?.get(product.id) || loadedStockMap?.get(product.code),
       }))
@@ -980,11 +999,148 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
   }, [products.data, loadedStockMap]);
 
   const create = useMutation({
-    mutationFn: (location: GeoLocationSnapshot) => apiRequest<Sale>('/sales', {
-      method: 'POST',
-      body: JSON.stringify({ clientReference: crypto.randomUUID(), routeId, customerId, items,
-        payments: payments.map(payment => ({ ...payment, amount: payment.amount === '' ? null : Number(payment.amount) })), location })
-    }),
+    mutationFn: async (location: GeoLocationSnapshot) => {
+      const isOfflineMode = snapshot.mode === 'FORCE_OFFLINE' || snapshot.state === 'OFFLINE' || !navigator.onLine;
+
+      const payloadPayments: SaleOfflinePaymentInput[] = payments.map(payment => ({
+        method: payment.method as 'CASH' | 'TRANSFER' | 'CREDIT',
+        amount: payment.amount === '' ? 0 : Number(payment.amount),
+        reference: payment.reference || null,
+        bank: payment.bank || null,
+        evidenceReference: payment.evidenceReference || null,
+      }));
+
+      const payloadItems: SaleOfflineItemInput[] = items.map(it => {
+        const pres = presentations.find(p => p.id === it.presentationId);
+        return {
+          presentationId: it.presentationId,
+          quantity: it.quantity,
+          productId: pres?.productId ?? pres?.product?.id,
+          unitPrice: pres ? Number((pres as any).unitPrice || 0) : 0,
+        };
+      });
+
+      if (isOfflineMode) {
+        const localSale = await queueSale({
+          routeId,
+          sellerId: effectiveSellerId,
+          deviceId: effectiveDeviceId,
+          customerId,
+          items: payloadItems,
+          payments: payloadPayments,
+          location,
+        });
+
+        const selectedCust = availableCustomers.find(c => c.id === customerId);
+        const selectedRte = routes.data?.find(r => r.id === routeId);
+
+        const syntheticSale: Sale = {
+          id: localSale.localSaleId,
+          documentNumber: localSale.localReference,
+          routeCode: selectedRte?.code ?? 'RUTA-LOC',
+          routeName: selectedRte?.name ?? 'Ruta Local',
+          sellerName: session?.user?.displayName ?? 'Vendedor',
+          customerCode: selectedCust?.code ?? 'CLI-LOC',
+          customerName: selectedCust?.name ?? 'Cliente',
+          status: 'CONFIRMED',
+          subtotal: Number(localSale.subtotal),
+          total: Number(localSale.total),
+          currencyCode: localSale.currencyCode,
+          createdAt: localSale.occurredAtLocal,
+          routeId,
+          customerId,
+          items: items.map(it => {
+            const pres = presentations.find(p => p.id === it.presentationId);
+            return {
+              id: it.presentationId,
+              productName: pres?.product?.name ?? 'Agua Purificada',
+              presentationName: pres?.name ?? 'Presentación',
+              presentationQuantity: it.quantity,
+              quantityBaseUnits: it.quantity,
+              unitPrice: 0,
+              lineTotal: 0,
+              priceSource: 'LOCAL',
+            };
+          }),
+          payments: payloadPayments.map(p => ({
+            id: crypto.randomUUID(),
+            method: p.method,
+            amount: p.amount,
+            status: 'CONFIRMED',
+            reference: p.reference ?? '',
+            bank: p.bank ?? '',
+          })),
+        };
+        return syntheticSale;
+      }
+
+      try {
+        return await apiRequest<Sale>('/sales', {
+          method: 'POST',
+          body: JSON.stringify({
+            clientReference: crypto.randomUUID(),
+            routeId,
+            customerId,
+            items,
+            payments: payloadPayments,
+            location,
+          }),
+        });
+      } catch {
+        // Fallback inmediato a IndexedDB si la señal es inestable (1-2 barritas) o falló la conexión
+        const localSale = await queueSale({
+          routeId,
+          sellerId: effectiveSellerId,
+          deviceId: effectiveDeviceId,
+          customerId,
+          items: payloadItems,
+          payments: payloadPayments,
+          location,
+        });
+
+        const selectedCust = availableCustomers.find(c => c.id === customerId);
+        const selectedRte = routes.data?.find(r => r.id === routeId);
+
+        const syntheticSale: Sale = {
+          id: localSale.localSaleId,
+          documentNumber: localSale.localReference,
+          routeCode: selectedRte?.code ?? 'RUTA-LOC',
+          routeName: selectedRte?.name ?? 'Ruta Local',
+          sellerName: session?.user?.displayName ?? 'Vendedor',
+          customerCode: selectedCust?.code ?? 'CLI-LOC',
+          customerName: selectedCust?.name ?? 'Cliente',
+          status: 'CONFIRMED',
+          subtotal: Number(localSale.subtotal),
+          total: Number(localSale.total),
+          currencyCode: localSale.currencyCode,
+          createdAt: localSale.occurredAtLocal,
+          routeId,
+          customerId,
+          items: items.map(it => {
+            const pres = presentations.find(p => p.id === it.presentationId);
+            return {
+              id: it.presentationId,
+              productName: pres?.product?.name ?? 'Agua Purificada',
+              presentationName: pres?.name ?? 'Presentación',
+              presentationQuantity: it.quantity,
+              quantityBaseUnits: it.quantity,
+              unitPrice: 0,
+              lineTotal: 0,
+              priceSource: 'LOCAL',
+            };
+          }),
+          payments: payloadPayments.map(p => ({
+            id: crypto.randomUUID(),
+            method: p.method,
+            amount: p.amount,
+            status: 'CONFIRMED',
+            reference: p.reference ?? '',
+            bank: p.bank ?? '',
+          })),
+        };
+        return syntheticSale;
+      }
+    },
     onSuccess: async (sale) => {
       const cust = availableCustomers.find(c => c.id === customerId);
       // Contar únicamente las unidades vendidas de presentaciones que son garrafones
@@ -1017,16 +1173,65 @@ export function SalesPage({ canSell, canViewLocation, view }: { canSell: boolean
   });
 
   const registerVisit = useMutation({
-    mutationFn: (location: GeoLocationSnapshot) => apiRequest<{ customerName: string; visitReason: string; fullNote: string }>('/sales/no-purchase-visit', {
-      method: 'POST',
-      body: JSON.stringify({
-        routeId: visitRouteId,
-        customerId: visitCustomerId,
+    mutationFn: async (location: GeoLocationSnapshot) => {
+      const isOfflineMode = snapshot.mode === 'FORCE_OFFLINE' || snapshot.state === 'OFFLINE' || !navigator.onLine;
+      if (!isOfflineMode) {
+        try {
+          return await apiRequest<{ customerName: string; visitReason: string; fullNote: string }>('/sales/no-purchase-visit', {
+            method: 'POST',
+            body: JSON.stringify({
+              routeId: visitRouteId,
+              customerId: visitCustomerId,
+              visitReason,
+              visitNote: visitNote.trim() || null,
+              location,
+            }),
+          });
+        } catch {
+          // Fallback a outbox si la señal inestable falla
+        }
+      }
+
+      const db = await openMobileDatabase();
+      const clientOperationId = crypto.randomUUID();
+      const now = new Date().toISOString();
+      const custName = availableCustomers.find(c => c.id === visitCustomerId)?.name ?? 'Cliente';
+      await db.put('outboxOperations', {
+        clientOperationId,
+        deviceId: effectiveDeviceId,
+        entityType: 'NO_PURCHASE_VISIT' as any,
+        operationType: 'CREATE',
+        aggregateLocalId: crypto.randomUUID(),
+        payload: {
+          routeId: visitRouteId,
+          customerId: visitCustomerId,
+          visitReason,
+          visitNote: visitNote.trim() || null,
+          location: {
+            latitude: location.latitude,
+            longitude: location.longitude,
+            accuracyMeters: location.accuracyMeters,
+            capturedAt: location.capturedAt,
+          },
+        },
+        dependencies: [],
+        status: 'PENDING',
+        retryCount: 0,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        nextAttemptAt: null,
+        createdAtLocal: now,
+        updatedAt: now,
+      });
+      notifyOutboxChanged();
+      const reasonLabel = visitReason === 'NO_ESTABA' ? 'Cliente no estaba'
+        : visitReason === 'NO_NECESITABA' ? 'No necesitaba' : 'Otro motivo';
+      return {
+        customerName: custName,
         visitReason,
-        visitNote: visitNote.trim() || null,
-        location,
-      }),
-    }),
+        fullNote: visitNote.trim() ? `${reasonLabel}: ${visitNote.trim()}` : reasonLabel,
+      };
+    },
     onSuccess: (data) => {
       const reasonLabel = visitReason === 'NO_ESTABA' ? 'Cliente no estaba'
         : visitReason === 'NO_NECESITABA' ? 'No necesitaba' : 'Otro motivo';
