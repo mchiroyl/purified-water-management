@@ -218,10 +218,32 @@ export function setLocalCache<T>(path: string, data: T): void {
   }
 }
 
-export async function preloadOfflineCatalogs(): Promise<void> {
+export async function preloadOfflineCatalogs(roles: string[] = []): Promise<void> {
   if (typeof window === 'undefined' || !navigator.onLine || isOfflineOverride?.()) return;
-  const endpoints = ['/routes', '/customers', '/products', '/loads', '/pricing/lists', '/itineraries/my-active'];
-  await Promise.allSettled(endpoints.map(ep => apiRequest(ep)));
+  const common = [
+    '/company',
+    '/routes',
+    '/products',
+    '/pricing/lists',
+    '/dashboard',
+    '/inventory/locations',
+    '/sales',
+    '/settlements',
+    '/loads',
+    '/customers',
+    '/itineraries/my-active',
+    '/wastes/types',
+  ];
+  const roleSpecific: string[] = [];
+  if (roles.includes('ADMINISTRADOR') || roles.includes('SUPERVISOR')) {
+    roleSpecific.push('/users', '/devices', '/credit/customers', '/returns', '/wastes', '/wastes/indicators', '/audit');
+  } else if (roles.includes('BODEGA')) {
+    roleSpecific.push('/returns', '/wastes');
+  } else if (roles.includes('VENDEDOR')) {
+    roleSpecific.push('/waste/reasons', '/returns');
+  }
+  const allEndpoints = Array.from(new Set([...common, ...roleSpecific]));
+  await Promise.allSettled(allEndpoints.map(ep => apiRequest(ep)));
 }
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -240,6 +262,12 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
     if (response.status >= 500) publish('agua-pura:request-failure');
     if (response.status === 204) return undefined as T;
     if (!response.ok) {
+      if (isGet && response.status >= 500) {
+        const cached = getLocalCache<T>(path);
+        if (cached !== null) {
+          return cached;
+        }
+      }
       return throwApiError(response, 'No fue posible completar la solicitud.');
     }
     const data = await response.json() as T;

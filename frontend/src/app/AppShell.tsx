@@ -59,7 +59,7 @@ export function AppShell() {
 
   useEffect(() => {
     if (user) {
-      void preloadOfflineCatalogs();
+      void preloadOfflineCatalogs(user.roles ?? []);
     }
   }, [user]);
 
