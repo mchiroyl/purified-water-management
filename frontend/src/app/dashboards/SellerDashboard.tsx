@@ -33,6 +33,7 @@ import type { DailyItineraryRunResponse } from '../../features/routes/types';
 import type { JugRouteSummaryResponse } from '../../features/jugs/types';
 import { captureCurrentLocation } from '../../services/geolocation';
 import { apiRequest } from '../../services/apiClient';
+import { useSyncOptional, getMobileDatabase } from '../../offline/SyncContext';
 
 type DashboardAlert = { code: string; severity: string; title: string; count: number };
 type Dashboard = {
@@ -506,52 +507,110 @@ export function SellerDashboard({
     hasLocationMismatch?: boolean;
   };
 
+  const syncContext = useSyncOptional();
+  const operations = syncContext?.operations ?? [];
+
+  const localSalesQuery = useQuery({
+    queryKey: ['localSales', operations.length],
+    queryFn: async () => {
+      try {
+        const db = await getMobileDatabase();
+        return await db.getAll('localSales');
+      } catch {
+        return [];
+      }
+    },
+    staleTime: 5_000,
+  });
+
+  const localAttendedCustomerIds = useMemo(() => {
+    const sold = new Set<string>();
+    const noPurchase = new Set<string>();
+
+    for (const ls of localSalesQuery.data ?? []) {
+      if (ls.customerId) sold.add(ls.customerId);
+    }
+
+    for (const op of operations) {
+      if (op.status === 'REJECTED') continue;
+      try {
+        const p = (typeof op.payload === 'string' ? JSON.parse(op.payload) : op.payload) as Record<string, any>;
+        if (op.entityType === 'SALE' && p?.customerId) {
+          sold.add(String(p.customerId));
+        }
+        if (op.entityType === 'NO_PURCHASE_VISIT' && p?.customerId) {
+          noPurchase.add(String(p.customerId));
+        }
+      } catch {}
+    }
+
+    return { sold, noPurchase };
+  }, [localSalesQuery.data, operations]);
+
   const effectiveStops = useMemo<SellerStopItem[]>(() => {
+    let rawStops: SellerStopItem[] = [];
+
     if (itineraryStops && itineraryStops.length > 0) {
-      return itineraryStops as SellerStopItem[];
+      rawStops = itineraryStops.map((s: any) => ({
+        id: String(s.id),
+        runId: s.runId,
+        customerId: String(s.customerId || ''),
+        customerCode: String(s.customerCode || ''),
+        customerName: String(s.customerName || ''),
+        stopOrder: Number(s.stopOrder || 1),
+        addressReference: s.addressReference ?? null,
+        status: s.status,
+        hasLocationMismatch: Boolean(s.hasLocationMismatch),
+      }));
+    } else if (routeTemplatesQuery.data?.[0]?.stops?.length) {
+      const tStops = routeTemplatesQuery.data[0].stops;
+      rawStops = tStops.map((ts: any, idx: number): SellerStopItem => ({
+        id: String(ts.id || `tpl-${idx}`),
+        runId: '',
+        customerId: String(ts.customerId || ''),
+        customerCode: String(ts.customerCode || ''),
+        customerName: String(ts.customerName || ''),
+        stopOrder: Number(ts.stopOrder || idx + 1),
+        addressReference: ts.addressReference ?? null,
+        status: 'PENDING',
+        hasLocationMismatch: false,
+      }));
+    } else if (routeCustomersQuery.data?.length) {
+      const custs = routeCustomersQuery.data;
+      rawStops = custs.map((c: any, idx: number): SellerStopItem => ({
+        id: String(c.id),
+        runId: '',
+        customerId: String(c.id),
+        customerCode: String(c.code || ''),
+        customerName: String(c.name || ''),
+        stopOrder: idx + 1,
+        addressReference: c.addressReference ?? null,
+        status: 'PENDING',
+        hasLocationMismatch: false,
+      }));
     }
-    const tStops = routeTemplatesQuery.data?.[0]?.stops;
-    if (tStops && tStops.length > 0) {
-      return tStops.map((ts: any, idx: number): SellerStopItem => {
-        const isSold = sellerSales.some(s => 
-          (s.customerId && ts.customerId && s.customerId === ts.customerId) ||
-          (s.customerName && ts.customerName && normalizeText(s.customerName) === normalizeText(ts.customerName))
-        );
-        return {
-          id: String(ts.id || `tpl-${idx}`),
-          runId: '',
-          customerId: String(ts.customerId || ''),
-          customerCode: String(ts.customerCode || ''),
-          customerName: String(ts.customerName || ''),
-          stopOrder: Number(ts.stopOrder || idx + 1),
-          addressReference: ts.addressReference ?? null,
-          status: isSold ? 'ATTENDED_SALE' : 'PENDING',
-          hasLocationMismatch: false,
-        };
-      });
-    }
-    const custs = routeCustomersQuery.data;
-    if (custs && custs.length > 0) {
-      return custs.map((c: any, idx: number): SellerStopItem => {
-        const isSold = sellerSales.some(s => 
-          (s.customerId && c.id && s.customerId === c.id) ||
-          (s.customerName && c.name && normalizeText(s.customerName) === normalizeText(c.name))
-        );
-        return {
-          id: String(c.id),
-          runId: '',
-          customerId: String(c.id),
-          customerCode: String(c.code || ''),
-          customerName: String(c.name || ''),
-          stopOrder: idx + 1,
-          addressReference: c.addressReference ?? null,
-          status: isSold ? 'ATTENDED_SALE' : 'PENDING',
-          hasLocationMismatch: false,
-        };
-      });
-    }
-    return [];
-  }, [itineraryStops, routeTemplatesQuery.data, routeCustomersQuery.data, sellerSales]);
+
+    return rawStops.map((stop): SellerStopItem => {
+      const isServerSold = stop.status === 'ATTENDED_SALE' || sellerSales.some(s => 
+        (s.customerId && stop.customerId && s.customerId === stop.customerId) ||
+        (s.customerName && stop.customerName && normalizeText(s.customerName) === normalizeText(stop.customerName))
+      );
+      const isLocalSold = Boolean(stop.customerId && localAttendedCustomerIds.sold.has(stop.customerId));
+
+      if (isServerSold || isLocalSold) {
+        return { ...stop, status: 'ATTENDED_SALE' };
+      }
+
+      const isServerNoPurchase = stop.status === 'ATTENDED_NO_PURCHASE';
+      const isLocalNoPurchase = Boolean(stop.customerId && localAttendedCustomerIds.noPurchase.has(stop.customerId));
+
+      if (isServerNoPurchase || isLocalNoPurchase) {
+        return { ...stop, status: 'ATTENDED_NO_PURCHASE' };
+      }
+
+      return stop;
+    });
+  }, [itineraryStops, routeTemplatesQuery.data, routeCustomersQuery.data, sellerSales, localAttendedCustomerIds]);
 
   const displayTotalStops = effectiveStops.length;
   const attendedCount = effectiveStops.filter(

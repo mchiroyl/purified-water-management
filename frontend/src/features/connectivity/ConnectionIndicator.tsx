@@ -42,7 +42,12 @@ export function ConnectionIndicator() {
           role="radio"
           aria-checked={!isForceOffline}
           className={`mode-btn ${!isForceOffline ? 'active-online' : ''}`}
-          onClick={() => manager.setMode('AUTO')}
+          onClick={() => {
+            manager.setMode('AUTO');
+            if (snapshot.state !== 'ONLINE') {
+              void manager.manualCheck();
+            }
+          }}
           title="Modo normal: comunica con el servidor cuando hay cobertura"
         >
           Conectado (Online)

@@ -71,10 +71,10 @@ export class ConnectionManager {
   constructor(options: ConnectionManagerOptions = {}) {
     this.endpoint = options.endpoint ?? resolveApiUrl('/connectivity');
     this.fetcher = options.fetcher ?? fetch;
-    this.timeoutMs = options.timeoutMs ?? 3_000;
+    this.timeoutMs = options.timeoutMs ?? 7_000;
     this.minimumIntervalMs = options.minimumIntervalMs ?? 1_000;
-    this.retryBaseMs = options.retryBaseMs ?? 3_000;
-    this.retryMaximumMs = options.retryMaximumMs ?? 30_000;
+    this.retryBaseMs = options.retryBaseMs ?? 2_000;
+    this.retryMaximumMs = options.retryMaximumMs ?? 20_000;
     this.lifecycleTarget = options.lifecycleTarget ?? (typeof window !== 'undefined' ? window : undefined);
     this.visibilityTarget = options.visibilityTarget ?? (typeof document !== 'undefined' ? document : undefined);
     this.now = options.now ?? Date.now;
@@ -89,7 +89,12 @@ export class ConnectionManager {
   isForceOffline = () => this.mode === 'FORCE_OFFLINE';
 
   setMode = (mode: OperationalMode) => {
-    if (this.mode === mode) return;
+    if (this.mode === mode) {
+      if (mode === 'AUTO' && this.snapshot.state !== 'ONLINE') {
+        void this.manualCheck();
+      }
+      return;
+    }
     this.mode = mode;
     this.activeAbort?.abort();
     this.activeAbort = undefined;
@@ -111,7 +116,7 @@ export class ConnectionManager {
       this.publish({
         ...this.snapshot,
         mode: 'AUTO',
-        state: isBrowserOnline ? 'ONLINE' : 'OFFLINE',
+        state: isBrowserOnline ? 'CHECKING' : 'OFFLINE',
         reason: 'MANUAL',
         checkedAt: new Date(this.now()).toISOString(),
       });
@@ -138,6 +143,7 @@ export class ConnectionManager {
     this.started = true;
     this.lifecycleTarget?.addEventListener('online', this.handleOnline);
     this.lifecycleTarget?.addEventListener('offline', this.handleOffline);
+    this.lifecycleTarget?.addEventListener('focus', this.handleFocus);
     this.lifecycleTarget?.addEventListener('agua-pura:request-failure', this.handleRequestFailure);
     this.lifecycleTarget?.addEventListener('agua-pura:request-success', this.handleRequestSuccess);
     this.visibilityTarget?.addEventListener('visibilitychange', this.handleVisibilityChange);
@@ -150,6 +156,7 @@ export class ConnectionManager {
     this.started = false;
     this.lifecycleTarget?.removeEventListener('online', this.handleOnline);
     this.lifecycleTarget?.removeEventListener('offline', this.handleOffline);
+    this.lifecycleTarget?.removeEventListener('focus', this.handleFocus);
     this.lifecycleTarget?.removeEventListener('agua-pura:request-failure', this.handleRequestFailure);
     this.lifecycleTarget?.removeEventListener('agua-pura:request-success', this.handleRequestSuccess);
     this.visibilityTarget?.removeEventListener('visibilitychange', this.handleVisibilityChange);
@@ -162,6 +169,8 @@ export class ConnectionManager {
 
   manualCheck() {
     if (this.mode === 'FORCE_OFFLINE') return Promise.resolve(this.snapshot);
+    this.clearRetry();
+    this.retryCount = 0;
     return this.check('MANUAL', true);
   }
 
@@ -193,7 +202,18 @@ export class ConnectionManager {
 
   private readonly handleOnline = () => {
     if (this.mode === 'FORCE_OFFLINE') return;
+    this.clearRetry();
+    this.retryCount = 0;
     void this.check('ONLINE_EVENT', true);
+  };
+
+  private readonly handleFocus = () => {
+    if (this.mode === 'FORCE_OFFLINE') return;
+    if (this.snapshot.state !== 'ONLINE') {
+      this.clearRetry();
+      this.retryCount = 0;
+      void this.check('MANUAL', true);
+    }
   };
 
   private readonly handleOffline = () => {
@@ -230,7 +250,11 @@ export class ConnectionManager {
 
   private readonly handleVisibilityChange = () => {
     if (this.mode === 'FORCE_OFFLINE') return;
-    if (this.visibilityTarget?.visibilityState === 'visible') void this.check('FOREGROUND');
+    if (this.visibilityTarget?.visibilityState === 'visible') {
+      this.clearRetry();
+      this.retryCount = 0;
+      void this.check('FOREGROUND');
+    }
   };
 
   private async performCheck(reason: ConnectionCheckReason, startedAt: number, generation: number) {

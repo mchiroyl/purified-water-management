@@ -25,6 +25,7 @@ import { captureCurrentLocation } from '../../services/geolocation';
 import type { GeoLocationSnapshot } from '../../offline/mobileDatabase';
 import type { DailyItineraryRunResponse, DailyItineraryStopResponse } from './types';
 import { VendorItineraryMap } from './VendorItineraryMap';
+import { useSyncOptional, getMobileDatabase } from '../../offline/SyncContext';
 
 function normalizeText(text?: string | null): string {
   if (!text) return '';
@@ -51,6 +52,45 @@ type VendorItineraryPanelProps = {
 
 export function VendorItineraryPanel({ routeId, isSeller = false }: VendorItineraryPanelProps) {
   const queryClient = useQueryClient();
+  const syncContext = useSyncOptional();
+  const operations = syncContext?.operations ?? [];
+
+  const localSalesQuery = useQuery({
+    queryKey: ['localSalesVendorItinerary', operations.length],
+    queryFn: async () => {
+      try {
+        const db = await getMobileDatabase();
+        return await db.getAll('localSales');
+      } catch {
+        return [];
+      }
+    },
+    staleTime: 5_000,
+  });
+
+  const localAttendedCustomerIds = useMemo(() => {
+    const sold = new Set<string>();
+    const noPurchase = new Set<string>();
+
+    for (const ls of localSalesQuery.data ?? []) {
+      if (ls.customerId) sold.add(ls.customerId);
+    }
+
+    for (const op of operations) {
+      if (op.status === 'REJECTED') continue;
+      try {
+        const p = (typeof op.payload === 'string' ? JSON.parse(op.payload) : op.payload) as Record<string, any>;
+        if (op.entityType === 'SALE' && p?.customerId) {
+          sold.add(String(p.customerId));
+        }
+        if (op.entityType === 'NO_PURCHASE_VISIT' && p?.customerId) {
+          noPurchase.add(String(p.customerId));
+        }
+      } catch {}
+    }
+
+    return { sold, noPurchase };
+  }, [localSalesQuery.data, operations]);
   const navigate = useNavigate();
   const [showMap, setShowMap] = useState(true);
   const [filter, setFilter] = useState<'ALL' | 'PENDING' | 'ATTENDED' | 'POSTPONED'>('ALL');
@@ -337,6 +377,13 @@ export function VendorItineraryPanel({ routeId, isSeller = false }: VendorItiner
           (s.customerName && ts.customerName && normalizeText(s.customerName) === normalizeText(ts.customerName))
         );
         const custMatch = allCusts.find((c: any) => c.id === ts.customerId);
+        const isLocalSold = Boolean(ts.customerId && localAttendedCustomerIds.sold.has(ts.customerId));
+        const isLocalNoPurchase = Boolean(ts.customerId && localAttendedCustomerIds.noPurchase.has(ts.customerId));
+        const effectiveStatus = (isSold || isLocalSold)
+          ? 'ATTENDED_SALE'
+          : isLocalNoPurchase
+            ? 'ATTENDED_NO_PURCHASE'
+            : 'PENDING';
         return {
           id: String(ts.id || `tpl-${idx}`),
           runId: 'tpl-run',
@@ -352,7 +399,7 @@ export function VendorItineraryPanel({ routeId, isSeller = false }: VendorItiner
             ? Number(ts.targetLongitude)
             : ((custMatch?.confirmedLongitude ?? custMatch?.longitude) != null ? Number(custMatch?.confirmedLongitude ?? custMatch?.longitude) : null),
           stopOrder: Number(ts.stopOrder || idx + 1),
-          status: isSold ? 'ATTENDED_SALE' : 'PENDING',
+          status: effectiveStatus,
           hasLocationMismatch: false,
         };
       });
@@ -482,8 +529,16 @@ export function VendorItineraryPanel({ routeId, isSeller = false }: VendorItiner
   const rawStops = run.stops || [];
   const stops: DailyItineraryStopResponse[] = rawStops.map((s: any, idx: number) => {
     const hasValidCoords = s.targetLatitude != null && Number(s.targetLatitude) !== 0 && s.targetLongitude != null && Number(s.targetLongitude) !== 0;
+    const isLocalSold = Boolean(s.customerId && localAttendedCustomerIds.sold.has(s.customerId));
+    const isLocalNoPurchase = Boolean(s.customerId && localAttendedCustomerIds.noPurchase.has(s.customerId));
+    const effectiveStatus = (s.status === 'ATTENDED_SALE' || isLocalSold)
+      ? 'ATTENDED_SALE'
+      : (s.status === 'ATTENDED_NO_PURCHASE' || isLocalNoPurchase)
+        ? 'ATTENDED_NO_PURCHASE'
+        : s.status;
     return {
       ...s,
+      status: effectiveStatus,
       stopOrder: Number(s.stopOrder ?? s.plannedOrder ?? idx + 1),
       customerName: cleanDisplayText(String(s.customerName ?? s.customerNameSnapshot ?? 'Cliente')),
       customerCode: String(s.customerCode ?? s.customer_code ?? 'CLI'),
