@@ -8,7 +8,9 @@ export function ConnectionIndicator() {
   const navigate = useNavigate();
   const isForceOffline = snapshot.mode === 'FORCE_OFFLINE';
 
-  const unfinishedCount = syncContext?.operations.filter(op => op.status !== 'SYNCED').length ?? 0;
+  const unfinishedCount = syncContext?.operations.filter(op =>
+    op.status === 'PENDING' || op.status === 'SYNCING' || op.status === 'FAILED_RETRYABLE'
+  ).length ?? 0;
   const isSyncing = syncContext?.snapshot.state === 'SYNCING' || syncContext?.snapshot.state === 'CHECKING_CONNECTION';
 
   const label = snapshot.state === 'ONLINE'

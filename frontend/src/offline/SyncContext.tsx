@@ -41,6 +41,8 @@ type SyncContextValue = {
   operations: OutboxRecord[];
   syncNow: () => Promise<void>;
   refresh: () => Promise<void>;
+  discardOperation: (clientOperationId: string) => Promise<void>;
+  clearRejected: () => Promise<void>;
 };
 
 const SyncContext = createContext<SyncContextValue | null>(null);
@@ -85,6 +87,25 @@ export function SyncProvider({
     await engine.sync();
     await refresh();
   }, [engine, refresh]);
+
+  const discardOperation = useCallback(async (clientOperationId: string) => {
+    const db = await database();
+    await db.delete('outboxOperations', clientOperationId);
+    await refresh();
+  }, [database, refresh]);
+
+  const clearRejected = useCallback(async () => {
+    const db = await database();
+    const ops = await db.getAll('outboxOperations');
+    const tx = db.transaction('outboxOperations', 'readwrite');
+    for (const op of ops) {
+      if (op.status === 'REJECTED') {
+        await tx.objectStore('outboxOperations').delete(op.clientOperationId);
+      }
+    }
+    await tx.done;
+    await refresh();
+  }, [database, refresh]);
 
   // Rate-limited auto-sync: waits at least 15 s between automatic sync triggers
   // to avoid triggering repeated HTTP probes that would bounce the connection state.
@@ -143,7 +164,10 @@ export function SyncProvider({
     };
   }, [syncNow, refresh, autoSync]);
 
-  const value = useMemo(() => ({ snapshot, operations, syncNow, refresh }), [snapshot, operations, syncNow, refresh]);
+  const value = useMemo(
+    () => ({ snapshot, operations, syncNow, refresh, discardOperation, clearRejected }),
+    [snapshot, operations, syncNow, refresh, discardOperation, clearRejected],
+  );
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;
 }
 

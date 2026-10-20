@@ -12,8 +12,11 @@ const statusLabels: Record<SyncStatus, string> = {
 };
 
 export function PendingOperationsPage() {
-  const { snapshot, operations, syncNow } = useSync();
-  const unfinished = operations.filter((operation) => operation.status !== 'SYNCED');
+  const { snapshot, operations, syncNow, discardOperation, clearRejected } = useSync();
+  const pendingCount = operations.filter(
+    (op) => op.status === 'PENDING' || op.status === 'SYNCING' || op.status === 'FAILED_RETRYABLE',
+  ).length;
+  const rejectedOps = operations.filter((op) => op.status === 'REJECTED');
   const isRunning = snapshot.state === 'CHECKING_CONNECTION' || snapshot.state === 'SYNCING';
 
   return (
@@ -22,16 +25,25 @@ export function PendingOperationsPage() {
         eyebrow="Sincronización"
         title="Operaciones pendientes"
         description="Cada registro conserva su resultado independiente y sus dependencias."
-        actions={<button className="primary" type="button" disabled={isRunning} onClick={() => void syncNow()}>
-          {isRunning ? 'Sincronizando…' : 'Sincronizar ahora'}
-        </button>}
+        actions={
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {rejectedOps.length > 0 && (
+              <button className="secondary" type="button" onClick={() => void clearRejected()}>
+                Limpiar rechazadas ({rejectedOps.length})
+              </button>
+            )}
+            <button className="primary" type="button" disabled={isRunning} onClick={() => void syncNow()}>
+              {isRunning ? 'Sincronizando…' : 'Sincronizar ahora'}
+            </button>
+          </div>
+        }
       />
 
       <section className="metric-grid sync-metrics" aria-label="Resumen de sincronización">
-        <article><span>Pendientes</span><strong>{unfinished.length}</strong></article>
+        <article><span>Pendientes</span><strong>{pendingCount}</strong></article>
         <article><span>Sincronizadas</span><strong>{operations.filter((item) => item.status === 'SYNCED').length}</strong></article>
         <article><span>Conflictos</span><strong>{operations.filter((item) => item.status === 'CONFLICT').length}</strong></article>
-        <article><span>Rechazadas</span><strong>{operations.filter((item) => item.status === 'REJECTED').length}</strong></article>
+        <article><span>Rechazadas</span><strong>{rejectedOps.length}</strong></article>
       </section>
 
       {snapshot.state === 'BLOCKED' && <div className="alert error">No hay conexión confirmada. Las operaciones permanecen guardadas en el dispositivo.</div>}
@@ -49,6 +61,16 @@ export function PendingOperationsPage() {
             <p className="audit-line">Creada: {new Date(operation.createdAtLocal).toLocaleString('es-GT')} · Reintentos: {operation.retryCount}</p>
             {operation.dependencies.length > 0 && <p className="audit-line">Depende de {operation.dependencies.length} operación(es).</p>}
             {operation.lastErrorMessage && <div className="alert error">{operation.lastErrorCode}: {operation.lastErrorMessage}</div>}
+            {operation.status === 'REJECTED' && (
+              <button
+                type="button"
+                className="secondary"
+                style={{ marginTop: '0.5rem', fontSize: '0.8rem', padding: '0.35rem 0.65rem' }}
+                onClick={() => void discardOperation(operation.clientOperationId)}
+              >
+                🗑️ Descartar registro rechazado
+              </button>
+            )}
           </article>
         ))}
       </section>

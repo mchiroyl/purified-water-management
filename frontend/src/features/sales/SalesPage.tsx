@@ -1124,19 +1124,26 @@ export function SalesPage({
       }
 
       try {
-        return await apiRequest<Sale>('/sales', {
-          method: 'POST',
-          body: JSON.stringify({
-            clientReference: crypto.randomUUID(),
-            routeId,
-            customerId,
-            items,
-            payments: payloadPayments,
-            location,
-          }),
-        });
+        const timeoutController = new AbortController();
+        const timeoutTimer = setTimeout(() => timeoutController.abort(), 3_500);
+        try {
+          return await apiRequest<Sale>('/sales', {
+            method: 'POST',
+            signal: timeoutController.signal,
+            body: JSON.stringify({
+              clientReference: crypto.randomUUID(),
+              routeId,
+              customerId,
+              items,
+              payments: payloadPayments,
+              location,
+            }),
+          });
+        } finally {
+          clearTimeout(timeoutTimer);
+        }
       } catch {
-        // Fallback inmediato a IndexedDB si la señal es inestable (1-2 barritas) o falló la conexión
+        // Fallback inmediato a IndexedDB si la señal es inestable, lenta (1-2 barritas) o falló la conexión
         const localSale = await queueSale({
           routeId,
           sellerId: effectiveSellerId,
@@ -1193,7 +1200,7 @@ export function SalesPage({
         return syntheticSale;
       }
     },
-    onSuccess: async (sale) => {
+    onSuccess: (sale) => {
       const cust = availableCustomers.find(c => c.id === customerId);
       // Contar únicamente las unidades vendidas de presentaciones que son garrafones
       const jugUnits = items.reduce((acc, it) => {
@@ -1214,13 +1221,17 @@ export function SalesPage({
       setPostSaleJugQty(0);
       setPostSaleJugLentSuccess(false);
       setPostSaleJugError('');
-      await queryClient.invalidateQueries({ queryKey: ['sales'] });
-      await queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-      await queryClient.invalidateQueries({ queryKey: ['route-loads'] });
-      await queryClient.invalidateQueries({ queryKey: ['inventory'] });
-      await queryClient.invalidateQueries({ queryKey: ['jugs'] });
-      await queryClient.invalidateQueries({ queryKey: ['credit'] });
-      await queryClient.invalidateQueries({ queryKey: ['settlements'] });
+
+      // Desencadenar invalidaciones en segundo plano SIN bloquear la interfaz del vendedor
+      void Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: ['sales'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+        queryClient.invalidateQueries({ queryKey: ['route-loads'] }),
+        queryClient.invalidateQueries({ queryKey: ['inventory'] }),
+        queryClient.invalidateQueries({ queryKey: ['jugs'] }),
+        queryClient.invalidateQueries({ queryKey: ['credit'] }),
+        queryClient.invalidateQueries({ queryKey: ['settlements'] }),
+      ]);
     }
   });
 
@@ -1301,11 +1312,13 @@ export function SalesPage({
     setVisitSuccess('');
     setVisitCapturing(true);
     const visitCust = visitAvailableCustomers.find(c => c.id === visitCustomerId);
-    const visitFallback = (visitCust?.confirmedLatitude != null && visitCust?.confirmedLongitude != null)
+    const vLat = visitCust?.confirmedLatitude ?? (visitCust as any)?.latitude;
+    const vLon = visitCust?.confirmedLongitude ?? (visitCust as any)?.longitude;
+    const visitFallback = (vLat != null && vLon != null && Number(vLat) !== 0)
       ? {
-          latitude: Number(visitCust.confirmedLatitude),
-          longitude: Number(visitCust.confirmedLongitude),
-          accuracyMeters: 20,
+          latitude: Number(vLat),
+          longitude: Number(vLon),
+          accuracyMeters: 15,
           capturedAt: new Date().toISOString(),
         }
       : null;
@@ -1340,11 +1353,13 @@ export function SalesPage({
     setLocationError('');
     setIsCapturingLocation(true);
     const currentCustomer = availableCustomers.find(customer => customer.id === customerId);
-    const customerFallback = (currentCustomer?.confirmedLatitude != null && currentCustomer?.confirmedLongitude != null)
+    const lat = currentCustomer?.confirmedLatitude ?? (currentCustomer as any)?.latitude;
+    const lon = currentCustomer?.confirmedLongitude ?? (currentCustomer as any)?.longitude;
+    const customerFallback = (lat != null && lon != null && Number(lat) !== 0)
       ? {
-          latitude: Number(currentCustomer.confirmedLatitude),
-          longitude: Number(currentCustomer.confirmedLongitude),
-          accuracyMeters: 20,
+          latitude: Number(lat),
+          longitude: Number(lon),
+          accuracyMeters: 15,
           capturedAt: new Date().toISOString(),
         }
       : null;
