@@ -79,7 +79,10 @@ export function SyncProvider({
 
   useEffect(() => {
     const handleOnline = () => void syncNow();
-    const handleOutbox = () => void syncNow();
+    const handleOutbox = async () => {
+      await refresh();
+      void syncNow();
+    };
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') void syncNow();
     };
@@ -87,21 +90,33 @@ export function SyncProvider({
       if (event.data?.type === 'AGUA_PURA_SYNC_REQUESTED') void syncNow();
     };
 
+    const unsubscribeConnection = connectionManager.subscribe((connSnap) => {
+      if (connSnap.state === 'ONLINE') {
+        void syncNow();
+      }
+    });
+
     window.addEventListener('online', handleOnline);
     window.addEventListener('agua-pura:outbox-changed', handleOutbox);
     document.addEventListener('visibilitychange', handleVisibility);
     navigator.serviceWorker?.addEventListener('message', handleServiceWorkerMessage);
+    void refresh();
     void syncNow();
     return () => {
+      unsubscribeConnection();
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('agua-pura:outbox-changed', handleOutbox);
       document.removeEventListener('visibilitychange', handleVisibility);
       navigator.serviceWorker?.removeEventListener('message', handleServiceWorkerMessage);
     };
-  }, [syncNow]);
+  }, [syncNow, refresh]);
 
   const value = useMemo(() => ({ snapshot, operations, syncNow, refresh }), [snapshot, operations, syncNow, refresh]);
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;
+}
+
+export function useSyncOptional() {
+  return useContext(SyncContext);
 }
 
 export function useSync() {
@@ -109,3 +124,4 @@ export function useSync() {
   if (!context) throw new Error('useSync debe utilizarse dentro de SyncProvider');
   return context;
 }
+

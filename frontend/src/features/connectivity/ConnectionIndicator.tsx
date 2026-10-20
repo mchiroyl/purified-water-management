@@ -1,8 +1,13 @@
 import { useConnection } from './ConnectionContext';
+import { useSyncOptional } from '../../offline/SyncContext';
 
 export function ConnectionIndicator() {
   const { manager, snapshot } = useConnection();
+  const syncContext = useSyncOptional();
   const isForceOffline = snapshot.mode === 'FORCE_OFFLINE';
+
+  const unfinishedCount = syncContext?.operations.filter(op => op.status !== 'SYNCED').length ?? 0;
+  const isSyncing = syncContext?.snapshot.state === 'SYNCING' || syncContext?.snapshot.state === 'CHECKING_CONNECTION';
 
   const label = snapshot.state === 'ONLINE'
     ? 'En línea'
@@ -71,6 +76,21 @@ export function ConnectionIndicator() {
       >
         {label}
       </button>
+
+      {/* Badge/Botón de operaciones pendientes de subir al servidor */}
+      {unfinishedCount > 0 && (
+        <button
+          type="button"
+          className="pending-sync-badge"
+          disabled={isSyncing || isForceOffline}
+          onClick={() => void syncContext?.syncNow()}
+          title={isForceOffline
+            ? `${unfinishedCount} operación(es) guardadas en el teléfono. Cambia a Conectado (Online) para sincronizar.`
+            : `${unfinishedCount} operación(es) pendientes. Toca para sincronizar ahora.`}
+        >
+          {isSyncing ? '🔄 Sincronizando…' : `⏳ ${unfinishedCount} pendiente${unfinishedCount > 1 ? 's' : ''}`}
+        </button>
+      )}
     </div>
   );
 }

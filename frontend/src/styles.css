@@ -174,6 +174,30 @@ aside a:hover:not(.active) { background: #f1f5f9; color: #0f172a; }
 .status-pill.local-mode .status-dot { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
 .status-pill.degraded-net { color: #fde047; }
 .status-pill.degraded-net .status-dot { background: #eab308; box-shadow: 0 0 6px #eab308; }
+.pending-sync-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .28rem .65rem;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 700;
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fdba74;
+  cursor: pointer;
+  white-space: nowrap;
+  min-height: 28px;
+  transition: all .18s ease;
+}
+.pending-sync-badge:hover:not(:disabled) {
+  background: #ffedd5;
+  border-color: #fb923c;
+}
+.pending-sync-badge:disabled {
+  opacity: .7;
+  cursor: default;
+}
 .metric-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: .75rem; margin: 1.5rem 0; }
 .metric-grid article, .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 1rem; padding: 1rem; box-shadow: 0 8px 24px rgba(18,76,84,.05); }
 .metric-grid span { display: block; color: var(--muted); font-size: .8rem; }
