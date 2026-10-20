@@ -96,20 +96,26 @@ export async function queueSale(
     };
   });
 
-  const paymentRecords: LocalPaymentRecord[] = input.payments.map((p) => ({
-    localPaymentId: crypto.randomUUID(),
-    serverPaymentId: null,
-    localSaleId,
-    routeRunId: input.routeId,
-    clientOperationId,
-    paymentMethod: p.method === 'TRANSFER' ? 'TRANSFER' : 'CASH',
-    amount: (Number(p.amount) || 0).toFixed(2),
-    verificationStatus: 'CONFIRMED',
-    transferReference: p.reference ?? null,
-    evidenceCacheKey: p.evidenceReference ?? null,
-    syncStatus: 'PENDING',
-    paidAtLocal: occurredAtLocal,
-  }));
+  const paymentRecords: LocalPaymentRecord[] = input.payments.map((p) => {
+    let amt = Number(p.amount) || 0;
+    if (input.payments.length === 1 && amt === 0 && calculatedTotal > 0) {
+      amt = calculatedTotal;
+    }
+    return {
+      localPaymentId: crypto.randomUUID(),
+      serverPaymentId: null,
+      localSaleId,
+      routeRunId: input.routeId,
+      clientOperationId,
+      paymentMethod: p.method === 'TRANSFER' ? 'TRANSFER' : 'CASH',
+      amount: amt.toFixed(2),
+      verificationStatus: 'CONFIRMED',
+      transferReference: p.reference ?? null,
+      evidenceCacheKey: p.evidenceReference ?? null,
+      syncStatus: 'PENDING',
+      paidAtLocal: occurredAtLocal,
+    };
+  });
 
   // Actualizar inventario local del camión de forma inmediata si existe en IndexedDB
   const currentInventory = await db.getAll('routeInventory');

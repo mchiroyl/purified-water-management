@@ -193,7 +193,7 @@ export function setLocalCache<T>(path: string, data: T): void {
 
 export async function preloadOfflineCatalogs(): Promise<void> {
   if (typeof window === 'undefined' || !navigator.onLine || isOfflineOverride?.()) return;
-  const endpoints = ['/routes', '/customers', '/products', '/loads', '/itineraries/my-active'];
+  const endpoints = ['/routes', '/customers', '/products', '/loads', '/pricing/lists', '/itineraries/my-active'];
   await Promise.allSettled(endpoints.map(ep => apiRequest(ep)));
 }
 

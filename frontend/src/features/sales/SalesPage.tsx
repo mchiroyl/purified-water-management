@@ -63,6 +63,31 @@ type Customer = {
 };
 type Presentation = { id: string; code: string; name: string; active: boolean; productId?: string };
 type Product = { id: string; code: string; name: string; active: boolean; controlsInventory: boolean; presentations: Presentation[] };
+type PriceTier = { id: string; presentationId: string; minimumBaseUnits: number; maximumBaseUnits?: number; unitPrice: number };
+type PriceVersion = { id: string; versionNumber: number; status: string; tiers: PriceTier[] };
+type PriceList = { id: string; code: string; name: string; status: string; currencyCode: string; versions: PriceVersion[] };
+
+function resolveLocalPrice(presentationId?: string, quantity = 1, lists?: PriceList[]): number {
+  if (!lists || !presentationId) return 0;
+  for (const list of lists) {
+    if (list.status !== 'ACTIVE') continue;
+    for (const version of list.versions || []) {
+      if (version.status !== 'ACTIVE') continue;
+      const matchingTier = version.tiers
+        ?.filter(t => t.presentationId === presentationId)
+        ?.sort((a, b) => b.minimumBaseUnits - a.minimumBaseUnits)
+        ?.find(t => quantity >= t.minimumBaseUnits && (!t.maximumBaseUnits || quantity <= t.maximumBaseUnits));
+      if (matchingTier) {
+        return Number(matchingTier.unitPrice || 0);
+      }
+      const baseTier = version.tiers?.find(t => t.presentationId === presentationId);
+      if (baseTier) {
+        return Number(baseTier.unitPrice || 0);
+      }
+    }
+  }
+  return 0;
+}
 type SaleItem = { id: string; productName: string; presentationName: string; presentationQuantity: number; quantityBaseUnits: number; unitPrice: number; lineTotal: number; priceSource: string };
 type Payment = { id: string; method: string; amount: number; status: string; reference: string; bank: string };
 type Sale = { id: string; documentNumber: string; routeCode: string; routeName: string; sellerName: string; customerCode: string; customerName: string; status: string; subtotal: number; total: number; currencyCode: string; createdAt: string; items: SaleItem[]; payments?: Payment[]; pendingTransferAmount?: number; rejectedTransferAmount?: number; creditAmount?: number; routeId?: string; customerId?: string };
@@ -211,7 +236,17 @@ function CustomerContextBanner({
 // ── Badge de precio en vivo (Especial vs General) ───────────────────────────
 type PriceDecisionResponse = { unitPrice: number; source: string; priceVersionId?: string; priceTierId?: string; specialPriceId?: string };
 
-function ItemPriceBadge({ customerId, presentationId, quantity }: { customerId?: string; presentationId?: string; quantity: number }) {
+function ItemPriceBadge({
+  customerId,
+  presentationId,
+  quantity,
+  fallbackPrice,
+}: {
+  customerId?: string;
+  presentationId?: string;
+  quantity: number;
+  fallbackPrice?: number;
+}) {
   const query = useQuery({
     queryKey: ['pricing', 'resolve', customerId, presentationId, quantity],
     enabled: Boolean(customerId && presentationId && quantity > 0),
@@ -223,13 +258,14 @@ function ItemPriceBadge({ customerId, presentationId, quantity }: { customerId?:
   });
 
   if (!customerId || !presentationId || quantity <= 0) return null;
-  if (query.isLoading) {
+  if (query.isLoading && !fallbackPrice) {
     return <span className="muted" style={{ fontSize: '0.82rem', padding: '0.2rem 0' }}>Cotizando precio oficial…</span>;
   }
-  if (query.error || !query.data) return null;
 
-  const isSpecial = query.data.source === 'CUSTOMER_SPECIAL_PRICE';
-  const unitPrice = Number(query.data.unitPrice || 0);
+  const unitPrice = query.data ? Number(query.data.unitPrice || 0) : Number(fallbackPrice || 0);
+  if (!unitPrice) return null;
+
+  const isSpecial = query.data?.source === 'CUSTOMER_SPECIAL_PRICE';
   const lineTotal = unitPrice * quantity;
 
   return (
@@ -583,6 +619,7 @@ export function SalesPage({
   const customers = useQuery({ queryKey: ['customers'], queryFn: () => apiRequest<Customer[]>('/customers'), enabled: canSell, staleTime: 300_000 });
   const products = useQuery({ queryKey: ['products'], queryFn: () => apiRequest<Product[]>('/products'), enabled: canSell, staleTime: 300_000 });
   const loads = useQuery({ queryKey: ['route-loads'], queryFn: () => apiRequest<RouteLoad[]>('/loads'), enabled: canSell, staleTime: 60_000 });
+  const priceLists = useQuery({ queryKey: ['pricing', 'lists'], queryFn: () => apiRequest<PriceList[]>('/pricing/lists'), enabled: canSell, staleTime: 300_000 });
   const [searchParams] = useSearchParams();
   const [routeId, setRouteId] = useState('');
   const [customerId, setCustomerId] = useState('');
@@ -1002,21 +1039,28 @@ export function SalesPage({
     mutationFn: async (location: GeoLocationSnapshot) => {
       const isOfflineMode = snapshot.mode === 'FORCE_OFFLINE' || snapshot.state === 'OFFLINE' || !navigator.onLine;
 
-      const payloadPayments: SaleOfflinePaymentInput[] = payments.map(payment => ({
-        method: payment.method as 'CASH' | 'TRANSFER' | 'CREDIT',
-        amount: payment.amount === '' ? 0 : Number(payment.amount),
-        reference: payment.reference || null,
-        bank: payment.bank || null,
-        evidenceReference: payment.evidenceReference || null,
-      }));
-
       const payloadItems: SaleOfflineItemInput[] = items.map(it => {
         const pres = presentations.find(p => p.id === it.presentationId);
+        const resolvedPrice = resolveLocalPrice(it.presentationId, it.quantity, priceLists.data);
         return {
           presentationId: it.presentationId,
           quantity: it.quantity,
           productId: pres?.productId ?? pres?.product?.id,
-          unitPrice: pres ? Number((pres as any).unitPrice || 0) : 0,
+          unitPrice: resolvedPrice,
+        };
+      });
+
+      const calculatedSubtotal = payloadItems.reduce((acc, it) => acc + (it.quantity * (it.unitPrice || 0)), 0);
+      const calculatedTotal = calculatedSubtotal;
+
+      const payloadPayments: SaleOfflinePaymentInput[] = payments.map(payment => {
+        const amt = payment.amount === '' ? calculatedTotal : Number(payment.amount);
+        return {
+          method: payment.method as 'CASH' | 'TRANSFER' | 'CREDIT',
+          amount: amt,
+          reference: payment.reference || null,
+          bank: payment.bank || null,
+          evidenceReference: payment.evidenceReference || null,
         };
       });
 
@@ -1029,6 +1073,8 @@ export function SalesPage({
           items: payloadItems,
           payments: payloadPayments,
           location,
+          total: calculatedTotal,
+          subtotal: calculatedSubtotal,
         });
 
         const selectedCust = availableCustomers.find(c => c.id === customerId);
@@ -1043,22 +1089,23 @@ export function SalesPage({
           customerCode: selectedCust?.code ?? 'CLI-LOC',
           customerName: selectedCust?.name ?? 'Cliente',
           status: 'CONFIRMED',
-          subtotal: Number(localSale.subtotal),
-          total: Number(localSale.total),
+          subtotal: Number(localSale.subtotal) || calculatedSubtotal,
+          total: Number(localSale.total) || calculatedTotal,
           currencyCode: localSale.currencyCode,
           createdAt: localSale.occurredAtLocal,
           routeId,
           customerId,
           items: items.map(it => {
             const pres = presentations.find(p => p.id === it.presentationId);
+            const unitPrice = resolveLocalPrice(it.presentationId, it.quantity, priceLists.data);
             return {
               id: it.presentationId,
               productName: pres?.product?.name ?? 'Agua Purificada',
               presentationName: pres?.name ?? 'Presentación',
               presentationQuantity: it.quantity,
               quantityBaseUnits: it.quantity,
-              unitPrice: 0,
-              lineTotal: 0,
+              unitPrice,
+              lineTotal: unitPrice * it.quantity,
               priceSource: 'LOCAL',
             };
           }),
@@ -1096,6 +1143,8 @@ export function SalesPage({
           items: payloadItems,
           payments: payloadPayments,
           location,
+          total: calculatedTotal,
+          subtotal: calculatedSubtotal,
         });
 
         const selectedCust = availableCustomers.find(c => c.id === customerId);
@@ -1110,22 +1159,23 @@ export function SalesPage({
           customerCode: selectedCust?.code ?? 'CLI-LOC',
           customerName: selectedCust?.name ?? 'Cliente',
           status: 'CONFIRMED',
-          subtotal: Number(localSale.subtotal),
-          total: Number(localSale.total),
+          subtotal: Number(localSale.subtotal) || calculatedSubtotal,
+          total: Number(localSale.total) || calculatedTotal,
           currencyCode: localSale.currencyCode,
           createdAt: localSale.occurredAtLocal,
           routeId,
           customerId,
           items: items.map(it => {
             const pres = presentations.find(p => p.id === it.presentationId);
+            const unitPrice = resolveLocalPrice(it.presentationId, it.quantity, priceLists.data);
             return {
               id: it.presentationId,
               productName: pres?.product?.name ?? 'Agua Purificada',
               presentationName: pres?.name ?? 'Presentación',
               presentationQuantity: it.quantity,
               quantityBaseUnits: it.quantity,
-              unitPrice: 0,
-              lineTotal: 0,
+              unitPrice,
+              lineTotal: unitPrice * it.quantity,
               priceSource: 'LOCAL',
             };
           }),
@@ -1612,7 +1662,7 @@ export function SalesPage({
           ))}
         </select></label>
         <label>Cantidad<input required type="number" min="0.0001" step="0.0001" value={item.quantity} onChange={event => setItems(current => current.map((row, position) => position === index ? { ...row, quantity: Number(event.target.value) } : row))} /></label>
-        <ItemPriceBadge customerId={customerId} presentationId={item.presentationId} quantity={item.quantity} />
+        <ItemPriceBadge customerId={customerId} presentationId={item.presentationId} quantity={item.quantity} fallbackPrice={resolveLocalPrice(item.presentationId, item.quantity, priceLists.data)} />
         {items.length > 1 && <button type="button" className="secondary" onClick={() => setItems(current => current.filter((_row, position) => position !== index))}>Quitar</button>}
       </div>)}</div>
       <h3>Forma de pago</h3>
