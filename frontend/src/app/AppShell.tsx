@@ -205,14 +205,26 @@ export function AppShell() {
       <header>
         <div className="header-brand">
           {company.data?.logoUrl ? (
-            <img src={`${resolveApiUrl(company.data.logoUrl)}?v=${company.data.version}`} alt="" />
-          ) : !company.isPending && !company.data?.logoUrl ? (
-            <div className="sidebar-logo-icon" style={{ width: 34, height: 34 }}>
-              <Droplets size={18} color="#ffffff" strokeWidth={2.5} />
-            </div>
-          ) : (
-            <div style={{ width: 34, height: 34, borderRadius: '0.75rem', background: 'transparent' }} />
-          )}
+            <img
+              src={`${resolveApiUrl(company.data.logoUrl)}?v=${company.data.version}`}
+              alt=""
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                const fallback = e.currentTarget.nextElementSibling as HTMLElement | null;
+                if (fallback) fallback.style.display = 'flex';
+              }}
+            />
+          ) : null}
+          <div
+            className="sidebar-logo-icon"
+            style={{
+              width: 34,
+              height: 34,
+              display: company.data?.logoUrl ? 'none' : 'flex',
+            }}
+          >
+            <Droplets size={18} color="#ffffff" strokeWidth={2.5} />
+          </div>
           <div>
             <strong>{company.data?.commercialName ?? 'Fresh Water'}</strong>
             <span className="user-name">{user?.displayName} · {user?.roles?.[0] ?? 'Operativo'}</span>

@@ -1,11 +1,35 @@
 import { ApiError, type ApiErrorPayload } from '../types/api';
 
 export const baseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
-let accessToken: string | null = null;
+let accessToken: string | null = (typeof sessionStorage !== 'undefined')
+  ? (() => {
+      try {
+        return sessionStorage.getItem('agua_pura:access_token');
+      } catch {
+        return null;
+      }
+    })()
+  : null;
+
 let refreshPromise: Promise<string> | null = null;
 
 export function setAccessToken(token: string | null): void {
   accessToken = token;
+  if (typeof sessionStorage !== 'undefined') {
+    try {
+      if (token) {
+        sessionStorage.setItem('agua_pura:access_token', token);
+      } else {
+        sessionStorage.removeItem('agua_pura:access_token');
+      }
+    } catch {
+      // Ignore sessionStorage errors
+    }
+  }
+}
+
+export function getAccessToken(): string | null {
+  return accessToken;
 }
 
 export function resolveApiUrl(path?: string | null): string {
@@ -136,7 +160,7 @@ async function fetchWithRefresh(path: string, init: RequestInit, accept: string)
   }
   if (response.status < 500) publish('agua-pura:request-success');
 
-  if (response.status === 401 && accessToken && !isAuthEndpoint(path)) {
+  if (response.status === 401 && !isAuthEndpoint(path)) {
     try {
       await refreshOnce();
       const retryController = new AbortController();

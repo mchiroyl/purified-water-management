@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ApiError } from '../../types/api';
-import { apiRequest, setAccessToken, RefreshRejectedError } from '../../services/apiClient';
+import { apiRequest, setAccessToken, getAccessToken, RefreshRejectedError } from '../../services/apiClient';
 import type { AuthResponse, SessionUser } from './types';
 import { clearMobileData, prepareMobileDataForSession } from '../../offline/mobileDatabase';
 import { getKnownDeviceId, saveKnownDeviceId } from './deviceIdentity';
@@ -142,6 +142,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     window.addEventListener('agua-pura:session-expired', handleExpired);
     return () => window.removeEventListener('agua-pura:session-expired', handleExpired);
   }, []);
+
+  useEffect(() => {
+    const handleReconnected = () => {
+      if (user && !getAccessToken()) {
+        void refresh().catch(() => {
+          // Si el servidor todavía no responde o la red es intermitente, conservar sesión local
+        });
+      }
+    };
+    window.addEventListener('online', handleReconnected);
+    window.addEventListener('agua-pura:connection-restored', handleReconnected);
+    return () => {
+      window.removeEventListener('online', handleReconnected);
+      window.removeEventListener('agua-pura:connection-restored', handleReconnected);
+    };
+  }, [user, refresh]);
 
   const logout = useCallback(async () => {
     try {

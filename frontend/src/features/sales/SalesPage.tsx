@@ -515,35 +515,88 @@ function InlineJugReturnForm({
   onSuccessToast?: (toast: { title: string; message: string; icon?: string }) => void;
 }) {
   const queryClient = useQueryClient();
+  const session = useOptionalSession();
   const [quantity, setQuantity] = useState(maxReturnable && maxReturnable > 0 ? Math.min(maxReturnable, 1) : 1);
   const [notes, setNotes] = useState('');
   const [returnError, setReturnError] = useState('');
   const [returnSuccess, setReturnSuccess] = useState('');
 
   const returnJug = useMutation({
-    mutationFn: () =>
-      apiRequest('/jugs/events', {
-        method: 'POST',
-        body: JSON.stringify({
-          customerId,
-          routeId,
-          eventType: 'RETURNED',
-          quantity: Number(quantity),
-          notes: notes.trim() || 'Devolución de garrafones vacíos',
-        }),
-      }),
-    onSuccess: () => {
-      const msg = `Se registró exitosamente la devolución de ${quantity} garrafón(es) vacío(s)${customerName ? ` para ${customerName}` : ''}.`;
-      setReturnSuccess(`✅ ${msg}`);
+    mutationFn: async () => {
+      const isOfflineMode = typeof navigator !== 'undefined' && !navigator.onLine;
+
+      const saveOffline = async () => {
+        const { openMobileDatabase } = await import('../../offline/mobileDatabase');
+        const db = await openMobileDatabase();
+        const clientOperationId = crypto.randomUUID();
+        const effectiveDeviceId = session?.user?.deviceId || 'browser-device';
+        await db.put('outboxOperations', {
+          clientOperationId,
+          deviceId: effectiveDeviceId,
+          entityType: 'JUG_EVENT',
+          operationType: 'CREATE',
+          aggregateLocalId: clientOperationId,
+          payload: {
+            customerId,
+            routeId: routeId || undefined,
+            eventType: 'RETURNED',
+            quantity: Number(quantity),
+            notes: notes.trim() || 'Devolución de garrafones vacíos',
+          },
+          dependencies: [],
+          status: 'PENDING',
+          retryCount: 0,
+          lastErrorCode: null,
+          lastErrorMessage: null,
+          nextAttemptAt: null,
+          createdAtLocal: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+        const { notifyOutboxChanged } = await import('../../offline/SyncContext');
+        notifyOutboxChanged();
+        return { isOffline: true };
+      };
+
+      if (isOfflineMode) {
+        return saveOffline();
+      }
+
+      try {
+        return await apiRequest('/jugs/events', {
+          method: 'POST',
+          body: JSON.stringify({
+            customerId,
+            routeId: routeId || undefined,
+            eventType: 'RETURNED',
+            quantity: Number(quantity),
+            notes: notes.trim() || 'Devolución de garrafones vacíos',
+          }),
+        });
+      } catch (err: any) {
+        if (
+          err instanceof TypeError ||
+          (err?.message && (err.message.includes('fetch') || err.message.includes('espera') || err.message.includes('local') || err.message.includes('solicitud')))
+        ) {
+          return saveOffline();
+        }
+        throw err;
+      }
+    },
+    onSuccess: (data: any) => {
+      const wasOffline = data?.isOffline;
+      const msg = wasOffline
+        ? `Devolución de ${quantity} garrafón(es) guardada en este dispositivo. Se sincronizará automáticamente al tener señal.`
+        : `Se registró exitosamente la devolución de ${quantity} garrafón(es) vacío(s)${customerName ? ` para ${customerName}` : ''}.`;
+      setReturnSuccess(wasOffline ? `📦 ${msg}` : `✅ ${msg}`);
       void queryClient.invalidateQueries({ queryKey: ['jugs'] });
       if (onSuccessToast) {
         onSuccessToast({
-          title: 'Devolución de garrafones procesada',
+          title: wasOffline ? 'Devolución guardada localmente' : 'Devolución de garrafones procesada',
           message: msg,
-          icon: '🧴',
+          icon: wasOffline ? '📦' : '🧴',
         });
       }
-      setTimeout(onDone, 1800);
+      setTimeout(onDone, 2000);
     },
     onError: (err: Error) => setReturnError(err.message || 'Error al registrar la devolución.'),
   });

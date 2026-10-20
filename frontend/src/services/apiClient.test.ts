@@ -30,6 +30,24 @@ describe('apiClient', () => {
     expect(retriedHeaders.get('Authorization')).toBe('Bearer renewed-token');
   });
 
+  it('renueva el access token y reintenta cuando el token inicial es nulo (inicio de sesión offline previo)', async () => {
+    setAccessToken(null);
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ code: 'UNAUTHORIZED' }), { status: 401 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        accessToken: 'reconnected-token',
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetcher);
+
+    await expect(apiRequest<{ ok: boolean }>('/dashboards/operations')).resolves.toEqual({ ok: true });
+
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher.mock.calls[1][0]).toContain('/auth/refresh');
+    const retriedHeaders = fetcher.mock.calls[2][1]?.headers as Headers;
+    expect(retriedHeaders.get('Authorization')).toBe('Bearer reconnected-token');
+  });
+
   it('publica éxito de conectividad para la respuesta 401 antes de renovar y para 204', async () => {
     const fetcher = vi.fn();
     const callsAtSuccess: number[] = [];
