@@ -133,6 +133,23 @@ export type LocalSaleRecord = {
   location?: GeoLocationSnapshot | null;
   syncStatus: SyncStatus;
   occurredAtLocal: string;
+  customerName?: string | null;
+  customerCode?: string | null;
+  sellerName?: string | null;
+  routeCode?: string | null;
+  routeName?: string | null;
+  items?: Array<{
+    id?: string;
+    productId?: string;
+    productCode?: string;
+    productName?: string;
+    presentationId?: string;
+    presentationName?: string;
+    presentationQuantity: number;
+    quantityBaseUnits?: number;
+    unitPrice?: number;
+    lineTotal?: number;
+  }>;
 };
 export type LocalSaleItemRecord = {
   id: string;

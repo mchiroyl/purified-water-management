@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { connectionManager } from '../features/connectivity/ConnectionManager';
 import { apiRequest } from '../services/apiClient';
 import { openMobileDatabase, type MobileDatabase, type OutboxRecord } from './mobileDatabase';
@@ -8,6 +9,14 @@ import {
   type SyncEngineSnapshot,
   type SyncRequestOperation,
 } from './SyncEngine';
+
+function useOptionalQueryClient() {
+  try {
+    return useQueryClient();
+  } catch {
+    return null;
+  }
+}
 
 let mobileDatabasePromise: Promise<MobileDatabase> | undefined;
 
@@ -72,10 +81,12 @@ export function SyncProvider({
   engine?: SyncEngine;
   database?: () => Promise<MobileDatabase>;
 }) {
+  const queryClient = useOptionalQueryClient();
   const [snapshot, setSnapshot] = useState(engine.getSnapshot());
   const [operations, setOperations] = useState<OutboxRecord[]>([]);
   // Track last auto-sync time to avoid hammering the server with probes
-  const lastAutoSyncRef = { current: 0 };
+  const lastAutoSyncRef = useRef(0);
+  const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refresh = useCallback(async () => {
     const db = await database();
@@ -84,9 +95,20 @@ export function SyncProvider({
   }, [database]);
 
   const syncNow = useCallback(async () => {
-    await engine.sync();
+    const summary = await engine.sync();
     await refresh();
-  }, [engine, refresh]);
+    if (summary.synced > 0 && queryClient) {
+      void Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: ['sales'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+        queryClient.invalidateQueries({ queryKey: ['route-loads'] }),
+        queryClient.invalidateQueries({ queryKey: ['inventory'] }),
+        queryClient.invalidateQueries({ queryKey: ['settlements'] }),
+        queryClient.invalidateQueries({ queryKey: ['customers'] }),
+        queryClient.invalidateQueries({ queryKey: ['credit'] }),
+      ]);
+    }
+  }, [engine, refresh, queryClient]);
 
   const discardOperation = useCallback(async (clientOperationId: string) => {
     const db = await database();
@@ -107,11 +129,25 @@ export function SyncProvider({
     await refresh();
   }, [database, refresh]);
 
-  // Rate-limited auto-sync: waits at least 15 s between automatic sync triggers
-  // to avoid triggering repeated HTTP probes that would bounce the connection state.
+  // Rate-limited auto-sync: waits at least 10 s between automatic sync triggers
+  // but if called within the window, schedules a deferred timer so requests are never lost.
   const autoSync = useCallback(() => {
     const now = Date.now();
-    if (now - lastAutoSyncRef.current < 15_000) return;
+    const elapsed = now - lastAutoSyncRef.current;
+    if (elapsed < 10_000) {
+      if (!pendingTimerRef.current) {
+        pendingTimerRef.current = setTimeout(() => {
+          pendingTimerRef.current = null;
+          lastAutoSyncRef.current = Date.now();
+          void syncNow();
+        }, Math.max(500, 10_000 - elapsed));
+      }
+      return;
+    }
+    if (pendingTimerRef.current) {
+      clearTimeout(pendingTimerRef.current);
+      pendingTimerRef.current = null;
+    }
     lastAutoSyncRef.current = now;
     void syncNow();
   }, [syncNow]);
@@ -123,11 +159,22 @@ export function SyncProvider({
 
     const handleOnline = () => {
       lastAutoSyncRef.current = 0; // browser came back online: reset rate limit
+      if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
       void syncNow();
     };
     const handleOutbox = async () => {
       await refresh();
-      autoSync();
+      // Si la red está activa, sincronizar prontamente (debounce 400ms para asentar escritura)
+      if (connectionManager.getSnapshot().state === 'ONLINE') {
+        if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+        pendingTimerRef.current = setTimeout(() => {
+          pendingTimerRef.current = null;
+          lastAutoSyncRef.current = Date.now();
+          void syncNow();
+        }, 400);
+      } else {
+        autoSync();
+      }
     };
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') autoSync();
@@ -137,17 +184,24 @@ export function SyncProvider({
     };
 
     // Only trigger sync on TRANSITION to ONLINE (not on every ONLINE publish)
-    // This is the key fix: prevents the probe loop that was bouncing the state
     const unsubscribeConnection = connectionManager.subscribe((connSnap) => {
       const wasOnline = previousConnectionState === 'ONLINE';
       const isNowOnline = connSnap.state === 'ONLINE';
       previousConnectionState = connSnap.state;
       if (!wasOnline && isNowOnline) {
-        // Genuine transition to online: reset rate limiter and sync
         lastAutoSyncRef.current = 0;
+        if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
         void syncNow();
       }
     });
+
+    // Heartbeat periódico mientras hay conexión activa para no dejar operaciones estancadas
+    const heartbeat = setInterval(() => {
+      const snap = connectionManager.getSnapshot();
+      if (snap.state === 'ONLINE' && snap.mode !== 'FORCE_OFFLINE') {
+        autoSync();
+      }
+    }, 15_000);
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('agua-pura:outbox-changed', handleOutbox);
@@ -156,6 +210,8 @@ export function SyncProvider({
     void refresh();
     autoSync();
     return () => {
+      clearInterval(heartbeat);
+      if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
       unsubscribeConnection();
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('agua-pura:outbox-changed', handleOutbox);

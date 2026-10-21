@@ -670,6 +670,26 @@ export function SalesPage({
   const effectiveDeviceId = deviceId ?? session?.user?.deviceId ?? 'browser-device';
   const effectiveSellerId = sellerId ?? session?.user?.id ?? '';
   const sales = useQuery({ queryKey: ['sales'], queryFn: () => apiRequest<Sale[]>('/sales'), staleTime: 60_000 });
+  const localSalesQuery = useQuery({
+    queryKey: ['localSales', snapshot.state],
+    queryFn: async () => {
+      try {
+        const db = await openMobileDatabase();
+        const [localSalesList, provCusts] = await Promise.all([
+          db.getAll('localSales'),
+          db.getAll('provisionalCustomers'),
+        ]);
+        const provMap = new Map(provCusts.map(c => [c.localCustomerId, c.name]));
+        return localSalesList.map(s => ({
+          ...s,
+          customerName: s.customerName || (s.customerId ? provMap.get(s.customerId) : undefined) || 'Cliente',
+        }));
+      } catch {
+        return [];
+      }
+    },
+    staleTime: 5_000,
+  });
   const routes = useQuery({ queryKey: ['routes'], queryFn: () => apiRequest<Route[]>('/routes'), enabled: canSell, staleTime: 300_000 });
   const customers = useQuery({ queryKey: ['customers'], queryFn: () => apiRequest<Customer[]>('/customers'), enabled: canSell, staleTime: 300_000 });
   const products = useQuery({ queryKey: ['products'], queryFn: () => apiRequest<Product[]>('/products'), enabled: canSell, staleTime: 300_000 });
@@ -734,12 +754,62 @@ export function SalesPage({
     setCollapsedGroups({});
   };
 
+  const combinedSales = useMemo<Sale[]>(() => {
+    const serverSales = sales.data ?? [];
+    const localSales = (localSalesQuery.data ?? [])
+      .filter(ls => {
+        if (ls.serverSaleId && serverSales.some(s => s.id === ls.serverSaleId)) return false;
+        if (serverSales.some(s => s.id === ls.localSaleId || s.documentNumber === ls.localReference)) return false;
+        return true;
+      })
+      .map(ls => {
+        const saleItems: SaleItem[] = (ls.items ?? []).map((it: any, idx: number) => ({
+          id: it.id || `local-it-${idx}`,
+          productName: it.productName || 'Producto',
+          presentationName: it.presentationName || 'Presentación',
+          presentationQuantity: Number(it.presentationQuantity ?? it.quantity) || 1,
+          quantityBaseUnits: Number(it.quantityBaseUnits ?? it.quantity) || 1,
+          unitPrice: Number(it.unitPrice) || 0,
+          lineTotal: (Number(it.presentationQuantity ?? it.quantity) || 1) * (Number(it.unitPrice) || 0),
+          priceSource: 'LOCAL',
+        }));
+
+        return {
+          id: ls.localSaleId,
+          documentNumber: ls.localReference,
+          routeCode: ls.routeCode || 'RUTA-LOC',
+          routeName: ls.routeName || 'Ruta Local',
+          sellerName: ls.sellerName || session?.user?.displayName || 'Vendedor',
+          customerCode: ls.customerCode || 'CLI-LOC',
+          customerName: ls.customerName || 'Cliente (Venta local)',
+          status: 'LOCAL_PENDING',
+          subtotal: Number(ls.subtotal) || Number(ls.total) || 0,
+          total: Number(ls.total) || 0,
+          currencyCode: ls.currencyCode || 'GTQ',
+          createdAt: ls.occurredAtLocal,
+          routeId: ls.routeRunId,
+          customerId: ls.customerId || '',
+          items: saleItems,
+          payments: [{
+            id: `pay-${ls.localSaleId}`,
+            method: 'CASH',
+            amount: Number(ls.total) || 0,
+            status: 'CONFIRMED',
+            reference: '',
+            bank: '',
+          }],
+        };
+      });
+
+    return [...localSales, ...serverSales];
+  }, [sales.data, localSalesQuery.data, session?.user?.displayName]);
+
   const groupedSales = useMemo<SaleGroup[]>(() => {
-    if (!sales.data || sales.data.length === 0) return [];
+    if (!combinedSales || combinedSales.length === 0) return [];
 
     const query = salesSearch.trim().toLowerCase();
     const filtered = query
-      ? sales.data.filter(s =>
+      ? combinedSales.filter(s =>
           (s.documentNumber && s.documentNumber.toLowerCase().includes(query)) ||
           (s.customerName && s.customerName.toLowerCase().includes(query)) ||
           (s.customerCode && s.customerCode.toLowerCase().includes(query)) ||
@@ -747,7 +817,7 @@ export function SalesPage({
           (s.routeCode && s.routeCode.toLowerCase().includes(query)) ||
           (s.sellerName && s.sellerName.toLowerCase().includes(query))
         )
-      : sales.data;
+      : combinedSales;
 
     const map = new Map<string, SaleGroup>();
 
@@ -792,7 +862,7 @@ export function SalesPage({
     }
 
     return list;
-  }, [sales.data, salesSearch]);
+  }, [combinedSales, salesSearch]);
 
   // ── Modal de Venta Confirmada y Préstamo de Garrafón ───────────────────────
   const [confirmedSaleModal, setConfirmedSaleModal] = useState<{
@@ -1121,6 +1191,9 @@ export function SalesPage({
       });
 
       if (isOfflineMode) {
+        const selectedCust = availableCustomers.find(c => c.id === customerId);
+        const selectedRte = routes.data?.find(r => r.id === routeId);
+
         const localSale = await queueSale({
           routeId,
           sellerId: effectiveSellerId,
@@ -1131,10 +1204,12 @@ export function SalesPage({
           location,
           total: calculatedTotal,
           subtotal: calculatedSubtotal,
+          customerName: selectedCust?.name ?? 'Cliente',
+          customerCode: selectedCust?.code ?? 'CLI-LOC',
+          sellerName: session?.user?.displayName ?? 'Vendedor',
+          routeCode: selectedRte?.code ?? 'RUTA-LOC',
+          routeName: selectedRte?.name ?? 'Ruta Local',
         });
-
-        const selectedCust = availableCustomers.find(c => c.id === customerId);
-        const selectedRte = routes.data?.find(r => r.id === routeId);
 
         const syntheticSale: Sale = {
           id: localSale.localSaleId,
@@ -1196,7 +1271,15 @@ export function SalesPage({
         } finally {
           clearTimeout(timeoutTimer);
         }
-      } catch {
+      } catch (err: any) {
+        // Si el servidor respondió con un error de negocio (4xx), no enmascarar como offline; mostrar el error al usuario
+        if (err?.status && err.status >= 400 && err.status < 500) {
+          throw err;
+        }
+
+        const selectedCust = availableCustomers.find(c => c.id === customerId);
+        const selectedRte = routes.data?.find(r => r.id === routeId);
+
         // Fallback inmediato a IndexedDB si la señal es inestable, lenta (1-2 barritas) o falló la conexión
         const localSale = await queueSale({
           routeId,
@@ -1208,10 +1291,12 @@ export function SalesPage({
           location,
           total: calculatedTotal,
           subtotal: calculatedSubtotal,
+          customerName: selectedCust?.name ?? 'Cliente',
+          customerCode: selectedCust?.code ?? 'CLI-LOC',
+          sellerName: session?.user?.displayName ?? 'Vendedor',
+          routeCode: selectedRte?.code ?? 'RUTA-LOC',
+          routeName: selectedRte?.name ?? 'Ruta Local',
         });
-
-        const selectedCust = availableCustomers.find(c => c.id === customerId);
-        const selectedRte = routes.data?.find(r => r.id === routeId);
 
         const syntheticSale: Sale = {
           id: localSale.localSaleId,
@@ -2125,7 +2210,7 @@ export function SalesPage({
             </p>
           </div>
           <span className="badge" style={{ background: '#e0f2fe', color: '#0369a1', fontWeight: 700, padding: '0.35rem 0.8rem', borderRadius: '1rem', fontSize: '0.9rem' }}>
-            {sales.data?.length ?? 0} ventas registradas
+            {combinedSales.length} ventas registradas
           </span>
         </div>
 
@@ -2266,11 +2351,18 @@ export function SalesPage({
                               <Fragment key={sale.id}>
                                 <tr>
                                   <td>
-                                    <strong className="document-number" style={{ color: '#0f766e', fontSize: '0.92rem', display: 'block' }}>
-                                      {sale.documentNumber}
-                                    </strong>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                                      <strong className="document-number" style={{ color: '#0f766e', fontSize: '0.92rem' }}>
+                                        {sale.documentNumber}
+                                      </strong>
+                                      {(sale.status === 'LOCAL_PENDING' || sale.documentNumber.startsWith('LOC-')) && (
+                                        <span style={{ fontSize: '0.65rem', background: '#fef3c7', color: '#92400e', padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: 800 }}>
+                                          📱 En teléfono
+                                        </span>
+                                      )}
+                                    </div>
                                     {saleTime && (
-                                      <small style={{ color: 'var(--muted)', fontSize: '0.78rem' }}>
+                                      <small style={{ color: 'var(--muted)', fontSize: '0.78rem', display: 'block', marginTop: '2px' }}>
                                         🕒 {saleTime}
                                       </small>
                                     )}

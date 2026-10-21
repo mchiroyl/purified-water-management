@@ -221,8 +221,32 @@ export function SellerDashboard({
     loadStartTime = sellerLoad.startedAt || sellerLoad.sellerReceivedAt || sellerLoad.createdAt;
   }
 
+  const syncContext = useSyncOptional();
+  const operations = syncContext?.operations ?? [];
+
+  const localSalesQuery = useQuery({
+    queryKey: ['localSales', operations.length],
+    queryFn: async () => {
+      try {
+        const db = await getMobileDatabase();
+        const [salesList, provCusts] = await Promise.all([
+          db.getAll('localSales'),
+          db.getAll('provisionalCustomers'),
+        ]);
+        const provMap = new Map(provCusts.map(c => [c.localCustomerId, c.name]));
+        return salesList.map(s => ({
+          ...s,
+          customerName: s.customerName || (s.customerId ? provMap.get(s.customerId) : undefined) || 'Cliente',
+        }));
+      } catch {
+        return [];
+      }
+    },
+    staleTime: 5_000,
+  });
+
   const sellerSales = useMemo(() => {
-    return sales.filter(s => {
+    const serverSalesFiltered = sales.filter(s => {
       const isCancelled = s.status && ['CANCELLED', 'ANNULLED', 'ANULADA'].includes(s.status.toUpperCase());
       if (isCancelled) {
         return false;
@@ -277,7 +301,55 @@ export function SellerDashboard({
 
       return true;
     });
-  }, [sales, sellerLoad, user, todayGuatemala, loadStartTime]);
+
+    // Incorporar ventas locales almacenadas en el teléfono que aún no se reflejan en el servidor
+    const unsyncedLocalSales: Sale[] = (localSalesQuery.data ?? [])
+      .filter(ls => {
+        if (ls.serverSaleId && serverSalesFiltered.some(s => s.id === ls.serverSaleId)) return false;
+        if (serverSalesFiltered.some(s => s.id === ls.localSaleId || s.documentNumber === ls.localReference)) return false;
+        const localDate = getSaleDate(ls.occurredAtLocal);
+        return localDate === todayGuatemala || !localDate;
+      })
+      .map(ls => {
+        const saleItems: SaleItem[] = (ls.items ?? []).map((it: any, idx: number) => ({
+          id: `local-it-${idx}`,
+          productId: it.productId,
+          productCode: it.productCode,
+          productName: it.productName || 'Producto',
+          presentationQuantity: Number(it.presentationQuantity ?? it.quantity) || 1,
+          quantityBaseUnits: Number(it.quantityBaseUnits ?? it.quantity) || 1,
+          unitPrice: Number(it.unitPrice) || 0,
+          lineTotal: (Number(it.presentationQuantity ?? it.quantity) || 1) * (Number(it.unitPrice) || 0),
+        }));
+
+        return {
+          id: ls.localSaleId,
+          documentNumber: ls.localReference,
+          routeId: ls.routeRunId,
+          routeCode: sellerLoad?.routeCode ?? '',
+          routeName: sellerLoad?.routeName ?? '',
+          sellerName: user.displayName || user.username,
+          createdByUsername: user.username,
+          customerId: ls.customerId || undefined,
+          customerName: ls.customerName || 'Cliente (Venta local)',
+          customerCode: ls.customerCode || '',
+          status: 'LOCAL_PENDING',
+          total: Number(ls.total) || 0,
+          createdAt: ls.occurredAtLocal,
+          items: saleItems,
+          payments: [{
+            id: `pay-${ls.localSaleId}`,
+            method: 'CASH',
+            amount: Number(ls.total) || 0,
+            status: 'CONFIRMED'
+          }],
+          routeLoadId: sellerLoad?.id,
+        };
+      });
+
+    const combined = [...unsyncedLocalSales, ...serverSalesFiltered];
+    return combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [sales, sellerLoad, user, todayGuatemala, loadStartTime, localSalesQuery.data]);
 
   const routeReplenishments = loads.filter(l => 
     sellerLoad &&
@@ -507,21 +579,6 @@ export function SellerDashboard({
     hasLocationMismatch?: boolean;
   };
 
-  const syncContext = useSyncOptional();
-  const operations = syncContext?.operations ?? [];
-
-  const localSalesQuery = useQuery({
-    queryKey: ['localSales', operations.length],
-    queryFn: async () => {
-      try {
-        const db = await getMobileDatabase();
-        return await db.getAll('localSales');
-      } catch {
-        return [];
-      }
-    },
-    staleTime: 5_000,
-  });
 
   const localAttendedCustomerIds = useMemo(() => {
     const sold = new Set<string>();
@@ -1260,30 +1317,39 @@ export function SellerDashboard({
               </Link>
             </div>
           ) : (
-            sellerSales.slice(0, 5).map((sale, i) => (
-              <div
-                key={sale.id || i}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '0.75rem 0',
-                  borderBottom: i < Math.min(sellerSales.length, 5) - 1 ? '1px solid #f1f5f9' : 'none'
-                }}
-              >
-                <div style={{ minWidth: 0, flex: 1, paddingRight: '0.5rem' }}>
-                  <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {sale.customerName}
+            sellerSales.slice(0, 5).map((sale, i) => {
+              const isLocal = sale.status === 'LOCAL_PENDING' || sale.documentNumber.startsWith('LOC-');
+              return (
+                <div
+                  key={sale.id || i}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '0.75rem 0',
+                    borderBottom: i < Math.min(sellerSales.length, 5) - 1 ? '1px solid #f1f5f9' : 'none'
+                  }}
+                >
+                  <div style={{ minWidth: 0, flex: 1, paddingRight: '0.5rem' }}>
+                    <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{sale.customerName}</span>
+                      {isLocal && (
+                        <span style={{ fontSize: '0.62rem', background: '#fef3c7', color: '#92400e', padding: '0.12rem 0.35rem', borderRadius: '4px', fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                          📱 Guardada en teléfono
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: isLocal ? '#b45309' : '#94a3b8', marginTop: '1px' }}>
+                      {new Date(sale.createdAt).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })} · Doc: {sale.documentNumber}
+                      {isLocal && ' (Sincronización en curso)'}
+                    </div>
                   </div>
-                  <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '1px' }}>
-                    {new Date(sale.createdAt).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })} · Doc: {sale.documentNumber}
+                  <div style={{ fontSize: '0.98rem', fontWeight: 800, color: isLocal ? '#b45309' : '#0f172a', fontFeatureSettings: '"tnum"' }}>
+                    {money(sale.total)}
                   </div>
                 </div>
-                <div style={{ fontSize: '0.98rem', fontWeight: 800, color: '#0f172a', fontFeatureSettings: '"tnum"' }}>
-                  {money(sale.total)}
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
