@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 import { apiBlob, apiRequest } from '../../services/apiClient';
 import { openMobileDatabase, type GeoLocationSnapshot } from '../../offline/mobileDatabase';
-import { captureCurrentLocation } from '../../services/geolocation';
+import { captureCurrentLocation, getLastKnownLocation } from '../../services/geolocation';
 import { cacheReceipt, findCachedReceipt, markReceiptPending } from './receiptOffline';
 import { downloadReceiptFile, shareReceiptFile } from './receiptSharing';
 import { useOptionalSession } from '../auth/SessionContext';
@@ -837,7 +837,8 @@ export function SalesPage({
 
   // ── Contexto de sesión y ruta asignada al vendedor ────────────────────────
   const user = session?.user;
-  const isAdminOrSupervisor = Boolean(user?.roles.some(r => r === 'ADMINISTRADOR' || r === 'SUPERVISOR'));
+  const isAdminOrSupervisor = Boolean(user?.roles.some(r => r === 'ADMINISTRADOR' || r === 'SUPERVISOR' || r === 'BODEGA'));
+  const isCreditAdmin = Boolean(user?.roles.includes('ADMINISTRADOR_CREDITO'));
   const isSeller = Boolean(user?.roles.includes('VENDEDOR') && !isAdminOrSupervisor);
   const assignedRoute = isSeller
     ? (routes.data?.find(r => r.status === 'ACTIVE') ?? routes.data?.[0] ?? null)
@@ -1365,8 +1366,14 @@ export function SalesPage({
     setVisitSuccess('');
     setVisitCapturing(true);
     const visitCust = visitAvailableCustomers.find(c => c.id === visitCustomerId);
-    const vLat = visitCust?.confirmedLatitude ?? (visitCust as any)?.latitude;
-    const vLon = visitCust?.confirmedLongitude ?? (visitCust as any)?.longitude;
+    const vLat = visitCust?.confirmedLatitude
+      ?? (visitCust as any)?.latitude
+      ?? currentItineraryStop?.targetLatitude
+      ?? (currentItineraryStop as any)?.latitude;
+    const vLon = visitCust?.confirmedLongitude
+      ?? (visitCust as any)?.longitude
+      ?? currentItineraryStop?.targetLongitude
+      ?? (currentItineraryStop as any)?.longitude;
     const visitFallback = (vLat != null && vLon != null && Number(vLat) !== 0)
       ? {
           latitude: Number(vLat),
@@ -1375,13 +1382,31 @@ export function SalesPage({
           capturedAt: new Date().toISOString(),
         }
       : null;
+
+    const buildVisitAdminFallback = (): GeoLocationSnapshot => {
+      if (visitFallback) return visitFallback;
+      const cached = getLastKnownLocation();
+      if (cached) return { ...cached, capturedAt: new Date().toISOString() };
+      return {
+        latitude: 14.6349,
+        longitude: -90.5069,
+        accuracyMeters: null,
+        capturedAt: new Date().toISOString(),
+      };
+    };
+
     try {
       const location = await captureCurrentLocation('registrar la visita sin compra', {
         fallbackLocation: visitFallback,
+        maxWaitMs: isAdminOrSupervisor ? 1500 : undefined,
       });
       registerVisit.mutate(location);
     } catch (err) {
-      setVisitError(err instanceof Error ? err.message : 'No fue posible obtener la ubicación.');
+      if (isAdminOrSupervisor) {
+        registerVisit.mutate(buildVisitAdminFallback());
+      } else {
+        setVisitError(err instanceof Error ? err.message : 'No fue posible obtener la ubicación.');
+      }
     } finally {
       setVisitCapturing(false);
     }
@@ -1406,8 +1431,14 @@ export function SalesPage({
     setLocationError('');
     setIsCapturingLocation(true);
     const currentCustomer = availableCustomers.find(customer => customer.id === customerId);
-    const lat = currentCustomer?.confirmedLatitude ?? (currentCustomer as any)?.latitude;
-    const lon = currentCustomer?.confirmedLongitude ?? (currentCustomer as any)?.longitude;
+    const lat = currentCustomer?.confirmedLatitude
+      ?? (currentCustomer as any)?.latitude
+      ?? currentItineraryStop?.targetLatitude
+      ?? (currentItineraryStop as any)?.latitude;
+    const lon = currentCustomer?.confirmedLongitude
+      ?? (currentCustomer as any)?.longitude
+      ?? currentItineraryStop?.targetLongitude
+      ?? (currentItineraryStop as any)?.longitude;
     const customerFallback = (lat != null && lon != null && Number(lat) !== 0)
       ? {
           latitude: Number(lat),
@@ -1416,19 +1447,41 @@ export function SalesPage({
           capturedAt: new Date().toISOString(),
         }
       : null;
+
+    const buildAdminFallback = (): GeoLocationSnapshot => {
+      if (customerFallback) return customerFallback;
+      const cached = getLastKnownLocation();
+      if (cached) return { ...cached, capturedAt: new Date().toISOString() };
+      return {
+        latitude: 14.6349, // Ubicación operativa base
+        longitude: -90.5069,
+        accuracyMeters: null,
+        capturedAt: new Date().toISOString(),
+      };
+    };
+
     try {
       const location = await captureCurrentLocation('confirmar la venta', {
         fallbackLocation: customerFallback,
+        maxWaitMs: isAdminOrSupervisor ? 1500 : undefined,
       });
       create.mutate(location);
     } catch (error) {
-      setLocationError(error instanceof Error ? error.message : 'No fue posible obtener la ubicación.');
+      if (isAdminOrSupervisor) {
+        // En modo administrativo/oficina (ej. digitando ruta en papel desde PC de escritorio sin GPS):
+        // Se utiliza la ubicación conocida del cliente, la última conocida o referencia operativa sin bloquear
+        create.mutate(buildAdminFallback());
+      } else {
+        setLocationError(error instanceof Error ? error.message : 'No fue posible obtener la ubicación.');
+      }
     } finally {
       setIsCapturingLocation(false);
     }
   };
   const selectedCustomer = availableCustomers.find(customer => customer.id === customerId);
   const isCreditAuthorized = Boolean(
+    isAdminOrSupervisor ||
+    isCreditAdmin ||
     selectedCustomer?.creditAllowed ||
     saleCreditBalance.data?.creditAllowed ||
     (saleCreditBalance.data && Number(saleCreditBalance.data.availableCredit ?? 0) > 0) ||
@@ -1447,7 +1500,7 @@ export function SalesPage({
     && Number(saleCreditBalance.data.availableCredit) <= 0
     && Number(saleCreditBalance.data.currentBalance) > 0;
   const creditBlockedByExhaustion = !!creditPayment && creditExhaustedForSale;
-  const saleBlocked = creditOverLimit || creditBlockedByExhaustion;
+  const saleBlocked = !isAdminOrSupervisor && (creditOverLimit || creditBlockedByExhaustion);
 
   const obtainReceipt = async (sale: Sale) => {
     const database = await openMobileDatabase();
@@ -1770,14 +1823,24 @@ export function SalesPage({
         {payment.method === 'CREDIT' && selectedCustomer && (
           <div>
             <p className="credit-available">Disponible: Q{availableCredit.toFixed(2)}</p>
-            {creditOverLimit && (
+            {creditOverLimit && !isAdminOrSupervisor && (
               <p className="alert error" style={{ fontSize: '0.83rem', margin: '0.25rem 0 0' }}>
                 El monto supera el crédito disponible (Q{availableCredit.toFixed(2)}). Reduzca el monto o registre un abono en Créditos.
               </p>
             )}
-            {creditBlockedByExhaustion && !creditOverLimit && (
+            {creditOverLimit && isAdminOrSupervisor && (
+              <p className="alert warning" style={{ fontSize: '0.83rem', margin: '0.25rem 0 0', background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a' }}>
+                ⚠️ Nota administrativa: El monto excede el saldo habitual (Q{availableCredit.toFixed(2)}), pero se permite el registro por digitación de ruta en papel.
+              </p>
+            )}
+            {creditBlockedByExhaustion && !creditOverLimit && !isAdminOrSupervisor && (
               <p className="alert error" style={{ fontSize: '0.83rem', margin: '0.25rem 0 0' }}>
                 🛑 El cliente no tiene crédito disponible. Debe abonar antes de continuar.
+              </p>
+            )}
+            {creditBlockedByExhaustion && !creditOverLimit && isAdminOrSupervisor && (
+              <p className="alert warning" style={{ fontSize: '0.83rem', margin: '0.25rem 0 0', background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a' }}>
+                ⚠️ Nota administrativa: El cliente tiene el crédito agotado, pero se autoriza el registro por digitación de ruta en papel.
               </p>
             )}
           </div>
@@ -2546,12 +2609,29 @@ export function SalesPage({
             </button>
           </div>
 
-          {/* Botón OK — Ir al Panel Operativo */}
-          <div className="floating-toast-actions" style={{ marginTop: '0.4rem' }}>
+          {/* Botón OK — Ir al Panel Operativo / Registrar otra venta */}
+          <div className="floating-toast-actions" style={{ marginTop: '0.4rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {isAdminOrSupervisor && (
+              <button
+                type="button"
+                className="secondary"
+                style={{ flex: 1, fontSize: '0.95rem', padding: '0.65rem 0.75rem' }}
+                onClick={() => {
+                  setConfirmedSaleModal(null);
+                  setCustomerId('');
+                  setItems([{ presentationId: '', quantity: 1 }]);
+                  setPayments([newPayment()]);
+                  setShowSaleJugReturn(false);
+                  setShowSaleAbono(false);
+                }}
+              >
+                ➕ Registrar otra venta
+              </button>
+            )}
             <button
               type="button"
               className="primary"
-              style={{ width: '100%', fontSize: '1rem', padding: '0.65rem 1.25rem' }}
+              style={{ flex: 1, fontSize: '1rem', padding: '0.65rem 1.25rem' }}
               onClick={handleDismissConfirmedSale}
               autoFocus
             >

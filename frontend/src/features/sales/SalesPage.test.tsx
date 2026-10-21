@@ -4,7 +4,17 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, vi } from 'vitest';
 import { SalesPage } from './SalesPage';
 
+const useOptionalSessionMock = vi.hoisted(() => vi.fn<() => any>(() => null));
+vi.mock('../auth/SessionContext', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../auth/SessionContext')>();
+  return {
+    ...actual,
+    useOptionalSession: useOptionalSessionMock,
+  };
+});
+
 afterEach(() => {
+  useOptionalSessionMock.mockReturnValue(null);
   vi.unstubAllGlobals();
   delete (navigator as { geolocation?: Geolocation }).geolocation;
 });
@@ -343,5 +353,69 @@ describe('SalesPage', () => {
 
     // Se muestra el modal de venta confirmada con número local asignado
     expect(await screen.findByText(/¡venta confirmada exitosamente!/i)).toBeInTheDocument();
+  });
+
+  it('permite al administrador confirmar la venta sin bloqueo si la geolocalización falla o es denegada', async () => {
+    useOptionalSessionMock.mockReturnValue({
+      user: { id: 'admin-1', username: 'admin', displayName: 'Administrador', deviceId: 'dev-1', roles: ['ADMINISTRADOR'], mustChangePassword: false },
+      busy: false,
+      initializing: false,
+      login: vi.fn(),
+      enroll: vi.fn(),
+      refresh: vi.fn(),
+      changePassword: vi.fn(),
+      logout: vi.fn(),
+    });
+    // Simular que el navegador deniega o falla la ubicación (código 1 o PC sin señal GPS)
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: {
+        watchPosition: vi.fn((_success: PositionCallback, error?: PositionErrorCallback) => {
+          error?.({ code: 1, message: 'denied' } as GeolocationPositionError);
+          return 1;
+        }),
+        clearWatch: vi.fn(),
+      },
+    });
+    const fetchMock = formFetchMock();
+    vi.stubGlobal('fetch', fetchMock);
+    await prepareSaleForm(fetchMock);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar venta' }));
+
+    // No debe bloquear con error y debe confirmar la venta con la ubicación administrativa fallback
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(([input, init]) => input.toString().endsWith('/sales') && (init as RequestInit | undefined)?.method === 'POST');
+      expect(call).toBeDefined();
+      const body = JSON.parse((call?.[1] as RequestInit).body as string);
+      expect(body.location).toBeDefined();
+      expect(body.location.latitude).toBe(14.6349);
+      expect(body.location.longitude).toBe(-90.5069);
+    });
+  });
+
+  it('permite al administrador seleccionar pago a crédito aunque el cliente no tenga crédito pre-autorizado', async () => {
+    useOptionalSessionMock.mockReturnValue({
+      user: { id: 'admin-1', username: 'admin', displayName: 'Administrador', deviceId: 'dev-1', roles: ['ADMINISTRADOR'], mustChangePassword: false },
+      busy: false,
+      initializing: false,
+      login: vi.fn(),
+      enroll: vi.fn(),
+      refresh: vi.fn(),
+      changePassword: vi.fn(),
+      logout: vi.fn(),
+    });
+    const fetchMock = formFetchMock();
+    vi.stubGlobal('fetch', fetchMock);
+    await prepareSaleForm(fetchMock);
+
+    // El dropdown de Medio debe contener la opción de Crédito para el administrador
+    const methodSelect = screen.getByLabelText('Medio');
+    const creditOption = screen.getByRole('option', { name: /crédito/i });
+    expect(creditOption).toBeInTheDocument();
+    expect(creditOption).not.toBeDisabled();
+
+    fireEvent.change(methodSelect, { target: { value: 'CREDIT' } });
+    expect((methodSelect as HTMLSelectElement).value).toBe('CREDIT');
   });
 });
