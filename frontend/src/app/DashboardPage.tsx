@@ -87,34 +87,44 @@ export function DashboardPage() {
     enabled: isAdminOrSupervisor
   });
 
+  // Sondeo periódico suave (30s) para administradores en oficina.
+  // Para el vendedor en ruta móvil, desactivado (false) para evitar parpadeos y consumo de batería/datos;
+  // el vendedor ve sus ventas inmediatamente de forma local con o sin internet.
+  const pollInterval = isAdminOrSupervisor ? 30_000 : false;
+
   const dashboard = useQuery({
     queryKey: ['dashboard'],
     queryFn: () => apiRequest<Dashboard>('/dashboard'),
-    refetchInterval: 15_000
+    refetchInterval: pollInterval,
+    refetchOnWindowFocus: false,
   });
 
   const loads = useQuery({
     queryKey: ['route-loads'],
     queryFn: () => apiRequest<RouteLoad[]>('/loads'),
-    refetchInterval: 15_000
+    refetchInterval: pollInterval,
+    refetchOnWindowFocus: false,
   });
 
   const locations = useQuery({
     queryKey: ['inventory', 'locations'],
     queryFn: () => apiRequest<Location[]>('/inventory/locations'),
-    refetchInterval: 15_000
+    refetchInterval: pollInterval,
+    refetchOnWindowFocus: false,
   });
 
   const sales = useQuery({
     queryKey: ['sales'],
     queryFn: () => apiRequest<Sale[]>('/sales'),
-    refetchInterval: 15_000
+    refetchInterval: pollInterval,
+    refetchOnWindowFocus: false,
   });
 
   const settlements = useQuery({
     queryKey: ['settlements'],
     queryFn: () => apiRequest<Settlement[]>('/settlements'),
-    refetchInterval: 15_000
+    refetchInterval: pollInterval,
+    refetchOnWindowFocus: false,
   });
 
   const isRefreshing = dashboard.isFetching || loads.isFetching || sales.isFetching || locations.isFetching || settlements.isFetching;
@@ -135,7 +145,7 @@ export function DashboardPage() {
 
   return (
     <main>
-      {dashboard.error && (
+      {dashboard.error && !data && (
         <div className="alert error" style={{ marginBottom: '1.5rem' }}>
           <strong>Error al cargar panel operativo:</strong> {dashboard.error.message}
         </div>

@@ -516,7 +516,8 @@ export function SellerDashboard({
       }
     },
     enabled: Boolean(effectiveRouteId || user.roles?.includes('VENDEDOR')),
-    staleTime: 15_000,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   });
 
   const routeJugsQuery = useQuery({
@@ -530,7 +531,8 @@ export function SellerDashboard({
       }
     },
     enabled: Boolean(effectiveRouteId),
-    staleTime: 30_000,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   });
 
   const routeTemplatesQuery = useQuery({
@@ -822,7 +824,7 @@ export function SellerDashboard({
           }}
         >
           <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
-          <span>{isRefreshing ? '…' : 'Sincronizar'}</span>
+          <span>Sincronizar</span>
         </button>
       </div>
 

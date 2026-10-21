@@ -195,13 +195,20 @@ export function SyncProvider({
       }
     });
 
-    // Heartbeat periódico mientras hay conexión activa para no dejar operaciones estancadas
+    // Heartbeat periódico mientras hay conexión activa: solo sincroniza si hay operaciones pendientes en outbox
     const heartbeat = setInterval(() => {
       const snap = connectionManager.getSnapshot();
       if (snap.state === 'ONLINE' && snap.mode !== 'FORCE_OFFLINE') {
-        autoSync();
+        void database()
+          .then((db) => db.getAll('outboxOperations'))
+          .then((ops) => {
+            if (ops.some((op) => op.status !== 'SYNCED')) {
+              autoSync();
+            }
+          })
+          .catch(() => {});
       }
-    }, 15_000);
+    }, 20_000);
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('agua-pura:outbox-changed', handleOutbox);
