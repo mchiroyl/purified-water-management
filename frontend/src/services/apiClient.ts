@@ -74,11 +74,19 @@ export class RefreshRejectedError extends Error {
 }
 
 async function refreshAccessToken(): Promise<string> {
-  const response = await fetch(`${baseUrl}/auth/refresh`, {
-    method: 'POST',
-    headers: { Accept: 'application/json' },
-    credentials: 'include',
-  });
+  const refreshController = new AbortController();
+  const refreshTimer = setTimeout(() => refreshController.abort(new DOMException('Tiempo de espera de autenticación agotado.', 'TimeoutError')), 3_500);
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}/auth/refresh`, {
+      method: 'POST',
+      signal: refreshController.signal,
+      headers: { Accept: 'application/json' },
+      credentials: 'include',
+    });
+  } finally {
+    clearTimeout(refreshTimer);
+  }
   if (response.status < 500) publish('agua-pura:request-success');
   if (response.status >= 500) {
     publish('agua-pura:request-failure');
@@ -137,7 +145,9 @@ async function fetchWithRefresh(path: string, init: RequestInit, accept: string)
 
   let combinedSignal: AbortSignal = controller.signal;
   if (init.signal) {
-    if (typeof AbortSignal.any === 'function') {
+    if (init.signal.aborted) {
+      controller.abort();
+    } else if (typeof AbortSignal.any === 'function') {
       combinedSignal = AbortSignal.any([init.signal, controller.signal]);
     } else {
       init.signal.addEventListener('abort', () => controller.abort());

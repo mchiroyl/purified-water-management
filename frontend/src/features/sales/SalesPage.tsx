@@ -1163,7 +1163,15 @@ export function SalesPage({
 
   const create = useMutation({
     mutationFn: async (location: GeoLocationSnapshot) => {
-      const isOfflineMode = snapshot.mode === 'FORCE_OFFLINE' || snapshot.state === 'OFFLINE' || !navigator.onLine;
+      const isProvisionalCustomer = customerId.startsWith('P-') ||
+        customerId.startsWith('provisional-') ||
+        availableCustomers.some(c => c.id === customerId && (c.registrationState === 'PROVISIONAL' || (c as any).isProvisional));
+
+      const isOfflineMode = isProvisionalCustomer ||
+        snapshot.mode === 'FORCE_OFFLINE' ||
+        snapshot.state === 'OFFLINE' ||
+        snapshot.state === 'DEGRADED' ||
+        !navigator.onLine;
 
       const payloadItems: SaleOfflineItemInput[] = items.map(it => {
         const pres = presentations.find(p => p.id === it.presentationId);
@@ -1254,7 +1262,7 @@ export function SalesPage({
 
       try {
         const timeoutController = new AbortController();
-        const timeoutTimer = setTimeout(() => timeoutController.abort(), 3_500);
+        const timeoutTimer = setTimeout(() => timeoutController.abort(), 2_500);
         try {
           return await apiRequest<Sale>('/sales', {
             method: 'POST',
@@ -1545,19 +1553,25 @@ export function SalesPage({
       };
     };
 
+    const isProvisional = customerId.startsWith('P-') ||
+      customerId.startsWith('provisional-') ||
+      availableCustomers.some(c => c.id === customerId && (c.registrationState === 'PROVISIONAL' || (c as any).isProvisional));
+    const isOffline = isProvisional || snapshot.mode === 'FORCE_OFFLINE' || snapshot.state === 'OFFLINE' || snapshot.state === 'DEGRADED' || !navigator.onLine;
+
     try {
       const location = await captureCurrentLocation('confirmar la venta', {
         fallbackLocation: customerFallback,
-        maxWaitMs: isAdminOrSupervisor ? 1500 : undefined,
+        maxWaitMs: isAdminOrSupervisor ? 1500 : (isOffline ? 2000 : 4000),
       });
       create.mutate(location);
     } catch (error) {
-      if (isAdminOrSupervisor) {
-        // En modo administrativo/oficina (ej. digitando ruta en papel desde PC de escritorio sin GPS):
-        // Se utiliza la ubicación conocida del cliente, la última conocida o referencia operativa sin bloquear
-        create.mutate(buildAdminFallback());
+      const msg = error instanceof Error ? error.message : '';
+      const isPermissionOrUnsupported = msg.includes('Se requiere permitir el acceso') || msg.includes('Este dispositivo no permite');
+      if (isPermissionOrUnsupported && !isAdminOrSupervisor) {
+        setLocationError(msg);
       } else {
-        setLocationError(error instanceof Error ? error.message : 'No fue posible obtener la ubicación.');
+        // Si la señal satelital tarda o está offline, no bloquear la venta del vendedor: utilizar el mejor respaldo de ubicación
+        create.mutate(buildAdminFallback());
       }
     } finally {
       setIsCapturingLocation(false);

@@ -311,7 +311,9 @@ public class JdbcSalesAdapter implements SalesPort {
         return """
                 SELECT s.id,s.client_reference,s.document_number,s.route_id,r.code route_code,r.name route_name,
                        s.inventory_location_id,s.seller_id,seller.display_name seller_name,s.customer_id,
-                       c.code customer_code,c.name customer_name,s.status,s.subtotal,s.total,s.currency_code,
+                       c.code customer_code,c.name customer_name,
+                       CASE WHEN EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=s.id AND ar.status='APPROVED') THEN 'ANNULLED' ELSE s.status END AS status,
+                       s.subtotal,s.total,s.currency_code,
                        s.company_name,s.company_tax_id,s.company_address,s.document_legend,s.created_by,
                        creator.username created_by_username,s.device_id,s.created_at
                 FROM sale s JOIN route r ON r.id=s.route_id JOIN seller ON seller.id=s.seller_id

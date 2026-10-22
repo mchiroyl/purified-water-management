@@ -305,8 +305,8 @@ export function SellerDashboard({
     // Incorporar ventas locales almacenadas en el teléfono que aún no se reflejan en el servidor
     const unsyncedLocalSales: Sale[] = (localSalesQuery.data ?? [])
       .filter(ls => {
-        if (ls.serverSaleId && serverSalesFiltered.some(s => s.id === ls.serverSaleId)) return false;
-        if (serverSalesFiltered.some(s => s.id === ls.localSaleId || s.documentNumber === ls.localReference)) return false;
+        if (ls.serverSaleId && sales.some(s => s.id === ls.serverSaleId)) return false;
+        if (sales.some(s => s.id === ls.localSaleId || s.documentNumber === ls.localReference)) return false;
         const localDate = getSaleDate(ls.occurredAtLocal);
         return localDate === todayGuatemala || !localDate;
       })
