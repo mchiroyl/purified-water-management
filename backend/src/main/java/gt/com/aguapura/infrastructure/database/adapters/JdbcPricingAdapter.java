@@ -253,16 +253,26 @@ public class JdbcPricingAdapter implements PricingPort {
     private String specialSelect() { return """
             SELECT sp.id,sp.customer_id,c.code customer_code,c.name customer_name,
                    sp.product_presentation_id,pp.code presentation_code,pp.name presentation_name,
-                   sp.unit_price,sp.valid_from,sp.valid_to,sp.status
+                   sp.unit_price,sp.valid_from,sp.valid_to,sp.status,
+                   r.id AS route_id, r.code AS route_code, r.name AS route_name
             FROM customer_special_price sp JOIN customer c ON c.id=sp.customer_id
-            JOIN product_presentation pp ON pp.id=sp.product_presentation_id WHERE 1=1
+            JOIN product_presentation pp ON pp.id=sp.product_presentation_id
+            LEFT JOIN LATERAL (
+                SELECT cr.route_id FROM customer_route cr
+                WHERE cr.customer_id = c.id AND cr.valid_from <= current_date
+                  AND (cr.valid_to IS NULL OR cr.valid_to >= current_date)
+                ORDER BY cr.valid_from DESC LIMIT 1
+            ) cr ON true
+            LEFT JOIN route r ON r.id = cr.route_id
+            WHERE 1=1
             """; }
     private SpecialPriceView specialRow(ResultSet rs) throws SQLException {
         return new SpecialPriceView(rs.getObject("id", UUID.class), rs.getObject("customer_id", UUID.class),
                 rs.getString("customer_code"), rs.getString("customer_name"),
                 rs.getObject("product_presentation_id", UUID.class), rs.getString("presentation_code"),
                 rs.getString("presentation_name"), rs.getBigDecimal("unit_price"), instant(rs, "valid_from"),
-                instant(rs, "valid_to"), rs.getString("status"));
+                instant(rs, "valid_to"), rs.getString("status"),
+                rs.getObject("route_id", UUID.class), rs.getString("route_code"), rs.getString("route_name"));
     }
 
     private String discountSelect() { return """

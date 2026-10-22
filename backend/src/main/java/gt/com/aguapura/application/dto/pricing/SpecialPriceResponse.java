@@ -6,4 +6,5 @@ import java.util.UUID;
 
 public record SpecialPriceResponse(UUID id, UUID customerId, String customerCode, String customerName,
                                    UUID presentationId, String presentationCode, String presentationName,
-                                   BigDecimal unitPrice, Instant validFrom, Instant validTo, String status) {}
+                                   BigDecimal unitPrice, Instant validFrom, Instant validTo, String status,
+                                   UUID routeId, String routeCode, String routeName) {}

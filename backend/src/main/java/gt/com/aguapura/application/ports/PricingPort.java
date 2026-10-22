@@ -42,7 +42,8 @@ public interface PricingPort {
                            Instant validTo, UUID approvedBy) {}
     record SpecialPriceView(UUID id, UUID customerId, String customerCode, String customerName,
                             UUID presentationId, String presentationCode, String presentationName,
-                            BigDecimal unitPrice, Instant validFrom, Instant validTo, String status) {}
+                            BigDecimal unitPrice, Instant validFrom, Instant validTo, String status,
+                            UUID routeId, String routeCode, String routeName) {}
     record NewDiscount(UUID requestedBy, UUID customerId, UUID presentationId, BigDecimal normalPrice,
                        BigDecimal requestedPrice, String reason, Instant expiresAt) {}
     record DiscountView(UUID id, UUID requestedBy, String requesterUsername, UUID approvedBy,

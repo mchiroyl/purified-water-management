@@ -175,7 +175,8 @@ public class PricingApplicationService {
     private SpecialPriceResponse special(PricingPort.SpecialPriceView item) {
         return new SpecialPriceResponse(item.id(), item.customerId(), item.customerCode(), item.customerName(),
                 item.presentationId(), item.presentationCode(), item.presentationName(), item.unitPrice(),
-                item.validFrom(), item.validTo(), item.status());
+                item.validFrom(), item.validTo(), item.status(),
+                item.routeId(), item.routeCode(), item.routeName());
     }
     private DiscountResponse discount(PricingPort.DiscountView item) {
         return new DiscountResponse(item.id(), item.requestedBy(), item.requesterUsername(), item.approvedBy(),

@@ -153,13 +153,98 @@ describe('PricingPage', () => {
     const dropdown = await screen.findByRole('listbox');
     expect(dropdown).toBeInTheDocument();
     expect(within(dropdown).getByText('Creado en ruta')).toBeInTheDocument();
-    expect(within(dropdown).getByText(/🚚 Ruta Sur/i)).toBeInTheDocument();
+    expect(within(dropdown).getAllByText(/🚚 Ruta Sur/i).length).toBeGreaterThanOrEqual(1);
 
     const option = within(dropdown).getByRole('option', { name: /Tienda Ruta El Carmen/i });
     fireEvent.click(option);
 
     expect(await screen.findByText(/Cliente registrado en ruta:/i)).toBeInTheDocument();
     expect(screen.getByText(/Cliente Permanente Activo/i)).toBeInTheDocument();
+  });
+
+  it('ordena y agrupa los precios especiales por ruta y permite buscar por cliente', async () => {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = input.toString();
+      if (url.includes('/pricing/special-prices')) {
+        return Promise.resolve(new Response(JSON.stringify([
+          { id: 'sp-1', customerId: 'c1', customerName: 'Tienda Angela', presentationName: 'ISOMAX 25 UNIDAD', unitPrice: 28, validFrom: '2026-10-21T09:13:00Z', status: 'ACTIVE', routeId: 'r-norte', routeName: 'Ruta Norte' },
+          { id: 'sp-2', customerId: 'c2', customerName: 'Calin central', presentationName: 'FARDO 22 UNIDAD', unitPrice: 3, validFrom: '2026-10-20T11:06:00Z', status: 'ACTIVE', routeId: 'r-sur', routeName: 'Ruta Sur' },
+        ]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (url.includes('/customers')) {
+        return Promise.resolve(new Response(JSON.stringify([
+          { id: 'c1', code: 'CLI-001', name: 'Tienda Angela', routeId: 'r-norte', routeName: 'Ruta Norte' },
+          { id: 'c2', code: 'CLI-002', name: 'Calin central', routeId: 'r-sur', routeName: 'Ruta Sur' },
+        ]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      return Promise.resolve(new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    }));
+
+    render(
+      <MemoryRouter>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <PricingPage view="list" canManage canApprove canRequestDiscount={false} />
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole('heading', { name: /precios especiales registrados/i })).toBeInTheDocument();
+    expect(await screen.findByText(/Ruta Ruta Norte/i)).toBeInTheDocument();
+    expect(screen.getByText(/Ruta Ruta Sur/i)).toBeInTheDocument();
+    expect(screen.getByText('Tienda Angela')).toBeInTheDocument();
+    expect(screen.getByText('Calin central')).toBeInTheDocument();
+
+    // Probar el buscador en tiempo real
+    const searchInput = screen.getByPlaceholderText(/buscar cliente por nombre o presentación/i);
+    fireEvent.change(searchInput, { target: { value: 'Angela' } });
+
+    expect(screen.getByText('Tienda Angela')).toBeInTheDocument();
+    expect(screen.queryByText('Calin central')).not.toBeInTheDocument();
+  });
+
+  it('muestra las opciones separadas con sus rutas cuando un cliente está en múltiples rutas', async () => {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = input.toString();
+      if (url.includes('/pricing/special-prices')) {
+        return Promise.resolve(new Response(JSON.stringify([
+          { id: 'sp-1', customerId: 'c1', customerName: 'Tienda Angela', presentationName: 'FARDO 22 UNIDAD', unitPrice: 3.5, validFrom: '2026-10-21T09:12:00Z', status: 'ACTIVE', routeId: 'r1', routeName: 'Ruta Norte' },
+          { id: 'sp-2', customerId: 'c2', customerName: 'Tienda Angela', presentationName: 'FARDO 22 UNIDAD', unitPrice: 3.5, validFrom: '2026-10-21T09:12:00Z', status: 'ACTIVE', routeId: 'r2', routeName: 'Ruta Centro' },
+          { id: 'sp-3', customerId: 'c3', customerName: 'Tienda Angela', presentationName: 'FARDO 22 UNIDAD', unitPrice: 3.5, validFrom: '2026-10-21T09:12:00Z', status: 'ACTIVE', routeId: 'r3', routeName: 'Ruta Sur' },
+        ]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (url.includes('/customers')) {
+        return Promise.resolve(new Response(JSON.stringify([
+          { id: 'c1', code: 'CLI-001', name: 'Tienda Angela', routeId: 'r1', routeName: 'Ruta Norte' },
+          { id: 'c2', code: 'CLI-002', name: 'Tienda Angela', routeId: 'r2', routeName: 'Ruta Centro' },
+          { id: 'c3', code: 'CLI-003', name: 'Tienda Angela', routeId: 'r3', routeName: 'Ruta Sur' },
+        ]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      return Promise.resolve(new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    }));
+
+    render(
+      <MemoryRouter>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <PricingPage view="list" canManage canApprove canRequestDiscount={false} />
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText(/Ruta Ruta Norte/i)).toBeInTheDocument();
+    const searchInput = screen.getByPlaceholderText(/buscar cliente por nombre o presentación/i);
+    fireEvent.change(searchInput, { target: { value: 'Tienda Angela' } });
+
+    // Notificación clara de cliente en 3 rutas
+    expect(await screen.findByText(/Coincidencia en 3 rutas:/i)).toBeInTheDocument();
+
+    // Las 3 rutas deben estar presentes de forma separada
+    expect(screen.getByText(/Ruta Ruta Centro/i)).toBeInTheDocument();
+    expect(screen.getByText(/Ruta Ruta Norte/i)).toBeInTheDocument();
+    expect(screen.getByText(/Ruta Ruta Sur/i)).toBeInTheDocument();
+
+    // Y cada opción dentro de su respectivo contenedor
+    const routeBadges = screen.getAllByText(/🚚 Ruta/i);
+    expect(routeBadges.length).toBeGreaterThanOrEqual(3);
   });
 });
 
