@@ -6,6 +6,7 @@ import gt.com.aguapura.application.dto.jugs.JugEventResponse;
 import gt.com.aguapura.application.dto.jugs.JugHistoryResponse;
 import gt.com.aguapura.application.dto.jugs.JugRouteSummaryResponse;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface JugLoanPort {
@@ -13,4 +14,5 @@ public interface JugLoanPort {
     JugBalanceResponse getCustomerBalance(UUID customerId);
     JugHistoryResponse getCustomerHistory(UUID customerId);
     JugRouteSummaryResponse getRouteSummary(UUID routeId);
+    List<JugBalanceResponse> getOutstandingBalances();
 }

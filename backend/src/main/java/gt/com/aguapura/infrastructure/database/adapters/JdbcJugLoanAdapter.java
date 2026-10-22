@@ -245,6 +245,40 @@ public class JdbcJugLoanAdapter implements JugLoanPort {
         return new JugRouteSummaryResponse(routeId, routeName, totalCustomers, totalJugs, balances);
     }
 
+    @Override
+    public List<JugBalanceResponse> getOutstandingBalances() {
+        return jdbc.sql("""
+                SELECT jle.customer_id, c.code as customer_code, c.name as customer_name, c.phone as customer_phone,
+                       jle.route_id, r.code as route_code, r.name as route_name,
+                       SUM(CASE
+                           WHEN jle.event_type = 'LENT' THEN jle.quantity
+                           WHEN jle.event_type IN ('RETURNED','CHARGED_LOSS','CHARGED_DAMAGE') THEN -jle.quantity
+                           ELSE 0
+                       END) as jugs_outstanding
+                FROM jug_loan_event jle
+                JOIN customer c ON c.id = jle.customer_id
+                JOIN route r ON r.id = jle.route_id
+                GROUP BY jle.customer_id, c.code, c.name, c.phone, jle.route_id, r.code, r.name
+                HAVING SUM(CASE
+                    WHEN jle.event_type = 'LENT' THEN jle.quantity
+                    WHEN jle.event_type IN ('RETURNED','CHARGED_LOSS','CHARGED_DAMAGE') THEN -jle.quantity
+                    ELSE 0
+                END) > 0
+                ORDER BY r.name ASC, jugs_outstanding DESC, c.name ASC
+                """)
+                .query((rs, rowNum) -> new JugBalanceResponse(
+                        rs.getObject("customer_id", UUID.class),
+                        rs.getString("customer_code"),
+                        rs.getString("customer_name"),
+                        rs.getString("customer_phone"),
+                        rs.getObject("route_id", UUID.class),
+                        rs.getString("route_code"),
+                        rs.getString("route_name"),
+                        rs.getInt("jugs_outstanding")
+                ))
+                .list();
+    }
+
     private JugEventResponse mapEventRow(ResultSet rs, int rowNum) throws SQLException {
         return new JugEventResponse(
                 rs.getObject("id", UUID.class),

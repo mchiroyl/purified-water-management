@@ -31,8 +31,11 @@ export type JugEventResponse = {
 
 export type JugBalanceResponse = {
   customerId: string;
+  customerCode?: string;
   customerName: string;
+  customerPhone?: string;
   routeId: string;
+  routeCode?: string;
   routeName: string;
   jugsOutstanding: number;
 };

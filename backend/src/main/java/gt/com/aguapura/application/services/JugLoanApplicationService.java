@@ -35,4 +35,8 @@ public class JugLoanApplicationService {
     public JugRouteSummaryResponse getRouteSummary(UUID routeId) {
         return port.getRouteSummary(routeId);
     }
+
+    public java.util.List<JugBalanceResponse> getOutstandingBalances() {
+        return port.getOutstandingBalances();
+    }
 }

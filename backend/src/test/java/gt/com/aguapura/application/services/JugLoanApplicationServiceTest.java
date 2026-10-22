@@ -92,4 +92,23 @@ class JugLoanApplicationServiceTest {
         assertThat(result.totalJugsOutstanding()).isEqualTo(4);
         verify(port).getRouteSummary(routeId);
     }
+
+    @Test
+    void getOutstandingBalancesReturnsPortResult() {
+        var port = mock(JugLoanPort.class);
+        var service = new JugLoanApplicationService(port);
+        var customerId = UUID.randomUUID();
+        var routeId = UUID.randomUUID();
+
+        var expected = List.of(new JugBalanceResponse(customerId, "CLI-001", "Cliente 1", "55551234", routeId, "RUT-01", "Ruta Norte", 10));
+        when(port.getOutstandingBalances()).thenReturn(expected);
+
+        var result = service.getOutstandingBalances();
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).jugsOutstanding()).isEqualTo(10);
+        assertThat(result.get(0).customerName()).isEqualTo("Cliente 1");
+        assertThat(result.get(0).routeName()).isEqualTo("Ruta Norte");
+        verify(port).getOutstandingBalances();
+    }
 }

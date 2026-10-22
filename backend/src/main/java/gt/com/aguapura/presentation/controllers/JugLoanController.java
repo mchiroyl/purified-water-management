@@ -63,4 +63,10 @@ public class JugLoanController {
     public JugRouteSummaryResponse getRouteSummary(@PathVariable UUID routeId) {
         return service.getRouteSummary(routeId);
     }
+
+    @GetMapping("/outstanding")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR_CREDITO', 'ADMINISTRADOR', 'SUPERVISOR', 'VENDEDOR')")
+    public java.util.List<JugBalanceResponse> getOutstandingBalances() {
+        return service.getOutstandingBalances();
+    }
 }
