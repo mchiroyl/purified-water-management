@@ -244,10 +244,12 @@ export function SellerDashboard({
           db.getAll('provisionalCustomers'),
         ]);
         const provMap = new Map(provCusts.map(c => [c.localCustomerId, c.name]));
-        return salesList.map(s => ({
-          ...s,
-          customerName: s.customerName || (s.customerId ? provMap.get(s.customerId) : undefined) || 'Cliente',
-        }));
+        return salesList
+          .filter(s => s.syncStatus !== 'SYNCED' && !s.serverSaleId)
+          .map(s => ({
+            ...s,
+            customerName: s.customerName || (s.customerId ? provMap.get(s.customerId) : undefined) || 'Cliente',
+          }));
       } catch {
         return [];
       }
@@ -315,8 +317,34 @@ export function SellerDashboard({
     // Incorporar ventas locales almacenadas en el teléfono que aún no se reflejan en el servidor
     const unsyncedLocalSales: Sale[] = (localSalesQuery.data ?? [])
       .filter(ls => {
+        // 1. Si ya fue confirmada/sincronizada en el servidor, NO mostrar como pendiente local
+        if (ls.syncStatus === 'SYNCED') return false;
+
+        // 2. Si ya tiene serverSaleId asociado y existe en la lista de ventas del servidor
         if (ls.serverSaleId && sales.some(s => s.id === ls.serverSaleId)) return false;
-        if (sales.some(s => s.id === ls.localSaleId || s.documentNumber === ls.localReference)) return false;
+
+        // 3. Si coincide con una venta del servidor por ID, correlativo local o clientReference
+        if (sales.some(s => 
+          s.id === ls.localSaleId || 
+          s.documentNumber === ls.localReference ||
+          (s as any).clientReference === ls.localSaleId ||
+          (s as any).clientReference === ls.clientOperationId ||
+          (s as any).clientReference === ls.localReference
+        )) return false;
+
+        // 4. Heurística de respaldo: Si en el servidor ya existe la venta del mismo cliente, mismo monto y fecha/hora cercana
+        const lsTime = new Date(ls.occurredAtLocal).getTime();
+        const duplicateOnServer = sales.some(s => {
+          if (Math.abs(Number(s.total) - Number(ls.total)) > 0.01) return false;
+          const sTime = new Date(s.createdAt).getTime();
+          if (Math.abs(sTime - lsTime) > 15 * 60 * 1000) return false; // más de 15 min de diferencia
+
+          if (s.customerId && ls.customerId && s.customerId === ls.customerId) return true;
+          if (s.customerName && ls.customerName && normalizeText(s.customerName) === normalizeText(ls.customerName)) return true;
+          return false;
+        });
+        if (duplicateOnServer) return false;
+
         const localDate = getSaleDate(ls.occurredAtLocal);
         return localDate === todayGuatemala || !localDate;
       })

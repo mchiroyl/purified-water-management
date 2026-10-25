@@ -100,6 +100,7 @@ export function SyncProvider({
     if (summary.synced > 0 && queryClient) {
       void Promise.allSettled([
         queryClient.invalidateQueries({ queryKey: ['sales'] }),
+        queryClient.invalidateQueries({ queryKey: ['localSales'] }),
         queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
         queryClient.invalidateQueries({ queryKey: ['route-loads'] }),
         queryClient.invalidateQueries({ queryKey: ['inventory'] }),
