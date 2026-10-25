@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -34,6 +34,11 @@ import type { JugRouteSummaryResponse } from '../../features/jugs/types';
 import { captureCurrentLocation } from '../../services/geolocation';
 import { apiRequest } from '../../services/apiClient';
 import { useSyncOptional, getMobileDatabase } from '../../offline/SyncContext';
+import {
+  downloadAndSaveRoutePackage,
+  getStoredRoutePackageStatus,
+  type RoutePackageStatus,
+} from '../../offline/routePackageSync';
 
 type DashboardAlert = { code: string; severity: string; title: string; count: number };
 type Dashboard = {
@@ -203,6 +208,11 @@ export function SellerDashboard({
         } catch {
           // ignore if already started
         }
+      }
+      if (sellerLoad.routeId) {
+        void downloadAndSaveRoutePackage(sellerLoad.routeId).then(() => {
+          void getStoredRoutePackageStatus(sellerLoad.routeId).then(setRoutePackageStatus);
+        }).catch((e) => console.warn('No se pudo pre-cargar el catálogo de ruta offline automáticamente:', e));
       }
       setReceiptSuccessModal({
         loadNumber: String(sellerLoad.loadNumber),
@@ -504,6 +514,31 @@ export function SellerDashboard({
 
   const effectiveRouteId = sellerLoad?.routeId;
 
+  // ── Catálogo de ruta offline y sincronización local ──────────────────────────
+  const [routePackageStatus, setRoutePackageStatus] = useState<RoutePackageStatus | null>(null);
+  const [isSyncingRoutePackage, setIsSyncingRoutePackage] = useState(false);
+  const [routePackageError, setRoutePackageError] = useState('');
+
+  useEffect(() => {
+    void getStoredRoutePackageStatus(effectiveRouteId).then(setRoutePackageStatus);
+  }, [effectiveRouteId]);
+
+  const handleSyncRoutePackage = async () => {
+    if (!effectiveRouteId) return;
+    setIsSyncingRoutePackage(true);
+    setRoutePackageError('');
+    try {
+      await downloadAndSaveRoutePackage(effectiveRouteId);
+      const updated = await getStoredRoutePackageStatus(effectiveRouteId);
+      setRoutePackageStatus(updated);
+      void handleRefreshAll();
+    } catch (err) {
+      setRoutePackageError(err instanceof Error ? err.message : 'Error al sincronizar catálogo offline');
+    } finally {
+      setIsSyncingRoutePackage(false);
+    }
+  };
+
   const activeItinerary = useQuery({
     queryKey: ['itineraries', 'active', effectiveRouteId],
     queryFn: async () => {
@@ -559,6 +594,17 @@ export function SellerDashboard({
           (sellerLoad?.routeCode && c.routeCode === sellerLoad.routeCode)
         );
       } catch {
+        try {
+          const db = await getMobileDatabase();
+          const allLocal = await db.getAll('customers');
+          if (allLocal && allLocal.length > 0) {
+            return allLocal.filter((c: any) =>
+              (effectiveRouteId && (c.routeRunId === effectiveRouteId || c.routeId === effectiveRouteId)) ||
+              (sellerLoad?.routeCode && c.routeCode === sellerLoad.routeCode) ||
+              !effectiveRouteId
+            );
+          }
+        } catch {}
         return [];
       }
     },
@@ -827,6 +873,81 @@ export function SellerDashboard({
           <span>Sincronizar</span>
         </button>
       </div>
+
+      {/* ── Banner de Catálogo Offline de Ruta ── */}
+      {effectiveRouteId && (
+        <div
+          style={{
+            background: routePackageStatus?.isLoaded ? '#f0fdf4' : '#fff7ed',
+            border: routePackageStatus?.isLoaded ? '1px solid #bbf7d0' : '1px solid #fed7aa',
+            borderRadius: '12px',
+            padding: '0.65rem 0.85rem',
+            marginBottom: '0.75rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '0.6rem',
+            flexWrap: 'wrap',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+            <div
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '8px',
+                background: routePackageStatus?.isLoaded ? '#dcfce7' : '#ffedd5',
+                color: routePackageStatus?.isLoaded ? '#15803d' : '#ea580c',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <Package size={17} />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: routePackageStatus?.isLoaded ? '#15803d' : '#c2410c' }}>
+                {routePackageStatus?.isLoaded
+                  ? `Catálogo Offline Listo: ${routePackageStatus.customerCount} clientes y ${routePackageStatus.productCount} productos`
+                  : 'Catálogo de ruta no guardado para operar sin cobertura'}
+              </div>
+              <div style={{ fontSize: '0.68rem', color: routePackageStatus?.isLoaded ? '#166534' : '#9a3412' }}>
+                {routePackageStatus?.downloadedAt
+                  ? `Descargado: ${new Date(routePackageStatus.downloadedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                  : 'Descarga el paquete para consultar clientes y precios sin señal'}
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSyncRoutePackage}
+            disabled={isSyncingRoutePackage}
+            style={{
+              border: 'none',
+              background: routePackageStatus?.isLoaded ? '#dcfce7' : '#ea580c',
+              color: routePackageStatus?.isLoaded ? '#15803d' : '#ffffff',
+              padding: '5px 11px',
+              borderRadius: '7px',
+              fontWeight: 700,
+              fontSize: '0.74rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              cursor: 'pointer',
+            }}
+          >
+            <RefreshCw size={12} className={isSyncingRoutePackage ? 'animate-spin' : ''} />
+            <span>{isSyncingRoutePackage ? 'Descargando…' : routePackageStatus?.isLoaded ? 'Actualizar Catálogo' : 'Descargar Catálogo'}</span>
+          </button>
+        </div>
+      )}
+      {routePackageError && (
+        <div className="alert error" style={{ marginBottom: '0.75rem', fontSize: '0.78rem' }}>
+          {routePackageError}
+        </div>
+      )}
 
       {/* ── 2. Indicadores Clave (2x2 Grid Exacto a la Maqueta en móvil, 4 col en pantallas grandes) ── */}
       <div className="seller-cockpit-kpi-grid" style={{

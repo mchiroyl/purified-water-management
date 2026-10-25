@@ -52,6 +52,11 @@ export type CustomerSnapshot = {
   creditAllowed: boolean;
   creditAvailable: string;
   cachedAt: string;
+  addressReference?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+  confirmedLatitude?: string | number | null;
+  confirmedLongitude?: string | number | null;
 };
 export type ProductSnapshot = {
   id: string;

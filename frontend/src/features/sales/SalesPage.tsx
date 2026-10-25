@@ -27,9 +27,17 @@ import {
   Clock,
   X,
   ImageIcon,
+  Package,
+  RefreshCw,
 } from 'lucide-react';
 import { apiBlob, apiRequest } from '../../services/apiClient';
 import { openMobileDatabase, type GeoLocationSnapshot } from '../../offline/mobileDatabase';
+import {
+  downloadAndSaveRoutePackage,
+  getStoredRoutePackageStatus,
+  resolveOfflinePrice,
+  type RoutePackageStatus,
+} from '../../offline/routePackageSync';
 import { captureCurrentLocation, getLastKnownLocation } from '../../services/geolocation';
 import { cacheReceipt, findCachedReceipt, markReceiptPending } from './receiptOffline';
 import { downloadReceiptFile, shareReceiptFile } from './receiptSharing';
@@ -249,9 +257,21 @@ function ItemPriceBadge({
   quantity: number;
   fallbackPrice?: number;
 }) {
+  const [offlinePrice, setOfflinePrice] = useState<{ unitPrice: number; isSpecial: boolean } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void resolveOfflinePrice(customerId, presentationId, quantity).then(res => {
+      if (!cancelled && res) {
+        setOfflinePrice({ unitPrice: res.unitPrice, isSpecial: res.isSpecial });
+      }
+    });
+    return () => { cancelled = true; };
+  }, [customerId, presentationId, quantity]);
+
   const query = useQuery({
     queryKey: ['pricing', 'resolve', customerId, presentationId, quantity],
-    enabled: Boolean(customerId && presentationId && quantity > 0),
+    enabled: Boolean(customerId && presentationId && quantity > 0 && navigator.onLine),
     queryFn: () => apiRequest<PriceDecisionResponse>('/pricing/resolve', {
       method: 'POST',
       body: JSON.stringify({ customerId, presentationId, quantityBaseUnits: quantity })
@@ -260,14 +280,14 @@ function ItemPriceBadge({
   });
 
   if (!customerId || !presentationId || quantity <= 0) return null;
-  if (query.isLoading && !fallbackPrice) {
+  if (query.isLoading && !fallbackPrice && !offlinePrice) {
     return <span className="muted" style={{ fontSize: '0.82rem', padding: '0.2rem 0' }}>Cotizando precio oficial…</span>;
   }
 
-  const unitPrice = query.data ? Number(query.data.unitPrice || 0) : Number(fallbackPrice || 0);
+  const unitPrice = query.data ? Number(query.data.unitPrice || 0) : (offlinePrice?.unitPrice || Number(fallbackPrice || 0));
   if (!unitPrice) return null;
 
-  const isSpecial = query.data?.source === 'CUSTOMER_SPECIAL_PRICE';
+  const isSpecial = query.data ? query.data.source === 'CUSTOMER_SPECIAL_PRICE' : (offlinePrice?.isSpecial ?? false);
   const lineTotal = unitPrice * quantity;
 
   return (
@@ -690,16 +710,155 @@ export function SalesPage({
     },
     staleTime: 5_000,
   });
-  const routes = useQuery({ queryKey: ['routes'], queryFn: () => apiRequest<Route[]>('/routes'), enabled: canSell, staleTime: 300_000 });
-  const customers = useQuery({ queryKey: ['customers'], queryFn: () => apiRequest<Customer[]>('/customers'), enabled: canSell, staleTime: 300_000 });
-  const products = useQuery({ queryKey: ['products'], queryFn: () => apiRequest<Product[]>('/products'), enabled: canSell, staleTime: 300_000 });
-  const loads = useQuery({ queryKey: ['route-loads'], queryFn: () => apiRequest<RouteLoad[]>('/loads'), enabled: canSell, staleTime: 60_000 });
+  const routes = useQuery({
+    queryKey: ['routes'],
+    queryFn: async () => {
+      try {
+        return await apiRequest<Route[]>('/routes');
+      } catch (err) {
+        try {
+          const db = await openMobileDatabase();
+          const localLoads = await db.getAll('routeLoads');
+          if (localLoads && localLoads.length > 0) {
+            const routesMap = new Map<string, Route>();
+            for (const l of localLoads) {
+              if (l.routeRunId) {
+                routesMap.set(l.routeRunId, {
+                  id: l.routeRunId,
+                  code: 'RUTA',
+                  name: `Ruta ${l.routeRunId.slice(0, 8)}`,
+                  status: 'ACTIVE'
+                });
+              }
+            }
+            if (routesMap.size > 0) return Array.from(routesMap.values());
+          }
+        } catch {}
+        throw err;
+      }
+    },
+    enabled: canSell,
+    staleTime: 300_000
+  });
+
+  const customers = useQuery({
+    queryKey: ['customers'],
+    queryFn: async () => {
+      try {
+        return await apiRequest<Customer[]>('/customers');
+      } catch (err) {
+        try {
+          const db = await openMobileDatabase();
+          const localCusts = await db.getAll('customers');
+          if (localCusts && localCusts.length > 0) {
+            return localCusts.map(c => ({
+              id: c.id,
+              code: c.code,
+              name: c.name,
+              status: c.status,
+              customerType: c.customerType,
+              creditAllowed: c.creditAllowed,
+              creditLimit: 0,
+              currentBalance: 0,
+              routeId: c.routeRunId,
+              registrationState: 'CONFIRMED',
+              addressReference: c.addressReference,
+              phone: c.phone || undefined,
+              whatsapp: c.whatsapp || undefined,
+              confirmedLatitude: c.confirmedLatitude ? Number(c.confirmedLatitude) : undefined,
+              confirmedLongitude: c.confirmedLongitude ? Number(c.confirmedLongitude) : undefined,
+            })) as Customer[];
+          }
+        } catch {}
+        throw err;
+      }
+    },
+    enabled: canSell,
+    staleTime: 300_000
+  });
+
+  const products = useQuery({
+    queryKey: ['products'],
+    queryFn: async () => {
+      try {
+        return await apiRequest<Product[]>('/products');
+      } catch (err) {
+        try {
+          const db = await openMobileDatabase();
+          const localProds = await db.getAll('products');
+          const localPres = await db.getAll('presentations');
+          if (localProds && localProds.length > 0) {
+            return localProds.map(p => ({
+              id: p.id,
+              code: p.code,
+              name: p.name,
+              active: p.active,
+              controlsInventory: p.tracksInventory,
+              presentations: localPres.filter(pr => pr.productId === p.id).map(pr => ({
+                id: pr.id,
+                code: pr.code,
+                name: pr.name,
+                active: pr.active,
+                productId: pr.productId,
+              }))
+            })) as Product[];
+          }
+        } catch {}
+        throw err;
+      }
+    },
+    enabled: canSell,
+    staleTime: 300_000
+  });
+
+  const loads = useQuery({
+    queryKey: ['route-loads'],
+    queryFn: async () => {
+      try {
+        return await apiRequest<RouteLoad[]>('/loads');
+      } catch (err) {
+        try {
+          const db = await openMobileDatabase();
+          const localLoads = await db.getAll('routeLoads');
+          const localItems = await db.getAll('routeLoadItems');
+          if (localLoads && localLoads.length > 0) {
+            return localLoads.map(l => ({
+              id: l.id,
+              loadNumber: l.id.slice(0, 8),
+              routeId: l.routeRunId,
+              routeCode: 'RUTA',
+              routeName: 'Ruta Local',
+              status: l.status,
+              createdByUsername: '',
+              items: localItems.filter(it => it.routeLoadId === l.id).map(it => ({
+                id: it.id,
+                productId: it.presentationId,
+                productCode: '',
+                productName: 'Producto',
+                baseUnitCode: 'UN',
+                quantityBaseUnits: Number(it.quantityBaseUnits || 0),
+              }))
+            })) as RouteLoad[];
+          }
+        } catch {}
+        throw err;
+      }
+    },
+    enabled: canSell,
+    staleTime: 60_000
+  });
+
   const priceLists = useQuery({ queryKey: ['pricing', 'lists'], queryFn: () => apiRequest<PriceList[]>('/pricing/lists'), enabled: canSell, staleTime: 300_000 });
   const [searchParams] = useSearchParams();
   const [routeId, setRouteId] = useState('');
   const [customerId, setCustomerId] = useState('');
   const [visitRouteId, setVisitRouteId] = useState('');
   const [visitCustomerId, setVisitCustomerId] = useState('');
+
+  // ── Catálogo de ruta offline y sincronización local ──────────────────────────
+  const [routePackageStatus, setRoutePackageStatus] = useState<RoutePackageStatus | null>(null);
+  const [isSyncingRoutePackage, setIsSyncingRoutePackage] = useState(false);
+  const [routePackageError, setRoutePackageError] = useState('');
 
   useEffect(() => {
     const preselectCust = searchParams.get('customerId');
@@ -927,6 +1086,31 @@ export function SalesPage({
 
   // ── Verificación de Itinerario Activo y Salto de Paradas ───────────────────
   const effectiveRouteId = routeId || assignedRoute?.id || '';
+
+  useEffect(() => {
+    void getStoredRoutePackageStatus(effectiveRouteId).then(setRoutePackageStatus);
+  }, [effectiveRouteId]);
+
+  const handleManualSyncCatalog = async () => {
+    if (!effectiveRouteId) return;
+    setIsSyncingRoutePackage(true);
+    setRoutePackageError('');
+    try {
+      await downloadAndSaveRoutePackage(effectiveRouteId);
+      const updated = await getStoredRoutePackageStatus(effectiveRouteId);
+      setRoutePackageStatus(updated);
+      void Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: ['customers'] }),
+        queryClient.invalidateQueries({ queryKey: ['products'] }),
+        queryClient.invalidateQueries({ queryKey: ['route-loads'] }),
+      ]);
+    } catch (err) {
+      setRoutePackageError(err instanceof Error ? err.message : 'Error al sincronizar catálogo offline');
+    } finally {
+      setIsSyncingRoutePackage(false);
+    }
+  };
+
   const hasStartedLoad = useMemo(() => {
     if (!loads.data || loads.isLoading) return true;
     return loads.data.some(l => l.status === 'STARTED' && (!routeId || l.routeId === routeId));
@@ -1758,6 +1942,94 @@ export function SalesPage({
         >
           Ir a Mi Carga →
         </button>
+      </div>
+    )}
+
+    {/* ── Banner de Catálogo Offline de Ruta ── */}
+    {effectiveRouteId && (
+      <div
+        style={{
+          margin: '0.75rem 0 1.25rem 0',
+          padding: '0.75rem 1rem',
+          borderRadius: '8px',
+          border: routePackageStatus?.isLoaded ? '1px solid #86efac' : '1.5px solid #fed7aa',
+          background: routePackageStatus?.isLoaded ? '#f0fdf4' : '#fff7ed',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '0.75rem',
+          flexWrap: 'wrap',
+          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '36px',
+              height: '36px',
+              borderRadius: '0.45rem',
+              background: routePackageStatus?.isLoaded ? '#dcfce7' : '#ffedd5',
+              color: routePackageStatus?.isLoaded ? '#15803d' : '#ea580c',
+              flexShrink: 0,
+            }}
+          >
+            <Package size={20} strokeWidth={2.2} />
+          </div>
+          <div>
+            <span
+              style={{
+                fontSize: '0.75rem',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                color: routePackageStatus?.isLoaded ? '#15803d' : '#c2410c',
+                fontWeight: 700,
+                display: 'block',
+              }}
+            >
+              Catálogo de Ruta Offline
+            </span>
+            <strong style={{ fontSize: '0.98rem', color: routePackageStatus?.isLoaded ? '#14532d' : '#9a3412' }}>
+              {routePackageStatus?.isLoaded
+                ? `${routePackageStatus.customerCount} clientes y ${routePackageStatus.productCount} productos listos en el teléfono`
+                : 'Catálogo no guardado para operar sin cobertura'}
+            </strong>
+            <div style={{ fontSize: '0.76rem', color: routePackageStatus?.isLoaded ? '#166534' : '#9a3412', marginTop: '2px' }}>
+              {routePackageStatus?.downloadedAt
+                ? `Actualizado: ${new Date(routePackageStatus.downloadedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                : 'Descarga el paquete antes de ingresar a áreas rurales o sin señal'}
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleManualSyncCatalog}
+          disabled={isSyncingRoutePackage}
+          style={{
+            border: 'none',
+            background: routePackageStatus?.isLoaded ? '#dcfce7' : '#ea580c',
+            color: routePackageStatus?.isLoaded ? '#15803d' : '#ffffff',
+            padding: '6px 12px',
+            borderRadius: '6px',
+            fontWeight: 700,
+            fontSize: '0.8rem',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            cursor: 'pointer',
+          }}
+        >
+          <RefreshCw size={13} className={isSyncingRoutePackage ? 'animate-spin' : ''} />
+          <span>{isSyncingRoutePackage ? 'Descargando…' : routePackageStatus?.isLoaded ? 'Actualizar Catálogo' : 'Descargar Catálogo'}</span>
+        </button>
+      </div>
+    )}
+    {routePackageError && (
+      <div className="alert error" style={{ margin: '-0.5rem 0 1rem 0', fontSize: '0.82rem' }}>
+        {routePackageError}
       </div>
     )}
 

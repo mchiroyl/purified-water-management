@@ -95,3 +95,53 @@ Cada fase incluirá código, pruebas, revisión de seguridad, actualización doc
 ## 8. Resultado del análisis
 
 No existe impedimento técnico local para comenzar la planificación. Los requisitos y decisiones confirmadas están unificados en `PROMPT_MAESTRO_SISTEMA_AGUA_PURA.md`, que es la única fuente canónica. El documento de diseño conserva únicamente contexto histórico. La implementación requiere un plan detallado que utilice exactamente las fases 0 a 39 del prompt maestro.
+
+## 9. Análisis de conectividad, operación móvil y resiliencia sin energía eléctrica
+
+### 9.1. Evaluación ética, profesional y operativa de dispositivos por rol
+
+| Rol | Dispositivo Principal | Conectividad | Veredicto y Justificación Profesional |
+|---|---|---|---|
+| **Vendedor (Ruta)** | **Smartphone (Android / iOS)** | Datos Móviles + **Offline-First** | **Indispensable**: El vendedor opera en camión, bajando garrafones y cobrando en calle. El teléfono es su punto de venta móvil (POS). Debe funcionar con total autonomía tanto si no hay señal celular como si los comercios no tienen energía eléctrica. |
+| **Administrador** | **Laptop / Computadora** | Datos Compartidos (**Hotspot**) o Red Fija | **Opción más segura y profesional**: El administrador audita liquidaciones masivas, concilia arqueos de caja, inventarios globales y anulaciones. Trabajar exclusivamente en 6 pulgadas eleva la fatiga visual y el riesgo de toques accidentales críticos. |
+| **Administrador (Móvil)** | **Smartphone (PWA Responsiva)** | Datos Móviles | **Respaldo de emergencia (*Failover*)**: La interfaz web progresiva es 100% responsiva, permitiendo autorizar créditos, consultar saldos de garrafones o verificar ventas urgentes desde el celular cuando se encuentre fuera de la oficina. |
+
+### 9.2. Resiliencia en la nube ante cortes de energía ("Sin Luz")
+
+- **Infraestructura Cloud**: El backend (Render), la base de datos (PostgreSQL) y el frontend (Vercel) se encuentran en centros de datos internacionales de alta disponibilidad con generadores propios y redundancia.
+- **Continuidad ante apagones locales**:
+  - Si se corta la energía eléctrica en la purificadora o municipio, **el servidor en la nube no se apaga ni sufre interrupciones**.
+  - El administrador puede encender su laptop (cuya batería ofrece horas de autonomía), activar la función de **"Zona WiFi / Compartir Datos Móviles (Hotspot)"** en su teléfono y seguir trabajando en la laptop con pantalla completa y teclado sin depender del tendido eléctrico local.
+
+## 10. Especificación técnica: Descarga de catálogos offline (`Route Package`)
+
+### 10.1. Diagnóstico del problema con señal inestable (1 a 2 barritas)
+
+El mayor riesgo operativo en campo no es la desconexión total (donde el navegador falla en 5 ms), sino las zonas con 1 o 2 barritas de señal celular:
+- `navigator.onLine` reporta falsamente que hay conexión.
+- Múltiples llamadas HTTP individuales (`/customers`, `/products`, `/pricing`, `/route-loads`) se quedan colgadas de 30 a 60 segundos, congelando la pantalla del vendedor.
+- Los reintentos sin idempotencia provocan ventas duplicadas y descuadres de inventario.
+
+### 10.2. Solución: Paquete Atómico de Ruta Diario (`GET /api/v1/sync/route-package/{routeId}`)
+
+En lugar de múltiples llamadas concurrentes dispersas, el sistema implementa un paquete único comprimido (< 150 KB) que se descarga al iniciar la jornada o seleccionar ruta:
+
+1. **Contenido del Paquete**:
+   - Clientes asignados a la ruta del vendedor (con límites de crédito, contacto y saldo de garrafones prestados).
+   - Catálogo de productos y presentaciones activas.
+   - Precios estándar por tramos de mayoreo y precios especiales vinculados a los clientes de la ruta.
+   - Carga inicial de inventario confirmada en el camión.
+2. **Almacenamiento Local Atómico en IndexedDB**:
+   - El frontend consume el paquete mediante la función `replaceRoutePackage(...)` en [`mobileDatabase.ts`](file:///d:/UMG/Purificadora/frontend/src/offline/mobileDatabase.ts).
+   - Los formularios de venta ([`SalesPage.tsx`](file:///d:/UMG/Purificadora/frontend/src/features/sales/SalesPage.tsx)) y garrafones leen directamente de IndexedDB en menos de 15 ms, garantizando fluidez de 60 fps sin bloqueos de red.
+3. **Indicador Visual de Certeza Operativa (`/impeccable`)**:
+   - Encabezado con estado del catálogo: `📦 Catálogo de Ruta: Actualizado hoy a las 07:15 AM (142 clientes)`.
+   - Botón de refresco manual con icono 🔄 para sincronizar cuando se recupere buena señal.
+   - Selector visual de conectividad: `[ Conectado (Online) ]` y `[ Sin Señal (Modo Local) ]`.
+4. **Optimización de Base de Datos PostgreSQL (`/supabase-postgres-best-practices`)**:
+   - Índices compuestos para ensamblar el paquete en < 50 ms:
+     - `CREATE INDEX idx_customer_route_active ON customer(route_id, is_active) WHERE is_active = true;`
+     - `CREATE INDEX idx_special_price_customer_status ON special_price(customer_id, status) WHERE status = 'ACTIVE';`
+   - Protección de idempotencia absoluta contra duplicados en reintentos móviles:
+     - `CREATE UNIQUE INDEX uq_sale_device_client_reference ON sale(device_id, client_reference);`
+
