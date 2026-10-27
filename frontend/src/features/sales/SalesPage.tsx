@@ -1180,6 +1180,37 @@ export function SalesPage({
   const [provisionalSuccess, setProvisionalSuccess] = useState('');
   const [localProvisionalCustomers, setLocalProvisionalCustomers] = useState<Customer[]>([]);
 
+  // ── Detección preventiva de duplicados en tiempo real (Offline y Online) ──
+  const localDuplicateCandidates = useMemo(() => {
+    const trimmedName = provisionalForm.name.trim().toLowerCase();
+    const cleanPhone = provisionalForm.phone.replace(/\D/g, '');
+    if (trimmedName.length < 3 && cleanPhone.length < 5) return [];
+
+    const allRouteCustomers = [
+      ...(customers.data?.filter(c => c.status === 'ACTIVE' && (!routeId || c.routeId === routeId)) ?? []),
+      ...localProvisionalCustomers.filter(c => !routeId || c.routeId === routeId),
+    ];
+
+    return allRouteCustomers.filter(c => {
+      // 1. Coincidencia por teléfono (5 o más dígitos)
+      if (cleanPhone.length >= 5) {
+        const cPhone = (c.phone || c.whatsapp || '').replace(/\D/g, '');
+        if (cPhone.length >= 5 && (cPhone === cleanPhone || cPhone.endsWith(cleanPhone) || cleanPhone.endsWith(cPhone))) {
+          return true;
+        }
+      }
+      // 2. Coincidencia por nombre (mismo nombre normalizado o inclusión)
+      if (trimmedName.length >= 3) {
+        const cName = c.name.toLowerCase().trim();
+        if (cName === trimmedName) return true;
+        if (trimmedName.length >= 4 && (cName.includes(trimmedName) || trimmedName.includes(cName))) {
+          return true;
+        }
+      }
+      return false;
+    }).slice(0, 3);
+  }, [provisionalForm.name, provisionalForm.phone, customers.data, localProvisionalCustomers, routeId]);
+
   const handleSaveProvisional = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!routeId) return;
@@ -2913,6 +2944,74 @@ export function SalesPage({
                 onChange={e => setProvisionalForm({ ...provisionalForm, phone: e.target.value })} 
               />
             </label>
+
+            {/* Detección y sugerencia de clientes duplicados en tiempo real */}
+            {localDuplicateCandidates.length > 0 && (
+              <div
+                className="wide"
+                style={{
+                  background: '#fffbeb',
+                  border: '1.5px solid #fde68a',
+                  borderRadius: '8px',
+                  padding: '0.75rem',
+                  marginTop: '0.25rem',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#92400e', fontWeight: 600, fontSize: '0.85rem' }}>
+                  <span>⚠️</span>
+                  <span>Posible cliente ya existente en esta ruta ({localDuplicateCandidates.length}):</span>
+                </div>
+                <div style={{ marginTop: '0.4rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  {localDuplicateCandidates.map(candidate => (
+                    <div
+                      key={candidate.id}
+                      style={{
+                        background: '#ffffff',
+                        border: '1px solid #fcd34d',
+                        borderRadius: '6px',
+                        padding: '0.5rem 0.65rem',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: '0.5rem',
+                      }}
+                    >
+                      <div style={{ fontSize: '0.82rem', color: '#1e293b' }}>
+                        <strong>{candidate.name}</strong> ({candidate.code || 'CLI'})
+                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                          📞 {candidate.phone || candidate.whatsapp || 'Sin teléfono'} · 📍 {candidate.addressReference || 'Sin ref'}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="secondary"
+                        style={{
+                          fontSize: '0.75rem',
+                          padding: '0.25rem 0.6rem',
+                          background: '#0284c7',
+                          color: '#ffffff',
+                          borderColor: '#0284c7',
+                          fontWeight: 600,
+                        }}
+                        onClick={() => {
+                          setCustomerId(candidate.id);
+                          setShowProvisionalModal(false);
+                          setProvisionalForm({ name: '', phone: '', addressReference: '' });
+                          setProvisionalSuccess(`✅ Seleccionado cliente existente: ${candidate.name} (${candidate.code || 'CLI'})`);
+                          setTimeout(() => setProvisionalSuccess(''), 8000);
+                        }}
+                      >
+                        👉 Usar este cliente
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <small style={{ display: 'block', color: '#b45309', fontSize: '0.74rem', marginTop: '0.4rem' }}>
+                  Si se trata de otra persona con nombre similar, puedes ignorar esta advertencia y pulsar <strong>"Guardar y Vender Ahora"</strong>.
+                </small>
+              </div>
+            )}
 
             {provisionalError && (
               <div className="alert error wide" style={{ fontSize: '0.85rem' }}>

@@ -37,6 +37,103 @@ const statusLabels: Record<string, string> = {
 };
 const money = (value: number) => `Q${Number(value).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+type ParsedBlocker = {
+  code: string;
+  count: number;
+  icon: string;
+  title: string;
+  description: string;
+  actionText?: string;
+  actionPath?: string;
+};
+
+function parseBlocker(reason: string): ParsedBlocker {
+  const parts = reason.split(':');
+  const code = parts[0] || reason;
+  const count = parseInt(parts[1], 10) || 1;
+
+  switch (code) {
+    case 'CUSTOMER_REVIEW_PENDING':
+      return {
+        code,
+        count,
+        icon: '👤',
+        title: count === 1 ? '1 cliente nuevo en ruta pendiente de revisión' : `${count} clientes nuevos en ruta pendientes de revisión`,
+        description: 'El vendedor registró clientes nuevos durante la jornada. La administración debe aprobarlos o resolverlos antes de cerrar la liquidación.',
+        actionText: 'Ir a Clientes ➔',
+        actionPath: '/customers/list',
+      };
+    case 'TRANSFER_PENDING':
+      return {
+        code,
+        count,
+        icon: '💳',
+        title: count === 1 ? '1 pago por transferencia pendiente de verificación' : `${count} pagos por transferencia pendientes de verificación`,
+        description: 'Hay pagos de ventas mediante transferencia bancaria que aún no han sido confirmados por administración.',
+        actionText: 'Verificar Pagos ➔',
+        actionPath: '/payments',
+      };
+    case 'CREDIT_PAYMENT_TRANSFER_PENDING':
+      return {
+        code,
+        count,
+        icon: '📑',
+        title: count === 1 ? '1 abono a crédito por transferencia sin verificar' : `${count} abonos a crédito por transferencia sin verificar`,
+        description: 'Se cobraron abonos de saldo por transferencia bancaria que requieren confirmación.',
+        actionText: 'Ver Créditos ➔',
+        actionPath: '/credit',
+      };
+    case 'WASTE_PENDING':
+      return {
+        code,
+        count,
+        icon: '⚠️',
+        title: count === 1 ? '1 reporte de merma pendiente de aprobación' : `${count} reportes de merma pendientes de aprobación`,
+        description: 'Hay productos dañados reportados en la ruta que bodega o supervisión debe validar.',
+        actionText: 'Revisar Mermas ➔',
+        actionPath: '/waste',
+      };
+    case 'RETURN_PENDING':
+      return {
+        code,
+        count,
+        icon: '🔄',
+        title: count === 1 ? '1 devolución de cliente pendiente de recepción' : `${count} devoluciones de clientes pendientes de recepción`,
+        description: 'Hay garrafones o producto devuelto por clientes pendientes de recepción física.',
+        actionText: 'Ver Devoluciones ➔',
+        actionPath: '/returns',
+      };
+    case 'REPLENISHMENT_PENDING':
+      return {
+        code,
+        count,
+        icon: '🚚',
+        title: count === 1 ? '1 recarga de camión en proceso' : `${count} recargas de camión en proceso`,
+        description: 'Existe una recarga de producto que aún no ha sido confirmada o entregada.',
+        actionText: 'Ver Cargas ➔',
+        actionPath: '/loads/list',
+      };
+    case 'SYNC_CONFLICT':
+      return {
+        code,
+        count,
+        icon: '🔄',
+        title: count === 1 ? '1 operación en conflicto de sincronización' : `${count} operaciones en conflicto de sincronización`,
+        description: 'Hay registros enviados desde el teléfono que tuvieron conflicto al llegar al servidor.',
+        actionText: 'Ver Auditoría ➔',
+        actionPath: '/audit',
+      };
+    default:
+      return {
+        code,
+        count,
+        icon: '🚫',
+        title: `Pendiente operativo: ${reason}`,
+        description: 'Debe resolverse esta condición operativa antes de proceder al cierre definitivo.',
+      };
+  }
+}
+
 export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean; canReceiveCash: boolean }) {
   const client = useQueryClient();
   const { operations, syncNow } = useSync();
@@ -800,8 +897,65 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
               )}
 
               {item.blockingReasons.length > 0 && (
-                <div className="alert error">
-                  Bloqueos para cierre: {item.blockingReasons.join(', ')}
+                <div style={{
+                  background: '#fef2f2',
+                  border: '1.5px solid #f87171',
+                  borderRadius: '8px',
+                  padding: '0.85rem 1rem',
+                  marginBottom: '1rem',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    <span style={{ fontSize: '1.1rem' }}>🚫</span>
+                    <strong style={{ color: '#991b1b', fontSize: '0.92rem' }}>
+                      Acciones requeridas antes de cerrar ({item.blockingReasons.length})
+                    </strong>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                    {item.blockingReasons.map(r => {
+                      const b = parseBlocker(r);
+                      return (
+                        <div key={r} style={{
+                          background: '#ffffff',
+                          border: '1px solid #fecaca',
+                          borderRadius: '6px',
+                          padding: '0.65rem 0.85rem',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                          gap: '0.5rem',
+                        }}>
+                          <div style={{ flex: '1 1 240px' }}>
+                            <div style={{ fontWeight: 600, color: '#7f1d1d', fontSize: '0.86rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                              <span>{b.icon}</span>
+                              <span>{b.title}</span>
+                            </div>
+                            <p style={{ margin: '0.2rem 0 0', fontSize: '0.78rem', color: '#6b7280' }}>
+                              {b.description}
+                            </p>
+                          </div>
+                          {b.actionPath && (
+                            <a
+                              href={b.actionPath}
+                              className="secondary"
+                              style={{
+                                fontSize: '0.75rem',
+                                padding: '0.3rem 0.6rem',
+                                color: '#0369a1',
+                                borderColor: '#bae6fd',
+                                background: '#f0f9ff',
+                                textDecoration: 'none',
+                                borderRadius: '4px',
+                                display: 'inline-block',
+                              }}
+                            >
+                              {b.actionText}
+                            </a>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
@@ -938,8 +1092,8 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
                         </div>
                       )}
                       {item.blockingReasons.length > 0 && (
-                        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', padding: '0.5rem', borderRadius: '6px', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
-                          🚫 <strong>Bloqueos pendientes:</strong> Debe resolver: {item.blockingReasons.join(', ')} para poder cerrar.
+                        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', padding: '0.65rem 0.85rem', borderRadius: '6px', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                          🚫 <strong>Cierre bloqueado:</strong> Debe resolver los {item.blockingReasons.length} pendiente(s) operativos indicados arriba (como revisión de clientes o pagos) para poder cerrar.
                         </div>
                       )}
                       {pendingLocalOperations > 0 && (

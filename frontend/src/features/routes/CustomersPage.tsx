@@ -48,6 +48,7 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
   const [localCustomers, setLocalCustomers] = useState<ProvisionalCustomerRecord[]>([]);
   const [localMessage, setLocalMessage] = useState('');
   const [reviewForms, setReviewForms] = useState<Record<string, { targetCustomerId: string; reason: string }>>({});
+  const [reviewAction, setReviewAction] = useState<Record<string, 'REJECT' | 'MERGE' | null>>({});
   const [assignments, setAssignments] = useState<Record<string, { routeId: string; validFrom: string }>>({});
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [editForm, setEditForm] = useState({
@@ -599,33 +600,201 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
           <div className="data-list">
             {reviews.data?.map(review => {
               const values = reviewForms[review.customer.id] ?? { targetCustomerId: '', reason: '' };
-              const permanentCustomers = customers.data?.filter(item => item.customerType === 'PERMANENT' && item.registrationState === 'ACTIVE') ?? [];
+              const mode = reviewAction[review.customer.id] ?? null;
+              const hasDuplicates = (review.duplicateCandidates?.length ?? 0) > 0;
+              const permanentCustomers = customers.data?.filter(item => item.customerType === 'PERMANENT' && item.registrationState === 'ACTIVE' && item.id !== review.customer.id) ?? [];
+
               return (
-                <article className="data-row customer-review" key={review.customer.id}>
-                  <div>
-                    <strong>{review.customer.name}</strong>
-                    <span>{review.customer.phone || 'Sin teléfono'} · {review.customer.routeName ?? 'Sin ruta'}</span>
-                    <small>{review.duplicateCandidates.length ? `Posibles duplicados: ${review.duplicateCandidates.map(item => `${item.code} ${item.name}`).join(', ')}` : 'Sin coincidencias automáticas'}</small>
+                <article
+                  className="data-row customer-review"
+                  key={review.customer.id}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.75rem',
+                    background: '#ffffff',
+                    border: hasDuplicates ? '1.5px solid #fde68a' : '1px solid #e2e8f0',
+                    borderRadius: '10px',
+                    padding: '1rem',
+                    marginBottom: '0.75rem',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <strong style={{ fontSize: '1rem', color: '#1e293b' }}>{review.customer.name}</strong>
+                        {hasDuplicates ? (
+                          <span style={{ background: '#fef3c7', color: '#92400e', padding: '0.2rem 0.55rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 600 }}>
+                            ⚠️ Posible duplicado ({review.duplicateCandidates.length})
+                          </span>
+                        ) : (
+                          <span style={{ background: '#ecfdf5', color: '#047857', padding: '0.2rem 0.55rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 600 }}>
+                            ✨ Cliente nuevo en ruta (Sin coincidencias)
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '0.84rem', color: '#64748b', marginTop: '0.25rem' }}>
+                        <span>📞 {review.customer.phone || 'Sin teléfono'}</span>
+                        <span style={{ margin: '0 0.4rem' }}>·</span>
+                        <span>📍 {review.customer.addressReference || 'Sin referencia'}</span>
+                        <span style={{ margin: '0 0.4rem' }}>·</span>
+                        <span>🚚 {review.customer.routeName ?? 'Sin ruta'} ({review.customer.sellerName ?? 'Vendedor'})</span>
+                      </div>
+                      {hasDuplicates && (
+                        <div style={{ marginTop: '0.35rem', fontSize: '0.8rem', color: '#b45309', background: '#fffbeb', padding: '0.35rem 0.6rem', borderRadius: '6px' }}>
+                          <strong>Coincidencias encontradas:</strong> {review.duplicateCandidates.map(item => `${item.code} · ${item.name} (${item.phone || 'Sin tel'})`).join(', ')}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* BOTONES PRINCIPALES CUANDO NO HAY MODO SECUNDARIO ABIERTO */}
+                    {mode === null && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <button
+                          className="primary"
+                          disabled={decideReview.isPending}
+                          onClick={() => decideReview.mutate({ customerId: review.customer.id, decision: 'APPROVED' })}
+                          style={{ background: '#0284c7', color: '#ffffff', fontWeight: 600, padding: '0.45rem 0.9rem', fontSize: '0.85rem' }}
+                          title="Aprobar como cliente permanente de la empresa"
+                        >
+                          {decideReview.isPending ? 'Aprobando...' : 'Aprobar'}
+                        </button>
+                        <button
+                          className="secondary"
+                          disabled={decideReview.isPending}
+                          onClick={() => setReviewAction(prev => ({ ...prev, [review.customer.id]: 'REJECT' }))}
+                          style={{ fontSize: '0.85rem', padding: '0.45rem 0.8rem' }}
+                        >
+                          Rechazar
+                        </button>
+                        <button
+                          className="secondary"
+                          disabled={decideReview.isPending}
+                          onClick={() => setReviewAction(prev => ({ ...prev, [review.customer.id]: 'MERGE' }))}
+                          style={{
+                            fontSize: '0.82rem',
+                            padding: '0.45rem 0.75rem',
+                            background: hasDuplicates ? '#fef3c7' : '#f8fafc',
+                            color: hasDuplicates ? '#92400e' : '#475569',
+                            borderColor: hasDuplicates ? '#fde68a' : '#cbd5e1',
+                          }}
+                          title={hasDuplicates ? 'Fusionar con un cliente existente sugerido' : 'Buscar manualmente un cliente existente para fusionar'}
+                        >
+                          {hasDuplicates ? 'Fusionar con existente...' : '¿Ya existía? Fusionar'}
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  <div className="inline-assignment">
-                    <select
-                      aria-label={`Cliente definitivo para ${review.customer.name}`}
-                      value={values.targetCustomerId}
-                      onChange={e => setReviewForms({ ...reviewForms, [review.customer.id]: { ...values, targetCustomerId: e.target.value } })}
-                    >
-                      <option value="">Cliente definitivo para fusionar</option>
-                      {permanentCustomers.map(item => <option value={item.id} key={item.id}>{item.code} · {item.name}</option>)}
-                    </select>
-                    <input
-                      aria-label={`Motivo para ${review.customer.name}`}
-                      placeholder="Motivo para rechazo o fusión"
-                      value={values.reason}
-                      onChange={e => setReviewForms({ ...reviewForms, [review.customer.id]: { ...values, reason: e.target.value } })}
-                    />
-                    <button className="primary" disabled={decideReview.isPending} onClick={() => decideReview.mutate({ customerId: review.customer.id, decision: 'APPROVED' })}>Aprobar</button>
-                    <button className="secondary" disabled={!values.reason.trim() || decideReview.isPending} onClick={() => decideReview.mutate({ customerId: review.customer.id, decision: 'REJECTED' })}>Rechazar</button>
-                    <button className="secondary" disabled={!values.targetCustomerId || !values.reason.trim() || decideReview.isPending} onClick={() => decideReview.mutate({ customerId: review.customer.id, decision: 'MERGED' })}>Fusionar</button>
-                  </div>
+
+                  {/* PANEL DESPLEGABLE DE RECHAZO */}
+                  {mode === 'REJECT' && (
+                    <div style={{
+                      background: '#fff1f2',
+                      border: '1px solid #fecdd3',
+                      borderRadius: '8px',
+                      padding: '0.75rem 1rem',
+                      marginTop: '0.5rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.5rem',
+                    }}>
+                      <strong style={{ color: '#9f1239', fontSize: '0.85rem' }}>
+                        Indique el motivo de rechazo (requerido para auditoría):
+                      </strong>
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <input
+                          style={{ flex: '1 1 250px' }}
+                          aria-label={`Motivo para ${review.customer.name}`}
+                          placeholder="Ej: Registro duplicado por error / cliente inexistente..."
+                          value={values.reason}
+                          onChange={e => setReviewForms({ ...reviewForms, [review.customer.id]: { ...values, reason: e.target.value } })}
+                          autoFocus
+                        />
+                        <button
+                          className="secondary"
+                          style={{ background: '#e11d48', color: '#ffffff', borderColor: '#e11d48', fontSize: '0.82rem' }}
+                          disabled={!values.reason.trim() || decideReview.isPending}
+                          onClick={() => decideReview.mutate({ customerId: review.customer.id, decision: 'REJECTED' })}
+                        >
+                          {decideReview.isPending ? 'Rechazando...' : 'Confirmar Rechazo'}
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary"
+                          style={{ fontSize: '0.82rem' }}
+                          onClick={() => setReviewAction(prev => ({ ...prev, [review.customer.id]: null }))}
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* PANEL DESPLEGABLE DE FUSIÓN */}
+                  {mode === 'MERGE' && (
+                    <div style={{
+                      background: '#f0fdf4',
+                      border: '1px solid #bbf7d0',
+                      borderRadius: '8px',
+                      padding: '0.75rem 1rem',
+                      marginTop: '0.5rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.5rem',
+                    }}>
+                      <strong style={{ color: '#166534', fontSize: '0.85rem' }}>
+                        Fusionar cliente provisional con un cliente permanente existente:
+                      </strong>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        <select
+                          aria-label={`Cliente definitivo para ${review.customer.name}`}
+                          value={values.targetCustomerId}
+                          onChange={e => setReviewForms({ ...reviewForms, [review.customer.id]: { ...values, targetCustomerId: e.target.value } })}
+                          style={{ width: '100%' }}
+                        >
+                          <option value="">-- Seleccionar cliente permanente de destino --</option>
+                          {review.duplicateCandidates.length > 0 && (
+                            <optgroup label="⭐ Coincidencias sugeridas por el sistema">
+                              {review.duplicateCandidates.map(cand => (
+                                <option value={cand.id} key={`cand-${cand.id}`}>{cand.code} · {cand.name} {cand.phone ? `(${cand.phone})` : ''}</option>
+                              ))}
+                            </optgroup>
+                          )}
+                          <optgroup label="📋 Todos los clientes permanentes">
+                            {permanentCustomers.map(item => (
+                              <option value={item.id} key={item.id}>{item.code} · {item.name}</option>
+                            ))}
+                          </optgroup>
+                        </select>
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <input
+                            style={{ flex: '1 1 250px' }}
+                            aria-label={`Motivo para ${review.customer.name}`}
+                            placeholder="Motivo de la fusión (Ej: Mismo cliente registrado con referencia en ruta...)"
+                            value={values.reason}
+                            onChange={e => setReviewForms({ ...reviewForms, [review.customer.id]: { ...values, reason: e.target.value } })}
+                          />
+                          <button
+                            className="secondary"
+                            style={{ background: '#16a34a', color: '#ffffff', borderColor: '#16a34a', fontSize: '0.82rem' }}
+                            disabled={!values.targetCustomerId || !values.reason.trim() || decideReview.isPending}
+                            onClick={() => decideReview.mutate({ customerId: review.customer.id, decision: 'MERGED' })}
+                          >
+                            {decideReview.isPending ? 'Fusionando...' : 'Confirmar Fusión'}
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary"
+                            style={{ fontSize: '0.82rem' }}
+                            onClick={() => setReviewAction(prev => ({ ...prev, [review.customer.id]: null }))}
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </article>
               );
             })}
