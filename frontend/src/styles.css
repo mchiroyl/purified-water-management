@@ -175,6 +175,22 @@ aside a:hover:not(.active) { background: #f1f5f9; color: #0f172a; }
 .status-pill.local-mode .status-dot { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
 .status-pill.degraded-net { color: #fde047; }
 .status-pill.degraded-net .status-dot { background: #eab308; box-shadow: 0 0 6px #eab308; }
+.app-version-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: .24rem .55rem;
+  border-radius: 999px;
+  font-size: .70rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  white-space: nowrap;
+  min-height: 28px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.03);
+  user-select: none;
+}
 .pending-sync-badge {
   display: inline-flex;
   align-items: center;

@@ -1385,20 +1385,39 @@ export function SalesPage({
         snapshot.state === 'DEGRADED' ||
         !navigator.onLine;
 
-      const payloadItems: SaleOfflineItemInput[] = items.map(it => {
+      const payloadItems: SaleOfflineItemInput[] = await Promise.all(items.map(async it => {
         const pres = presentations.find(p => p.id === it.presentationId);
-        const resolvedPrice = resolveLocalPrice(it.presentationId, it.quantity, priceLists.data);
+        // 1. Revisar si la consulta en vivo de React Query ya tiene el precio oficial asignado
+        const livePriceData = queryClient.getQueryData<PriceDecisionResponse>([
+          'pricing', 'resolve', customerId, it.presentationId, it.quantity
+        ]);
+        let resolvedPrice = livePriceData?.unitPrice ? Number(livePriceData.unitPrice) : 0;
+
+        // 2. Si no, consultar el catálogo local (IndexedDB) con precios especiales del cliente
+        if (!resolvedPrice) {
+          const offlineDecision = await resolveOfflinePrice(customerId, it.presentationId, it.quantity);
+          if (offlineDecision && offlineDecision.unitPrice > 0) {
+            resolvedPrice = offlineDecision.unitPrice;
+          }
+        }
+
+        // 3. Fallback a la lista general de precios
+        if (!resolvedPrice) {
+          resolvedPrice = resolveLocalPrice(it.presentationId, it.quantity, priceLists.data);
+        }
+
         return {
           presentationId: it.presentationId,
           quantity: it.quantity,
           productId: pres?.productId ?? pres?.product?.id,
           unitPrice: resolvedPrice,
         };
-      });
+      }));
 
       const calculatedSubtotal = payloadItems.reduce((acc, it) => acc + (it.quantity * (it.unitPrice || 0)), 0);
       const calculatedTotal = calculatedSubtotal;
 
+      // Para almacenamiento offline (queueSale) y venta sintética local
       const payloadPayments: SaleOfflinePaymentInput[] = payments.map(payment => {
         const amt = payment.amount === '' ? calculatedTotal : Number(payment.amount);
         return {
@@ -1409,6 +1428,17 @@ export function SalesPage({
           evidenceReference: payment.evidenceReference || null,
         };
       });
+
+      // Para el servidor online (/sales): si payment.amount está vacío (pago completo no dividido),
+      // enviamos amount: null para que el backend asigne exactamente el total oficial calculado por su motor,
+      // evitando cualquier descalce de centavos o precios. Si fue dividido por el usuario, sí viaja el monto explícito.
+      const serverPayments = payments.map(payment => ({
+        method: payment.method,
+        amount: payment.amount === '' ? null : Number(payment.amount),
+        reference: payment.reference || null,
+        bank: payment.bank || null,
+        evidenceReference: payment.evidenceReference || null,
+      }));
 
       if (isOfflineMode) {
         const selectedCust = availableCustomers.find(c => c.id === customerId);
@@ -1446,9 +1476,9 @@ export function SalesPage({
           createdAt: localSale.occurredAtLocal,
           routeId,
           customerId,
-          items: items.map(it => {
+          items: payloadItems.map(it => {
             const pres = presentations.find(p => p.id === it.presentationId);
-            const unitPrice = resolveLocalPrice(it.presentationId, it.quantity, priceLists.data);
+            const unitPrice = it.unitPrice || 0;
             return {
               id: it.presentationId,
               productName: pres?.product?.name ?? 'Agua Purificada',
@@ -1484,7 +1514,7 @@ export function SalesPage({
               routeId,
               customerId,
               items,
-              payments: payloadPayments,
+              payments: serverPayments,
               location,
             }),
           });
@@ -1533,9 +1563,9 @@ export function SalesPage({
           createdAt: localSale.occurredAtLocal,
           routeId,
           customerId,
-          items: items.map(it => {
+          items: payloadItems.map(it => {
             const pres = presentations.find(p => p.id === it.presentationId);
-            const unitPrice = resolveLocalPrice(it.presentationId, it.quantity, priceLists.data);
+            const unitPrice = it.unitPrice || 0;
             return {
               id: it.presentationId,
               productName: pres?.product?.name ?? 'Agua Purificada',

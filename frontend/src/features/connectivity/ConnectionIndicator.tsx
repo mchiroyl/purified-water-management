@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useConnection } from './ConnectionContext';
 import { useSyncOptional } from '../../offline/SyncContext';
+import { APP_VERSION } from '../../config/version';
 
 export function ConnectionIndicator() {
   const { manager, snapshot } = useConnection();
@@ -82,6 +83,15 @@ export function ConnectionIndicator() {
         <span className="status-dot" aria-hidden="true" />
         <span className="status-text">{badgeText}</span>
       </button>
+
+      {/* Indicador de Versión oficial */}
+      <span
+        className="app-version-badge"
+        title={`Versión oficial del sistema: ${APP_VERSION}`}
+        aria-label={`Versión ${APP_VERSION}`}
+      >
+        {APP_VERSION}
+      </span>
 
       {/* Badge/Botón de operaciones pendientes: lleva a la pantalla de pendientes */}
       {unfinishedCount > 0 && (
