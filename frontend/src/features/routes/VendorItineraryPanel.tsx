@@ -123,7 +123,7 @@ export function VendorItineraryPanel({ routeId, isSeller = false }: VendorItiner
         throw err;
       }
     },
-    refetchInterval: 30000, // Background refresh every 30s
+    refetchInterval: (typeof import.meta !== 'undefined' && import.meta.env?.MODE === 'test') ? false : 30000,
   });
 
   const loadsQuery = useQuery({

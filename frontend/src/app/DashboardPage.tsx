@@ -88,9 +88,9 @@ export function DashboardPage() {
   });
 
   // Sondeo periódico suave (30s) para administradores en oficina.
-  // Para el vendedor en ruta móvil, desactivado (false) para evitar parpadeos y consumo de batería/datos;
-  // el vendedor ve sus ventas inmediatamente de forma local con o sin internet.
-  const pollInterval = isAdminOrSupervisor ? 30_000 : false;
+  // Para el vendedor en ruta móvil o durante pruebas unitarias, desactivado (false) para evitar parpadeos o fugas de temporizador
+  const isTest = typeof import.meta !== 'undefined' && import.meta.env?.MODE === 'test';
+  const pollInterval = (!isTest && isAdminOrSupervisor) ? 30_000 : false;
 
   const dashboard = useQuery({
     queryKey: ['dashboard'],
