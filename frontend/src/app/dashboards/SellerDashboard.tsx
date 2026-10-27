@@ -162,7 +162,7 @@ export function SellerDashboard({
     sellerLoads.find(l => l.status === 'STARTED' && (l.sellerReceivedByUsername === user.username || l.createdByUsername === user.username)) ||
     loads.find(l => l.status === 'STARTED') ||
     sellerLoads.find(l => l.status === 'RECEIVED' && (l.sellerReceivedByUsername === user.username || l.createdByUsername === user.username)) ||
-    sellerLoads.find(l => l.status === 'SETTLED') ||
+    sellerLoads.find(l => l.status === 'SETTLED' || l.status === 'CLOSED') ||
     sellerLoads[0] ||
     loads.find(l => l.status === 'STARTED') ||
     loads[0];
@@ -170,12 +170,13 @@ export function SellerDashboard({
   const settlementsList = Array.isArray(settlements) ? settlements : [];
   const currentSettlement = settlementsList.find(st => {
     if (!sellerLoad) return false;
-    return st.routeLoadId && sellerLoad.id && st.routeLoadId === sellerLoad.id;
+    return (st.routeLoadId && sellerLoad.id && st.routeLoadId === sellerLoad.id) ||
+      (st.sellerUsername === user.username && (st.date === todayGuatemala || st.createdAt?.slice(0, 10) === todayGuatemala));
   });
 
-  const isSettled = sellerLoad?.status === 'SETTLED' || currentSettlement?.status === 'CONFIRMED' || currentSettlement?.status === 'SETTLED';
+  const isSettled = sellerLoad?.status === 'SETTLED' || sellerLoad?.status === 'CLOSED' || currentSettlement?.status === 'CONFIRMED' || currentSettlement?.status === 'SETTLED' || currentSettlement?.status === 'CLOSED';
   const isPendingReceipt = sellerLoad?.status === 'WAREHOUSE_CONFIRMED' || sellerLoad?.status === 'PREPARED';
-  const isActiveLoad = sellerLoad && (sellerLoad.status === 'STARTED' || sellerLoad.status === 'RECEIVED');
+  const isActiveLoad = Boolean(sellerLoad && (sellerLoad.status === 'STARTED' || sellerLoad.status === 'RECEIVED') && !isSettled);
 
   const [isReceiving, setIsReceiving] = useState(false);
   const [receiveProgress, setReceiveProgress] = useState('');
@@ -681,6 +682,9 @@ export function SellerDashboard({
   }, [localSalesQuery.data, operations]);
 
   const effectiveStops = useMemo<SellerStopItem[]>(() => {
+    if (isSettled || !isActiveLoad) {
+      return [];
+    }
     let rawStops: SellerStopItem[] = [];
 
     if (itineraryStops && itineraryStops.length > 0) {
@@ -743,7 +747,7 @@ export function SellerDashboard({
 
       return stop;
     });
-  }, [itineraryStops, routeTemplatesQuery.data, routeCustomersQuery.data, sellerSales, localAttendedCustomerIds]);
+  }, [isSettled, isActiveLoad, itineraryStops, routeTemplatesQuery.data, routeCustomersQuery.data, sellerSales, localAttendedCustomerIds]);
 
   const displayTotalStops = effectiveStops.length;
   const attendedCount = effectiveStops.filter(
@@ -1055,17 +1059,17 @@ export function SellerDashboard({
             Avance de Ruta
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px' }}>
-            <span style={{ fontSize: '1.35rem', fontWeight: 900, color: '#0f172a', fontFeatureSettings: '"tnum"', lineHeight: 1.2 }}>
-              {displayTotalStops > 0 ? `${attendedCount}/${displayTotalStops}` : '0/0'}
+            <span style={{ fontSize: '1.35rem', fontWeight: 900, color: isSettled ? '#16a34a' : '#0f172a', fontFeatureSettings: '"tnum"', lineHeight: 1.2 }}>
+              {isSettled ? '0/0' : (displayTotalStops > 0 ? `${attendedCount}/${displayTotalStops}` : '0/0')}
             </span>
-            <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
-              paradas atendidas {itineraryProgressPct}%
+            <span style={{ fontSize: '0.72rem', color: isSettled ? '#15803d' : '#64748b' }}>
+              {isSettled ? 'jornada cerrada' : (displayTotalStops > 0 ? `paradas atendidas ${itineraryProgressPct}%` : 'sin carga activa')}
             </span>
           </div>
         </div>
       </div>
 
-      {/* ── 3. Route Itinerary Progress (Stepper Conectado con navegación directa a Ventas) ── */}
+      {/* ── 3. Clientes a Visitar (Stepper Conectado con navegación directa a Ventas) ── */}
       <div style={{
         background: '#ffffff',
         borderRadius: '14px',
@@ -1076,26 +1080,65 @@ export function SellerDashboard({
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
           <h3 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 800, color: '#0f172a' }}>
-            Route Itinerary Progress
+            Clientes a Visitar
           </h3>
-          <Link
-            to="/itinerary"
-            style={{
-              fontSize: '0.76rem',
-              color: '#0284c7',
-              textDecoration: 'none',
-              fontWeight: 700,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '3px'
-            }}
-          >
-            <span>Ver lista</span>
-            <ChevronRight size={13} />
-          </Link>
+          {isActiveLoad && effectiveStops.length > 0 && (
+            <Link
+              to="/itinerary"
+              style={{
+                fontSize: '0.76rem',
+                color: '#0284c7',
+                textDecoration: 'none',
+                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '3px'
+              }}
+            >
+              <span>Ver lista</span>
+              <ChevronRight size={13} />
+            </Link>
+          )}
         </div>
 
-        {effectiveStops.length > 0 ? (
+        {isSettled ? (
+          <div style={{
+            padding: '1rem',
+            borderRadius: '12px',
+            background: '#f0fdf4',
+            border: '1px solid #bbf7d0',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px',
+          }}>
+            <CheckCircle2 size={22} color="#16a34a" style={{ flexShrink: 0, marginTop: '2px' }} />
+            <div>
+              <div style={{ fontWeight: 800, color: '#15803d', fontSize: '0.92rem', marginBottom: '4px' }}>
+                ✓ Jornada liquidada y cerrada
+              </div>
+              <div style={{ color: '#166534', fontSize: '0.78rem', lineHeight: 1.45 }}>
+                Las paradas y clientes de ruta se activarán automáticamente cuando se asigne y reciba una nueva carga.
+              </div>
+            </div>
+          </div>
+        ) : !isActiveLoad ? (
+          <div style={{
+            padding: '1rem',
+            borderRadius: '12px',
+            background: '#f8fafc',
+            border: '1px solid #e2e8f0',
+            textAlign: 'center',
+            color: '#64748b',
+            fontSize: '0.8rem',
+          }}>
+            <div style={{ fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+              Sin carga activa en ruta
+            </div>
+            <div>
+              Los clientes a visitar se mostrarán cuando el administrador asigne y recibas tu carga del día.
+            </div>
+          </div>
+        ) : effectiveStops.length > 0 ? (
           <div>
             {/* Tira del Stepper horizontal con líneas conectoras y clic directo para vender */}
             <div style={{
@@ -1224,7 +1267,7 @@ export function SellerDashboard({
           </div>
         ) : (
           <div style={{ textAlign: 'center', padding: '0.75rem 0.5rem', color: '#64748b', fontSize: '0.8rem' }}>
-            <span>Sin paradas registradas en esta ruta.</span>
+            <span>Sin clientes asociados a esta ruta.</span>
             <div style={{ marginTop: '0.35rem' }}>
               <Link to="/loads" style={{ color: '#0284c7', fontWeight: 700, textDecoration: 'none' }}>
                 Consultar mapa de ruta →
