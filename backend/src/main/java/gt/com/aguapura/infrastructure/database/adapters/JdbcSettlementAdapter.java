@@ -326,17 +326,20 @@ public class JdbcSettlementAdapter implements SettlementPort {
         Map<UUID, List<CashDeliveryView>> cashByLoad = fetchCashDeliveriesBatch(loadIds);
         Map<UUID, List<SalePriceBreakdown>> breakdownByLoad = fetchSalePriceBreakdownBatch(loadIds);
 
-        return settlements.stream().map(s -> new SettlementView(
-                s.id(), s.routeLoadId(), s.loadNumber(), s.routeId(), s.routeCode(),
-                s.routeName(), s.sellerName(), s.loadStatus(), s.status(), s.salesTotal(),
-                s.salesCash(), s.creditCollectionsCash(),
-                s.expectedCash(), s.deliveredCash(), s.verifiedTransfers(), s.appliedCredit(),
-                s.monetaryDifference(), s.physicalDifferenceTotal(), s.blockingReasons(), s.calculatedAt(),
-                s.closedBy(), s.closedByUsername(), s.closedAt(), s.closeNotes(),
-                itemsBySettlement.getOrDefault(s.id(), List.of()),
-                cashByLoad.getOrDefault(s.routeLoadId(), List.of()),
-                breakdownByLoad.getOrDefault(s.routeLoadId(), List.of())
-        )).toList();
+        return settlements.stream().map(s -> {
+            var synced = syncActiveBlockers(s);
+            return new SettlementView(
+                synced.id(), synced.routeLoadId(), synced.loadNumber(), synced.routeId(), synced.routeCode(),
+                synced.routeName(), synced.sellerName(), synced.loadStatus(), synced.status(), synced.salesTotal(),
+                synced.salesCash(), synced.creditCollectionsCash(),
+                synced.expectedCash(), synced.deliveredCash(), synced.verifiedTransfers(), synced.appliedCredit(),
+                synced.monetaryDifference(), synced.physicalDifferenceTotal(), synced.blockingReasons(), synced.calculatedAt(),
+                synced.closedBy(), synced.closedByUsername(), synced.closedAt(), synced.closeNotes(),
+                itemsBySettlement.getOrDefault(synced.id(), List.of()),
+                cashByLoad.getOrDefault(synced.routeLoadId(), List.of()),
+                breakdownByLoad.getOrDefault(synced.routeLoadId(), List.of())
+            );
+        }).toList();
     }
 
     private Map<UUID, List<ItemView>> fetchSettlementItemsBatch(List<UUID> settlementIds) {
@@ -417,8 +420,35 @@ public class JdbcSettlementAdapter implements SettlementPort {
     }
 
     private SettlementView findOne(UUID routeLoadId) {
-        return withDetails(jdbc.sql(settlementSelect() + " AND s.route_load_id=:id").param("id", routeLoadId)
-                .query((rs, row) -> settlementRow(rs)).optional().orElseThrow(this::notFound));
+        var base = jdbc.sql(settlementSelect() + " AND s.route_load_id=:id").param("id", routeLoadId)
+                .query((rs, row) -> settlementRow(rs)).optional().orElseThrow(this::notFound);
+        return withDetails(syncActiveBlockers(base));
+    }
+
+    private SettlementView syncActiveBlockers(SettlementView s) {
+        if (!"STARTED".equals(s.loadStatus()) || "CLOSED".equals(s.status())) {
+            return s;
+        }
+        List<String> liveBlockers = blockers(s.routeLoadId());
+        if (liveBlockers.equals(s.blockingReasons())) {
+            return s;
+        }
+        String status = !liveBlockers.isEmpty() ? "PENDING"
+                : (s.physicalDifferenceTotal().signum() == 0 && s.monetaryDifference().signum() == 0
+                ? "BALANCED" : "WITH_DIFFERENCE");
+        jdbc.sql("UPDATE settlement SET blocking_reasons=:blockers, status=:status, version=version+1 WHERE id=:id")
+                .param("blockers", String.join("\n", liveBlockers))
+                .param("status", status)
+                .param("id", s.id()).update();
+        return new SettlementView(
+                s.id(), s.routeLoadId(), s.loadNumber(), s.routeId(), s.routeCode(),
+                s.routeName(), s.sellerName(), s.loadStatus(), status, s.salesTotal(),
+                s.salesCash(), s.creditCollectionsCash(),
+                s.expectedCash(), s.deliveredCash(), s.verifiedTransfers(), s.appliedCredit(),
+                s.monetaryDifference(), s.physicalDifferenceTotal(), liveBlockers, s.calculatedAt(),
+                s.closedBy(), s.closedByUsername(), s.closedAt(), s.closeNotes(),
+                s.items(), s.cashDeliveries(), s.salesByPrice()
+        );
     }
 
     private SettlementView withDetails(SettlementView item) {

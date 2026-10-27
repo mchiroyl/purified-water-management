@@ -611,6 +611,29 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
                   >
                     {statusLabels[item.status] ?? item.status}
                   </span>
+                  {!isClosed && (
+                    <button
+                      type="button"
+                      className="secondary"
+                      style={{
+                        fontSize: '0.82rem',
+                        padding: '0.35rem 0.65rem',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.3rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                      disabled={calculate.isPending && calculate.variables === item.routeLoadId}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        calculate.mutate(item.routeLoadId);
+                      }}
+                      title="Recalcular liquidación y verificar pendientes resueltos"
+                    >
+                      {calculate.isPending && calculate.variables === item.routeLoadId ? 'Calculando...' : '🔄 Recalcular'}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="secondary"
@@ -904,11 +927,33 @@ export function SettlementPage({ canClose, canReceiveCash }: { canClose: boolean
                   padding: '0.85rem 1rem',
                   marginBottom: '1rem',
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                    <span style={{ fontSize: '1.1rem' }}>🚫</span>
-                    <strong style={{ color: '#991b1b', fontSize: '0.92rem' }}>
-                      Acciones requeridas antes de cerrar ({item.blockingReasons.length})
-                    </strong>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '1.1rem' }}>🚫</span>
+                      <strong style={{ color: '#991b1b', fontSize: '0.92rem' }}>
+                        Acciones requeridas antes de cerrar ({item.blockingReasons.length})
+                      </strong>
+                    </div>
+                    <button
+                      type="button"
+                      className="secondary"
+                      style={{
+                        fontSize: '0.78rem',
+                        padding: '0.25rem 0.6rem',
+                        color: '#0369a1',
+                        borderColor: '#bae6fd',
+                        background: '#f0f9ff',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.3rem',
+                      }}
+                      disabled={calculate.isPending && calculate.variables === item.routeLoadId}
+                      onClick={() => calculate.mutate(item.routeLoadId)}
+                      title="Comprobar si los pendientes ya fueron resueltos"
+                    >
+                      {calculate.isPending && calculate.variables === item.routeLoadId ? 'Verificando...' : '🔄 Comprobar si ya se resolvió'}
+                    </button>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                     {item.blockingReasons.map(r => {

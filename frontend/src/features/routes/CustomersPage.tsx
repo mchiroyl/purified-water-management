@@ -171,6 +171,7 @@ export function CustomersPage({ canManage, canCreateRouteCustomer = false,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['customers'] });
       void queryClient.invalidateQueries({ queryKey: ['customers', 'provisional-reviews'] });
+      void queryClient.invalidateQueries({ queryKey: ['settlements'] });
     },
   });
   const loadLocalCustomers = useCallback(async () => {
