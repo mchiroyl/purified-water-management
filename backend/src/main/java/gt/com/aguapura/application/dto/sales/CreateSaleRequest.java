@@ -10,17 +10,33 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
 public record CreateSaleRequest(
         @NotNull UUID clientReference,
-        @NotNull UUID routeId,
+        UUID routeId,
         @NotNull UUID customerId,
         @NotEmpty @Size(max = 100) List<@Valid ItemRequest> items,
         @NotEmpty @Size(max = 3) List<@Valid PaymentRequest> payments,
-        @NotNull @Valid GeoLocationRequest location
+        @NotNull @Valid GeoLocationRequest location,
+        String originType,
+        UUID warehouseLocationId,
+        UUID routeLoadId,
+        Instant occurredAt
 ) {
+    public CreateSaleRequest(
+            UUID clientReference,
+            UUID routeId,
+            UUID customerId,
+            List<ItemRequest> items,
+            List<PaymentRequest> payments,
+            GeoLocationRequest location
+    ) {
+        this(clientReference, routeId, customerId, items, payments, location, "ROUTE", null, null, null);
+    }
+
     public record ItemRequest(
             @NotNull UUID presentationId,
             @NotNull @DecimalMin(value = "0", inclusive = false) @Digits(integer = 14, fraction = 4)

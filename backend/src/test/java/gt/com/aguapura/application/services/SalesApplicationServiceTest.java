@@ -9,6 +9,7 @@ import jakarta.validation.Validation;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -24,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -40,6 +42,7 @@ class SalesApplicationServiceTest {
     private final UUID routeId = UUID.randomUUID();
     private final UUID routeLoadId = UUID.randomUUID();
     private final UUID inventoryLocationId = UUID.randomUUID();
+    private final UUID warehouseLocationId = UUID.randomUUID();
     private final UUID sellerId = UUID.randomUUID();
     private final UUID customerId = UUID.randomUUID();
     private final UUID presentationId = UUID.randomUUID();
@@ -106,6 +109,71 @@ class SalesApplicationServiceTest {
                 .hasMessageContaining("El cliente seleccionado no está asignado a la ruta");
     }
 
+    @Test
+    void directOfficeSaleConsumesFromWarehouseWithoutRequiringRouteOrRouteLoad() {
+        when(persistence.findDirectOfficeSaleContext(customerId, warehouseLocationId)).thenReturn(Optional.of(
+                new SalesPort.SaleContext(null, warehouseLocationId, null, null, "OCCASIONAL", false,
+                        BigDecimal.ZERO, BigDecimal.ZERO)));
+        when(persistence.findActivePresentation(presentationId)).thenReturn(Optional.of(new SalesPort.PresentationView(
+                presentationId, "GAR-20", "Garrafón", productId, "AGUA", "Agua", BigDecimal.ONE)));
+        when(pricing.resolve(any())).thenReturn(new PriceDecisionResponse(new BigDecimal("10.00"), "LIST",
+                null, null, null));
+        when(persistence.createSale(any())).thenAnswer(invocation -> sale(invocation.getArgument(0)));
+
+        var request = new CreateSaleRequest(clientReference, null, customerId,
+                List.of(new CreateSaleRequest.ItemRequest(presentationId, BigDecimal.ONE)),
+                List.of(new CreateSaleRequest.PaymentRequest("CASH", new BigDecimal("10.00"), null, null, null)),
+                location, "DIRECT_OFFICE", warehouseLocationId, null, null);
+
+        var result = service.create(request, actorId, deviceId, false);
+
+        assertThat(result.originType()).isEqualTo("DIRECT_OFFICE");
+        verify(inventory).consume(eq(warehouseLocationId), eq(productId), eq(BigDecimal.ONE),
+                eq("SALE_OUT"), eq("Venta Mostrador REC-00000001"), eq("SALE"), eq(result.id()),
+                eq(actorId), eq(deviceId));
+        verify(tracking, never()).recordSale(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void sellerCannotPerformDirectOfficeSale() {
+        var request = new CreateSaleRequest(clientReference, null, customerId,
+                List.of(new CreateSaleRequest.ItemRequest(presentationId, BigDecimal.ONE)),
+                List.of(new CreateSaleRequest.PaymentRequest("CASH", new BigDecimal("10.00"), null, null, null)),
+                location, "DIRECT_OFFICE", warehouseLocationId, null, null);
+
+        assertThatThrownBy(() -> service.create(request, actorId, deviceId, true))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Los vendedores en ruta no pueden registrar ventas de mostrador");
+    }
+
+    @Test
+    void adminCanAttributeSaleToSpecificStartedLoadAndSetRetroactiveTimestamp() {
+        UUID yesterdayLoadId = UUID.randomUUID();
+        Instant yesterdayTimestamp = Instant.parse("2026-10-27T16:30:00Z");
+
+        when(persistence.findSaleContext(routeId, customerId)).thenReturn(Optional.of(new SalesPort.SaleContext(
+                routeId, inventoryLocationId, routeLoadId, sellerId, "PERMANENT", false,
+                BigDecimal.ZERO, BigDecimal.ZERO)));
+        when(persistence.isLoadStarted(yesterdayLoadId)).thenReturn(true);
+        when(persistence.findActivePresentation(presentationId)).thenReturn(Optional.of(new SalesPort.PresentationView(
+                presentationId, "GAR-20", "Garrafón", productId, "AGUA", "Agua", BigDecimal.ONE)));
+        when(pricing.resolve(any())).thenReturn(new PriceDecisionResponse(new BigDecimal("10.00"), "LIST",
+                null, null, null));
+        when(persistence.createSale(any())).thenAnswer(invocation -> sale(invocation.getArgument(0)));
+
+        var request = new CreateSaleRequest(clientReference, routeId, customerId,
+                List.of(new CreateSaleRequest.ItemRequest(presentationId, BigDecimal.ONE)),
+                List.of(new CreateSaleRequest.PaymentRequest("CASH", new BigDecimal("10.00"), null, null, null)),
+                location, "ROUTE", null, yesterdayLoadId, yesterdayTimestamp);
+
+        service.create(request, actorId, deviceId, false);
+
+        var captor = ArgumentCaptor.forClass(SalesPort.NewSale.class);
+        verify(persistence).createSale(captor.capture());
+        assertThat(captor.getValue().routeLoadId()).isEqualTo(yesterdayLoadId);
+        assertThat(captor.getValue().createdAt()).isEqualTo(yesterdayTimestamp);
+    }
+
     private CreateSaleRequest validRequest(GeoLocationRequest requestedLocation) {
         return new CreateSaleRequest(clientReference, routeId, customerId, List.of(new CreateSaleRequest.ItemRequest(
                 presentationId, BigDecimal.ONE)), List.of(new CreateSaleRequest.PaymentRequest("CASH",
@@ -113,9 +181,10 @@ class SalesApplicationServiceTest {
     }
 
     private SalesPort.SaleView sale(SalesPort.NewSale item) {
-        return new SalesPort.SaleView(item.id(), item.clientReference(), "REC-00000001", routeId, "R-1",
-                "Ruta uno", inventoryLocationId, sellerId, "Vendedor", customerId, "C-1", "Cliente",
+        return new SalesPort.SaleView(item.id(), item.clientReference(), "REC-00000001", item.routeId(), "R-1",
+                "Ruta uno", item.inventoryLocationId(), item.sellerId(), "Vendedor", customerId, "C-1", "Cliente",
                 "CONFIRMED", item.subtotal(), item.total(), "GTQ", "Agua Pura", "123", "Zona 1", "",
-                actorId, "vendedor", deviceId, Instant.parse("2026-08-16T12:00:00Z"), List.of(), List.of());
+                actorId, "vendedor", deviceId, item.createdAt() != null ? item.createdAt() : Instant.parse("2026-08-16T12:00:00Z"),
+                List.of(), List.of(), item.originType());
     }
 }

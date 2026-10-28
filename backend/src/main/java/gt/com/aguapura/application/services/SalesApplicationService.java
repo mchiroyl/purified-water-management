@@ -1,5 +1,6 @@
 package gt.com.aguapura.application.services;
 
+import gt.com.aguapura.application.dto.pricing.PriceDecisionResponse;
 import gt.com.aguapura.application.dto.pricing.ResolvePriceRequest;
 import gt.com.aguapura.application.dto.sales.CreateSaleRequest;
 import gt.com.aguapura.application.dto.sales.SaleLocationResponse;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -54,24 +56,59 @@ public class SalesApplicationService {
 
     @Transactional
     public SaleResponse create(CreateSaleRequest request, UUID actorId, UUID deviceId, boolean restrictedToSeller) {
-        var context = persistence.findSaleContext(request.routeId(), request.customerId()).orElseThrow(() -> {
-            if (persistence.findStartedRouteLoadId(request.routeId()).isEmpty()) {
-                return validation("ROUTE_LOAD_NOT_STARTED",
-                        "No hay una carga de inventario activa para esta ruta. Debe confirmar la recepción de su carga en 'Mi Carga' antes de poder registrar ventas.");
-            }
-            if (persistence.findCustomerInRoute(request.customerId(), request.routeId()).isEmpty()) {
-                return validation("CUSTOMER_NOT_IN_ROUTE",
-                        "El cliente seleccionado no está asignado a la ruta activa o no se encuentra activo.");
-            }
-            if (restrictedToSeller && !persistence.sellerAssignedToRoute(actorId, request.routeId())) {
-                return forbidden("SALE_ROUTE_FORBIDDEN",
-                        "El vendedor no está asignado a la ruta seleccionada para la fecha actual.");
-            }
-            return validation("SALE_CONTEXT_INVALID", "La ruta, el cliente o el inventario de ruta no son válidos.");
-        });
-        if (restrictedToSeller && !persistence.sellerAssignedToRoute(actorId, request.routeId())) {
-            throw forbidden("SALE_ROUTE_FORBIDDEN", "El vendedor no está asignado a la ruta seleccionada.");
+        boolean isDirectOffice = "DIRECT_OFFICE".equalsIgnoreCase(request.originType());
+        if (isDirectOffice && restrictedToSeller) {
+            throw forbidden("SALE_ORIGIN_FORBIDDEN", "Los vendedores en ruta no pueden registrar ventas de mostrador.");
         }
+
+        SalesPort.SaleContext context;
+        if (isDirectOffice) {
+            context = persistence.findDirectOfficeSaleContext(request.customerId(), request.warehouseLocationId())
+                    .orElseThrow(() -> validation("SALE_OFFICE_CONTEXT_INVALID",
+                            "No se encontró una bodega de inventario activa o el cliente no es válido."));
+        } else {
+            if (request.routeId() == null) {
+                throw validation("SALE_ROUTE_REQUIRED", "La venta en ruta requiere especificar la ruta.");
+            }
+            context = persistence.findSaleContext(request.routeId(), request.customerId()).orElseThrow(() -> {
+                if (persistence.findStartedRouteLoadId(request.routeId()).isEmpty()) {
+                    return validation("ROUTE_LOAD_NOT_STARTED",
+                            "No hay una carga de inventario activa para esta ruta. Debe confirmar la recepción de su carga en 'Mi Carga' antes de poder registrar ventas.");
+                }
+                if (persistence.findCustomerInRoute(request.customerId(), request.routeId()).isEmpty()) {
+                    return validation("CUSTOMER_NOT_IN_ROUTE",
+                            "El cliente seleccionado no está asignado a la ruta activa o no se encuentra activo.");
+                }
+                if (restrictedToSeller && !persistence.sellerAssignedToRoute(actorId, request.routeId())) {
+                    return forbidden("SALE_ROUTE_FORBIDDEN",
+                            "El vendedor no está asignado a la ruta seleccionada para la fecha actual.");
+                }
+                return validation("SALE_CONTEXT_INVALID", "La ruta, el cliente o el inventario de ruta no son válidos.");
+            });
+            if (restrictedToSeller && !persistence.sellerAssignedToRoute(actorId, request.routeId())) {
+                throw forbidden("SALE_ROUTE_FORBIDDEN", "El vendedor no está asignado a la ruta seleccionada.");
+            }
+        }
+
+        UUID effectiveRouteLoadId = context.routeLoadId();
+        if (!isDirectOffice && request.routeLoadId() != null) {
+            if (restrictedToSeller) {
+                throw forbidden("SALE_CUSTOM_LOAD_FORBIDDEN", "El vendedor no puede especificar una carga distinta a la activa.");
+            }
+            if (!persistence.isLoadStarted(request.routeLoadId())) {
+                throw validation("SALE_LOAD_NOT_STARTED", "La carga especificada no se encuentra en estado iniciado.");
+            }
+            effectiveRouteLoadId = request.routeLoadId();
+        }
+
+        Instant effectiveCreatedAt = null;
+        if (request.occurredAt() != null) {
+            if (restrictedToSeller) {
+                throw forbidden("SALE_RETROACTIVE_FORBIDDEN", "El vendedor no puede registrar ventas con fecha retroactiva.");
+            }
+            effectiveCreatedAt = request.occurredAt();
+        }
+
         var seenPresentations = new HashSet<UUID>();
         var items = new ArrayList<SalesPort.NewSaleItem>();
         BigDecimal subtotal = BigDecimal.ZERO;
@@ -106,17 +143,20 @@ public class SalesApplicationService {
                 payment.method(), payment.amount(), payment.status(), payment.reference(), payment.bank(),
                 payment.evidenceReference())).toList();
         UUID saleId = UUID.randomUUID();
-        var sale = persistence.createSale(new SalesPort.NewSale(saleId, request.clientReference(), request.routeId(),
+        String originType = isDirectOffice ? "DIRECT_OFFICE" : "ROUTE";
+        var sale = persistence.createSale(new SalesPort.NewSale(saleId, request.clientReference(), originType,
+                isDirectOffice ? null : request.routeId(), isDirectOffice ? null : effectiveRouteLoadId,
                 context.inventoryLocationId(), context.sellerId(), request.customerId(), subtotal, subtotal,
-                actorId, deviceId, items, payments));
+                actorId, deviceId, effectiveCreatedAt, items, payments));
+
         var location = request.location();
-        if (location != null) {
-            tracking.recordSale(context.routeLoadId(), request.routeId(), saleId, new RouteTrackingPort.GeoLocation(
+        if (!isDirectOffice && location != null && effectiveRouteLoadId != null && request.routeId() != null) {
+            tracking.recordSale(effectiveRouteLoadId, request.routeId(), saleId, new RouteTrackingPort.GeoLocation(
                     location.latitude(), location.longitude(), location.accuracyMeters(), location.capturedAt()),
                     actorId, deviceId);
         }
 
-        if (itinerary != null) {
+        if (!isDirectOffice && itinerary != null && request.routeId() != null) {
             itinerary.findActiveItineraryByRouteId(request.routeId()).ifPresent(activeRun -> {
                 BigDecimal obsLat = location != null ? location.latitude() : null;
                 BigDecimal obsLon = location != null ? location.longitude() : null;
@@ -132,7 +172,7 @@ public class SalesApplicationService {
                         if (target.targetLatitude() != null && target.targetLongitude() != null &&
                                 target.targetLatitude().compareTo(BigDecimal.ZERO) != 0) {
                             double dMeters = haversineMeters(
-                                    location.latitude().doubleValue(), location.longitude().doubleValue(),
+                                     location.latitude().doubleValue(), location.longitude().doubleValue(),
                                     target.targetLatitude().doubleValue(), target.targetLongitude().doubleValue());
                             distDev = BigDecimal.valueOf(dMeters).setScale(2, RoundingMode.HALF_UP);
                             if (dMeters > 500.0) {
@@ -150,12 +190,15 @@ public class SalesApplicationService {
         }
         items.stream().sorted((left, right) -> left.productId().compareTo(right.productId())).forEach(item ->
                 inventory.consume(context.inventoryLocationId(), item.productId(), item.quantityBaseUnits(),
-                        "SALE_OUT", "Venta " + sale.documentNumber(), "SALE", saleId, actorId, deviceId));
+                        "SALE_OUT", (isDirectOffice ? "Venta Mostrador " : "Venta ") + sale.documentNumber(),
+                        "SALE", saleId, actorId, deviceId));
         var result = response(sale);
         audit.record(actorId, deviceId, "CREATE_SALE", "SALE", result.id(), Map.of(),
-                Map.of("documentNumber", result.documentNumber(), "routeId", result.routeId(),
-                        "customerId", result.customerId(), "total", result.total(),
-                        "currencyCode", result.currencyCode(), "status", result.status()));
+                Map.of("documentNumber", result.documentNumber(), "originType", originType,
+                        "routeId", result.routeId() != null ? result.routeId().toString() : "MOSTRADOR",
+                        "customerId", result.customerId().toString(), "total", result.total().toString(),
+                        "currencyCode", result.currencyCode(), "status", result.status(),
+                        "retroactive", effectiveCreatedAt != null));
         return result;
     }
 
@@ -198,59 +241,63 @@ public class SalesApplicationService {
                     actorId, deviceId);
         }
 
+        // 6. Complete the stop in the daily itinerary run if active
         if (itinerary != null) {
             itinerary.findActiveItineraryByRouteId(request.routeId()).ifPresent(activeRun -> {
                 BigDecimal obsLat = loc != null ? loc.latitude() : null;
                 BigDecimal obsLon = loc != null ? loc.longitude() : null;
                 BigDecimal obsAcc = loc != null ? loc.accuracyMeters() : null;
-                itinerary.recordStopNoPurchaseVisit(activeRun.id(), request.customerId(),
-                        request.visitReason(), request.visitNote(), obsLat, obsLon, obsAcc);
+                itinerary.recordStopNoPurchaseVisit(activeRun.id(), request.customerId(), request.visitReason(), fullNote, obsLat, obsLon, obsAcc);
             });
         }
 
-        // 6. Audit trail
-        audit.record(actorId, deviceId, "NO_PURCHASE_VISIT", "ROUTE_TRACKING", routeLoadId,
-                Map.of(),
-                Map.of("routeId", request.routeId(), "customerId", request.customerId(),
-                        "visitReason", request.visitReason()));
+        audit.record(actorId, deviceId, "RECORD_NO_PURCHASE_VISIT", "ROUTE", request.routeId(), Map.of(),
+                Map.of("customerId", request.customerId(), "customerName", customer.customerName(),
+                        "visitReason", request.visitReason(), "fullNote", fullNote));
 
         return new gt.com.aguapura.application.dto.sales.NoPurchaseVisitResponse(
-                UUID.randomUUID(),
-                request.routeId(), null,
-                request.customerId(), customer.customerName(),
-                request.visitReason(), fullNote,
-                loc != null ? loc.capturedAt() : java.time.Instant.now(), java.time.Instant.now());
+                customer.customerName(),
+                request.visitReason(),
+                fullNote
+        );
     }
 
     @Transactional(readOnly = true)
-    public List<SaleResponse> findSales(UUID userId, boolean restrictedToSeller) {
-        return persistence.findSales(restrictedToSeller ? Optional.of(userId) : Optional.empty())
+    public List<SaleResponse> findSales(UUID actorId, boolean restrictedToSeller) {
+        return persistence.findSales(restrictedToSeller ? Optional.of(actorId) : Optional.empty())
                 .stream().map(this::response).toList();
     }
 
     @Transactional(readOnly = true)
-    public SaleResponse findSale(UUID id, UUID userId, boolean restrictedToSeller) {
-        return persistence.findSale(id, restrictedToSeller ? Optional.of(userId) : Optional.empty())
+    public SaleResponse findSale(UUID id, UUID actorId, boolean restrictedToSeller) {
+        return persistence.findSale(id, restrictedToSeller ? Optional.of(actorId) : Optional.empty())
                 .map(this::response).orElseThrow(() -> new BusinessException("SALE_NOT_FOUND",
-                        "No se encontró la venta.", ErrorCategory.NOT_FOUND));
+                        "No se encontró la venta solicitada.", ErrorCategory.NOT_FOUND));
     }
 
     @Transactional(readOnly = true)
-    public SaleLocationResponse findSaleLocation(UUID id) {
-        return tracking.findSaleLocation(id).map(point -> new SaleLocationResponse(
-                point.latitude(), point.longitude(), point.accuracyMeters(),
-                point.capturedAt(), point.persistedAt()))
+    public SaleLocationResponse findSaleLocation(UUID saleId) {
+        // First verify the sale exists
+        persistence.findSale(saleId, Optional.empty())
+                .orElseThrow(() -> new BusinessException("SALE_NOT_FOUND",
+                        "No se encontró la venta solicitada.", ErrorCategory.NOT_FOUND));
+
+        // Delegate to tracking port to find the GPS point captured for this sale
+        return tracking.findSaleLocation(saleId)
+                .map(point -> new SaleLocationResponse(
+                        point.latitude(),
+                        point.longitude(),
+                        point.accuracyMeters(),
+                        point.capturedAt(),
+                        point.persistedAt()
+                ))
                 .orElseThrow(() -> new BusinessException("SALE_LOCATION_NOT_FOUND",
-                        "No se encontró la ubicación para esta venta.", ErrorCategory.NOT_FOUND));
+                        "No se encontró registro de ubicación GPS para esta venta.", ErrorCategory.NOT_FOUND));
     }
 
-    private gt.com.aguapura.application.dto.pricing.PriceDecisionResponse resolvePrice(
-            UUID customerId, UUID presentationId, BigDecimal quantityBaseUnits) {
-        try {
-            return pricing.resolve(new ResolvePriceRequest(customerId, presentationId, quantityBaseUnits, null));
-        } catch (IllegalArgumentException exception) {
-            throw validation("SALE_PRICE_NOT_CONFIGURED", "No existe un precio vigente para la cantidad vendida.");
-        }
+    private PriceDecisionResponse resolvePrice(UUID customerId, UUID presentationId,
+                                                BigDecimal quantityBaseUnits) {
+        return pricing.resolve(new ResolvePriceRequest(customerId, presentationId, quantityBaseUnits, Instant.now()));
     }
 
     private SaleResponse response(SalesPort.SaleView item) {
@@ -272,7 +319,7 @@ public class SalesApplicationService {
                 item.customerCode(), item.customerName(), item.status(), item.subtotal(), item.total(),
                 item.currencyCode(), item.companyName(), item.companyTaxId(), item.companyAddress(),
                 item.documentLegend(), item.createdBy(), item.createdByUsername(), item.deviceId(),
-                item.createdAt(), items, payments, verified, pending, rejected, credit);
+                item.createdAt(), items, payments, verified, pending, rejected, credit, item.originType());
     }
 
     private BigDecimal paymentTotal(SalesPort.SaleView sale, String... statuses) {

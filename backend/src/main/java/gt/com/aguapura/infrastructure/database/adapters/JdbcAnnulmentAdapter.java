@@ -34,7 +34,9 @@ public class JdbcAnnulmentAdapter implements AnnulmentPort {
     @Override public SaleSnapshot findSale(UUID saleId){
         var sale=jdbc.sql("""
                 SELECT sale.id,sale.document_number,sale.route_id,sale.inventory_location_id,sale.customer_id,
-                  EXISTS(SELECT 1 FROM route_load rl WHERE rl.route_id=sale.route_id AND rl.status='STARTED') route_open
+                  CASE WHEN sale.route_id IS NULL THEN true
+                       ELSE EXISTS(SELECT 1 FROM route_load rl WHERE rl.route_id=sale.route_id AND rl.status='STARTED')
+                  END route_open
                 FROM sale WHERE sale.id=:id AND sale.status='CONFIRMED' FOR UPDATE
                 """).param("id",saleId).query((rs,row)->new SaleSnapshot(rs.getObject("id",UUID.class),
                 rs.getString("document_number"),rs.getObject("route_id",UUID.class),
@@ -109,11 +111,17 @@ public class JdbcAnnulmentAdapter implements AnnulmentPort {
         return query.query((rs,row)->annulmentRow(rs)).list().stream().map(this::withEffects).toList();
     }
     private String annulmentSelect(){return """
-            SELECT ar.*,sale.document_number,sale.route_id,r.code route_code,r.name route_name,c.name customer_name,
+            SELECT ar.*,sale.document_number,sale.route_id,
+              COALESCE(r.code, 'MOSTRADOR') route_code,
+              COALESCE(r.name, 'Venta en Mostrador') route_name,
+              c.name customer_name,
               sale.total sale_total,requester.username requested_username,decider.username decided_username
-            FROM annulment_request ar JOIN sale ON sale.id=ar.sale_id JOIN route r ON r.id=sale.route_id
-            JOIN customer c ON c.id=sale.customer_id JOIN seller ON seller.id=sale.seller_id
-            JOIN app_user requester ON requester.id=ar.requested_by LEFT JOIN app_user decider ON decider.id=ar.decided_by
+            FROM annulment_request ar JOIN sale ON sale.id=ar.sale_id
+            LEFT JOIN route r ON r.id=sale.route_id
+            JOIN customer c ON c.id=sale.customer_id
+            LEFT JOIN seller ON seller.id=sale.seller_id
+            JOIN app_user requester ON requester.id=ar.requested_by
+            LEFT JOIN app_user decider ON decider.id=ar.decided_by
             """;}
     private AnnulmentView annulmentRow(ResultSet rs)throws SQLException{return new AnnulmentView(rs.getObject("id",UUID.class),
             rs.getObject("sale_id",UUID.class),rs.getString("document_number"),rs.getObject("route_id",UUID.class),

@@ -418,4 +418,99 @@ describe('SalesPage', () => {
     fireEvent.change(methodSelect, { target: { value: 'CREDIT' } });
     expect((methodSelect as HTMLSelectElement).value).toBe('CREDIT');
   });
+
+  it('permite al administrador realizar ventas en mostrador / oficina despachando de bodega central sin ruta ni gps', async () => {
+    useOptionalSessionMock.mockReturnValue({
+      user: { id: 'admin-1', username: 'admin', displayName: 'Administrador', deviceId: 'dev-1', roles: ['ADMINISTRADOR'], mustChangePassword: false },
+      busy: false,
+      initializing: false,
+      login: vi.fn(),
+      enroll: vi.fn(),
+      refresh: vi.fn(),
+      changePassword: vi.fn(),
+      logout: vi.fn(),
+    });
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = input.toString();
+      if (path.endsWith('/inventory/locations')) {
+        return Promise.resolve(new Response(JSON.stringify([
+          { id: 'wh-1', code: 'BOD-01', name: 'Bodega Central', locationType: 'WAREHOUSE', active: true }
+        ]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (path.endsWith('/routes')) {
+        return Promise.resolve(new Response(JSON.stringify([
+          { id: 'route-1', code: 'R-01', name: 'Ruta norte', status: 'ACTIVE' }
+        ]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (path.endsWith('/customers')) {
+        return Promise.resolve(new Response(JSON.stringify([
+          { id: 'cust-mostrador', code: 'CLI-MOSTRADOR', name: 'Consumidor Final (Mostrador)', status: 'ACTIVE', customerType: 'OCCASIONAL', creditAllowed: false, creditLimit: 0, currentBalance: 0 }
+        ]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (path.endsWith('/products')) {
+        return Promise.resolve(new Response(JSON.stringify([
+          { id: 'product-1', code: 'AGUA', name: 'Agua pura', active: true, controlsInventory: true, presentations: [{ id: 'pres-1', code: 'BOT-600', name: 'Botella 600 ml', active: true }] }
+        ]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (path.endsWith('/sales') && init?.method === 'POST') {
+        const body = JSON.parse(init.body as string);
+        return Promise.resolve(new Response(JSON.stringify({
+          id: 'sale-counter-1',
+          documentNumber: 'V-00000099',
+          originType: body.originType,
+          status: 'CONFIRMED',
+          subtotal: 10,
+          total: 10,
+          currencyCode: 'GTQ',
+          createdAt: new Date().toISOString(),
+          items: [],
+          payments: []
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      return Promise.resolve(new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <MemoryRouter>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <SalesPage canSell={true} canViewLocation={false} />
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+
+    // Alternar a pestaña Venta Directa / Mostrador
+    const counterTab = await screen.findByRole('button', { name: /venta directa \/ mostrador/i });
+    fireEvent.click(counterTab);
+
+    // Verificar título y selector de bodega
+    expect(await screen.findByRole('heading', { name: /nueva venta en mostrador \/ oficina/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/bodega \/ almacén de despacho/i)).toBeInTheDocument();
+
+    // Seleccionar cliente consumidor final mediante el botón rápido
+    const quickCounterCustomerBtn = await screen.findByRole('button', { name: /consumidor final \(mostrador\)/i });
+    fireEvent.click(quickCounterCustomerBtn);
+
+    // Seleccionar presentación
+    await screen.findByRole('option', { name: /botella 600 ml/i });
+    fireEvent.change(screen.getByLabelText('Presentación'), { target: { value: 'pres-1' } });
+
+    // Confirmar venta de mostrador
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar venta' }));
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(([input, init]) => input.toString().endsWith('/sales') && (init as RequestInit | undefined)?.method === 'POST');
+      expect(call).toBeDefined();
+      const body = JSON.parse((call?.[1] as RequestInit).body as string);
+      expect(body.originType).toBe('DIRECT_OFFICE');
+      expect(body.warehouseLocationId).toBe('wh-1');
+      expect(body.routeId).toBeUndefined();
+      expect(body.customerId).toBe('cust-mostrador');
+      expect(body.location).toBeDefined();
+      expect(body.location.latitude).toBe(14.6349);
+      expect(body.location.longitude).toBe(-90.5069);
+    });
+  });
 });

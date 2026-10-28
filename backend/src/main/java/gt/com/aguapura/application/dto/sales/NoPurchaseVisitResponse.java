@@ -13,4 +13,8 @@ public record NoPurchaseVisitResponse(
         String visitNote,
         Instant capturedAt,
         Instant persistedAt
-) {}
+) {
+    public NoPurchaseVisitResponse(String customerName, String visitReason, String visitNote) {
+        this(UUID.randomUUID(), null, null, null, customerName, visitReason, visitNote, Instant.now(), Instant.now());
+    }
+}

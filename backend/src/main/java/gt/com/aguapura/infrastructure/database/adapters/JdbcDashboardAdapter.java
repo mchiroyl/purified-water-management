@@ -30,9 +30,13 @@ public class JdbcDashboardAdapter implements DashboardPort {
                       AND ra.valid_from<=CAST(:localDay AS date)
                       AND (ra.valid_to IS NULL OR ra.valid_to>=CAST(:localDay AS date)))
                 ), valid_sales AS (
-                  SELECT s.* FROM sale s JOIN scoped_routes sr ON sr.id=s.route_id
-                  WHERE s.created_at>=:start AND s.created_at<:end
-                    AND NOT EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=s.id AND ar.status='APPROVED')
+                  SELECT s.* FROM sale s
+                  WHERE (
+                    (s.route_id IS NOT NULL AND EXISTS (SELECT 1 FROM scoped_routes sr WHERE sr.id=s.route_id))
+                    OR (s.origin_type = 'DIRECT_OFFICE' AND NOT :restricted)
+                  )
+                  AND s.created_at>=:start AND s.created_at<:end
+                  AND NOT EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=s.id AND ar.status='APPROVED')
                 )
                 SELECT
                   COALESCE((SELECT sum(total) FROM valid_sales),0) sales_today,
@@ -55,8 +59,10 @@ public class JdbcDashboardAdapter implements DashboardPort {
                     WHERE w.status IN ('PENDING_REVIEW','PENDING_SECOND_APPROVAL')) pending_wastes,
                   (SELECT count(*) FROM customer c WHERE c.registration_state='PENDING_REVIEW'
                     AND (NOT :restricted OR c.created_by=:actor)) provisional_customers,
-                  (SELECT count(*) FROM payment p JOIN sale s ON s.id=p.sale_id JOIN scoped_routes sr ON sr.id=s.route_id
-                    WHERE p.payment_method='TRANSFER' AND p.status='PENDING_VERIFICATION') pending_transfers,
+                  (SELECT count(*) FROM payment p JOIN sale s ON s.id=p.sale_id
+                    WHERE ((s.route_id IS NOT NULL AND EXISTS(SELECT 1 FROM scoped_routes sr WHERE sr.id=s.route_id))
+                           OR (s.origin_type = 'DIRECT_OFFICE' AND NOT :restricted))
+                      AND p.payment_method='TRANSFER' AND p.status='PENDING_VERIFICATION') pending_transfers,
                   (SELECT count(*) FROM route_load rl JOIN scoped_routes sr ON sr.id=rl.route_id WHERE rl.status='STARTED') active_routes,
                   (SELECT count(*) FROM settlement st JOIN scoped_routes sr ON sr.id=st.route_id
                     WHERE st.closed_at>=:start AND st.closed_at<:end) completed_routes,

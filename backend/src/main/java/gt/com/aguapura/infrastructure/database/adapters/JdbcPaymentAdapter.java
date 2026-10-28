@@ -50,15 +50,20 @@ public class JdbcPaymentAdapter implements PaymentPort {
 
     private String selectTransfer() {
         return """
-                SELECT pay.id,pay.sale_id,sale.document_number,sale.route_id,route.code route_code,
-                       route.name route_name,sale.seller_id,seller.display_name seller_name,
+                SELECT pay.id,pay.sale_id,sale.document_number,sale.route_id,
+                       COALESCE(route.code, 'MOSTRADOR') route_code,
+                       COALESCE(route.name, 'Venta en Mostrador') route_name,
+                       sale.seller_id,
+                       COALESCE(seller.display_name, 'Administración') seller_name,
                        sale.customer_id,customer.code customer_code,customer.name customer_name,
                        pay.amount,sale.currency_code,pay.status,pay.reference,pay.bank,pay.evidence_reference,
                        pay.registered_by,registrar.username registered_by_username,pay.device_id,
-                       pay.verified_by,verifier.username verified_by_username,pay.verified_at,
+                       pay.verified_by,verifier.username verifier_username,pay.verified_at,
                        pay.rejection_reason,pay.created_at
-                FROM payment pay JOIN sale ON sale.id=pay.sale_id JOIN route ON route.id=sale.route_id
-                JOIN seller ON seller.id=sale.seller_id JOIN customer ON customer.id=sale.customer_id
+                FROM payment pay JOIN sale ON sale.id=pay.sale_id
+                LEFT JOIN route ON route.id=sale.route_id
+                LEFT JOIN seller ON seller.id=sale.seller_id
+                JOIN customer ON customer.id=sale.customer_id
                 JOIN app_user registrar ON registrar.id=pay.registered_by
                 LEFT JOIN app_user verifier ON verifier.id=pay.verified_by
                 WHERE pay.payment_method='TRANSFER'

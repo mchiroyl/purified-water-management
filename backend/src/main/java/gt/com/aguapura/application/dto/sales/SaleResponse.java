@@ -34,8 +34,26 @@ public record SaleResponse(
         BigDecimal verifiedPaidAmount,
         BigDecimal pendingTransferAmount,
         BigDecimal rejectedTransferAmount,
-        BigDecimal creditAmount
+        BigDecimal creditAmount,
+        String originType
 ) {
+    public SaleResponse(
+            UUID id, UUID clientReference, String documentNumber, UUID routeId,
+            String routeCode, String routeName, UUID sellerId, String sellerName,
+            UUID customerId, String customerCode, String customerName, String status,
+            BigDecimal subtotal, BigDecimal total, String currencyCode, String companyName,
+            String companyTaxId, String companyAddress, String documentLegend, UUID createdBy,
+            String createdByUsername, UUID deviceId, Instant createdAt, List<ItemResponse> items,
+            List<PaymentResponse> payments, BigDecimal verifiedPaidAmount,
+            BigDecimal pendingTransferAmount, BigDecimal rejectedTransferAmount, BigDecimal creditAmount
+    ) {
+        this(id, clientReference, documentNumber, routeId, routeCode, routeName, sellerId, sellerName,
+                customerId, customerCode, customerName, status, subtotal, total, currencyCode, companyName,
+                companyTaxId, companyAddress, documentLegend, createdBy, createdByUsername, deviceId,
+                createdAt, items, payments, verifiedPaidAmount, pendingTransferAmount, rejectedTransferAmount,
+                creditAmount, "ROUTE");
+    }
+
     public record ItemResponse(UUID id, UUID productId, String productCode, String productName,
                                UUID presentationId, String presentationCode, String presentationName,
                                BigDecimal presentationQuantity, BigDecimal quantityBaseUnits,

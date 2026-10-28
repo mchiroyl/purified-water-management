@@ -100,11 +100,12 @@ function resolveLocalPrice(presentationId?: string, quantity = 1, lists?: PriceL
 }
 type SaleItem = { id: string; productName: string; presentationName: string; presentationQuantity: number; quantityBaseUnits: number; unitPrice: number; lineTotal: number; priceSource: string };
 type Payment = { id: string; method: string; amount: number; status: string; reference: string; bank: string };
-type Sale = { id: string; documentNumber: string; routeCode: string; routeName: string; sellerName: string; customerCode: string; customerName: string; status: string; subtotal: number; total: number; currencyCode: string; createdAt: string; items: SaleItem[]; payments?: Payment[]; pendingTransferAmount?: number; rejectedTransferAmount?: number; creditAmount?: number; routeId?: string; customerId?: string };
+type Sale = { id: string; documentNumber: string; routeCode: string; routeName: string; sellerName: string; customerCode: string; customerName: string; status: string; subtotal: number; total: number; currencyCode: string; createdAt: string; items: SaleItem[]; payments?: Payment[]; pendingTransferAmount?: number; rejectedTransferAmount?: number; creditAmount?: number; routeId?: string; customerId?: string; originType?: string };
 type ItemForm = { presentationId: string; quantity: number };
 type PaymentForm = { method: string; amount: string; reference: string; bank: string; evidenceReference: string };
 type LoadItem = { id: string; productId: string; productCode: string; productName: string; baseUnitCode: string; quantityBaseUnits: number };
 type RouteLoad = { id: string; loadNumber: string; routeId: string; routeCode: string; routeName: string; status: string; sellerReceivedByUsername?: string; createdByUsername: string; items: LoadItem[] };
+type InventoryLocation = { id: string; code: string; name: string; locationType: string; active: boolean };
 
 type SaleGroup = {
   key: string;
@@ -687,6 +688,34 @@ export function SalesPage({
   const queryClient = useQueryClient();
   const session = useOptionalSession();
   const { snapshot } = useConnection();
+  const user = session?.user;
+  const isAdminOrSupervisor = Boolean(user?.roles.some(r => r === 'ADMINISTRADOR' || r === 'SUPERVISOR' || r === 'BODEGA'));
+  const isCreditAdmin = Boolean(user?.roles.includes('ADMINISTRADOR_CREDITO'));
+  const isSeller = Boolean(user?.roles.includes('VENDEDOR') && !isAdminOrSupervisor);
+
+  // ── Modalidad de Venta: Reparto en Ruta vs Venta Directa en Mostrador / Oficina ──
+  const [saleOrigin, setSaleOrigin] = useState<'ROUTE' | 'DIRECT_OFFICE'>('ROUTE');
+  const [warehouseLocationId, setWarehouseLocationId] = useState('');
+  const [isRetroactive, setIsRetroactive] = useState(false);
+  const [retroactiveDate, setRetroactiveDate] = useState('');
+  const [selectedRetroactiveLoadId, setSelectedRetroactiveLoadId] = useState('');
+
+  const inventoryLocations = useQuery({
+    queryKey: ['inventory', 'locations'],
+    queryFn: () => apiRequest<InventoryLocation[]>('/inventory/locations'),
+    enabled: isAdminOrSupervisor,
+    staleTime: 60_000,
+  });
+
+  const warehouseLocations = useMemo(() => {
+    return inventoryLocations.data?.filter(l => l.locationType === 'WAREHOUSE' && l.active) ?? [];
+  }, [inventoryLocations.data]);
+
+  useEffect(() => {
+    if (warehouseLocations.length > 0 && !warehouseLocationId) {
+      setWarehouseLocationId(warehouseLocations[0].id);
+    }
+  }, [warehouseLocations, warehouseLocationId]);
   const effectiveDeviceId = deviceId ?? session?.user?.deviceId ?? 'browser-device';
   const effectiveSellerId = sellerId ?? session?.user?.id ?? '';
   const sales = useQuery({ queryKey: ['sales'], queryFn: () => apiRequest<Sale[]>('/sales'), staleTime: 60_000 });
@@ -1009,9 +1038,10 @@ export function SalesPage({
     const map = new Map<string, SaleGroup>();
 
     for (const sale of filtered) {
-      const routeCode = sale.routeCode || '';
-      const routeName = sale.routeName || 'Sin Ruta Asignada';
-      const sellerName = sale.sellerName || 'Sin Vendedor';
+      const isDirectOffice = sale.originType === 'DIRECT_OFFICE' || (!sale.routeCode && !sale.routeId);
+      const routeCode = isDirectOffice ? 'OFICINA' : (sale.routeCode || '');
+      const routeName = isDirectOffice ? 'Venta en Mostrador / Oficina' : (sale.routeName || 'Sin Ruta Asignada');
+      const sellerName = isDirectOffice ? (sale.sellerName || 'Oficina Central') : (sale.sellerName || 'Sin Vendedor');
       const { dateKey, dateFormatted } = getSaleDateInfo(sale.createdAt);
 
       const groupKey = `${routeCode || routeName}___${sellerName}___${dateKey}`;
@@ -1093,10 +1123,6 @@ export function SalesPage({
   const [showVisitJugReturn, setShowVisitJugReturn] = useState(false);
 
   // ── Contexto de sesión y ruta asignada al vendedor ────────────────────────
-  const user = session?.user;
-  const isAdminOrSupervisor = Boolean(user?.roles.some(r => r === 'ADMINISTRADOR' || r === 'SUPERVISOR' || r === 'BODEGA'));
-  const isCreditAdmin = Boolean(user?.roles.includes('ADMINISTRADOR_CREDITO'));
-  const isSeller = Boolean(user?.roles.includes('VENDEDOR') && !isAdminOrSupervisor);
   const assignedRoute = isSeller
     ? (routes.data?.find(r => r.status === 'ACTIVE') ?? routes.data?.[0] ?? null)
     : null;
@@ -1140,9 +1166,10 @@ export function SalesPage({
   };
 
   const hasStartedLoad = useMemo(() => {
+    if (saleOrigin === 'DIRECT_OFFICE') return true;
     if (!loads.data || loads.isLoading) return true;
     return loads.data.some(l => l.status === 'STARTED' && (!routeId || l.routeId === routeId));
-  }, [loads.data, loads.isLoading, routeId]);
+  }, [loads.data, loads.isLoading, routeId, saleOrigin]);
 
   const activeItinerary = useQuery({
     queryKey: ['itineraries', 'active', effectiveRouteId],
@@ -1327,6 +1354,9 @@ export function SalesPage({
     setPostSaleJugError('');
     setPostSaleJugQty(1);
     setCustomerId('');
+    setIsRetroactive(false);
+    setRetroactiveDate('');
+    setSelectedRetroactiveLoadId('');
     setItems([{ presentationId: '', quantity: 1 }]);
     setPayments([newPayment()]);
     setShowSaleJugReturn(false);
@@ -1387,6 +1417,8 @@ export function SalesPage({
 
     const activeProducts = products.data.filter(product => {
       if (!product.active || !product.controlsInventory) return false;
+      // REGLA B2B: En ventas de mostrador / oficina se despacha de bodega central
+      if (saleOrigin === 'DIRECT_OFFICE') return true;
       // REGLA B2B: Si hay carga activa en el camión, SOLO mostrar los productos cargados
       if (loadedStockMap !== null && loadedStockMap.size > 0) {
         return loadedStockMap.has(product.id) || loadedStockMap.has(product.code);
@@ -1399,10 +1431,10 @@ export function SalesPage({
         ...item,
         productId: product.id,
         product,
-        stockInfo: loadedStockMap?.get(product.id) || loadedStockMap?.get(product.code),
+        stockInfo: saleOrigin === 'DIRECT_OFFICE' ? undefined : (loadedStockMap?.get(product.id) || loadedStockMap?.get(product.code)),
       }))
     );
-  }, [products.data, loadedStockMap]);
+  }, [products.data, loadedStockMap, saleOrigin]);
 
   const create = useMutation({
     mutationFn: async (location: GeoLocationSnapshot) => {
@@ -1472,11 +1504,12 @@ export function SalesPage({
       }));
 
       if (isOfflineMode) {
+        const isOffice = saleOrigin === 'DIRECT_OFFICE';
         const selectedCust = availableCustomers.find(c => c.id === customerId);
         const selectedRte = routes.data?.find(r => r.id === routeId);
 
         const localSale = await queueSale({
-          routeId,
+          routeId: isOffice ? '' : routeId,
           sellerId: effectiveSellerId,
           deviceId: effectiveDeviceId,
           customerId,
@@ -1487,17 +1520,17 @@ export function SalesPage({
           subtotal: calculatedSubtotal,
           customerName: selectedCust?.name ?? 'Cliente',
           customerCode: selectedCust?.code ?? 'CLI-LOC',
-          sellerName: session?.user?.displayName ?? 'Vendedor',
-          routeCode: selectedRte?.code ?? 'RUTA-LOC',
-          routeName: selectedRte?.name ?? 'Ruta Local',
+          sellerName: isOffice ? 'Oficina Central' : (session?.user?.displayName ?? 'Vendedor'),
+          routeCode: isOffice ? 'OFICINA' : (selectedRte?.code ?? 'RUTA-LOC'),
+          routeName: isOffice ? 'Venta en Mostrador' : (selectedRte?.name ?? 'Ruta Local'),
         });
 
         const syntheticSale: Sale = {
           id: localSale.localSaleId,
           documentNumber: localSale.localReference,
-          routeCode: selectedRte?.code ?? 'RUTA-LOC',
-          routeName: selectedRte?.name ?? 'Ruta Local',
-          sellerName: session?.user?.displayName ?? 'Vendedor',
+          routeCode: isOffice ? 'OFICINA' : (selectedRte?.code ?? 'RUTA-LOC'),
+          routeName: isOffice ? 'Venta en Mostrador' : (selectedRte?.name ?? 'Ruta Local'),
+          sellerName: isOffice ? 'Oficina Central' : (session?.user?.displayName ?? 'Vendedor'),
           customerCode: selectedCust?.code ?? 'CLI-LOC',
           customerName: selectedCust?.name ?? 'Cliente',
           status: 'CONFIRMED',
@@ -1505,8 +1538,9 @@ export function SalesPage({
           total: Number(localSale.total) || calculatedTotal,
           currencyCode: localSale.currencyCode,
           createdAt: localSale.occurredAtLocal,
-          routeId,
+          routeId: isOffice ? undefined : routeId,
           customerId,
+          originType: saleOrigin,
           items: payloadItems.map(it => {
             const pres = presentations.find(p => p.id === it.presentationId);
             const unitPrice = it.unitPrice || 0;
@@ -1537,17 +1571,29 @@ export function SalesPage({
         const timeoutController = new AbortController();
         const timeoutTimer = setTimeout(() => timeoutController.abort(), 2_500);
         try {
+          const requestBody: any = {
+            clientReference: crypto.randomUUID(),
+            originType: saleOrigin,
+            customerId,
+            items,
+            payments: serverPayments,
+            location,
+          };
+          if (saleOrigin === 'DIRECT_OFFICE') {
+            requestBody.warehouseLocationId = warehouseLocationId || undefined;
+          } else {
+            requestBody.routeId = routeId;
+            if (isRetroactive && selectedRetroactiveLoadId) {
+              requestBody.routeLoadId = selectedRetroactiveLoadId;
+            }
+            if (isRetroactive && retroactiveDate) {
+              requestBody.occurredAt = new Date(retroactiveDate).toISOString();
+            }
+          }
           return await apiRequest<Sale>('/sales', {
             method: 'POST',
             signal: timeoutController.signal,
-            body: JSON.stringify({
-              clientReference: crypto.randomUUID(),
-              routeId,
-              customerId,
-              items,
-              payments: serverPayments,
-              location,
-            }),
+            body: JSON.stringify(requestBody),
           });
         } finally {
           clearTimeout(timeoutTimer);
@@ -1558,12 +1604,13 @@ export function SalesPage({
           throw err;
         }
 
+        const isOffice = saleOrigin === 'DIRECT_OFFICE';
         const selectedCust = availableCustomers.find(c => c.id === customerId);
         const selectedRte = routes.data?.find(r => r.id === routeId);
 
         // Fallback inmediato a IndexedDB si la señal es inestable, lenta (1-2 barritas) o falló la conexión
         const localSale = await queueSale({
-          routeId,
+          routeId: isOffice ? '' : routeId,
           sellerId: effectiveSellerId,
           deviceId: effectiveDeviceId,
           customerId,
@@ -1574,17 +1621,17 @@ export function SalesPage({
           subtotal: calculatedSubtotal,
           customerName: selectedCust?.name ?? 'Cliente',
           customerCode: selectedCust?.code ?? 'CLI-LOC',
-          sellerName: session?.user?.displayName ?? 'Vendedor',
-          routeCode: selectedRte?.code ?? 'RUTA-LOC',
-          routeName: selectedRte?.name ?? 'Ruta Local',
+          sellerName: isOffice ? 'Oficina Central' : (session?.user?.displayName ?? 'Vendedor'),
+          routeCode: isOffice ? 'OFICINA' : (selectedRte?.code ?? 'RUTA-LOC'),
+          routeName: isOffice ? 'Venta en Mostrador' : (selectedRte?.name ?? 'Ruta Local'),
         });
 
         const syntheticSale: Sale = {
           id: localSale.localSaleId,
           documentNumber: localSale.localReference,
-          routeCode: selectedRte?.code ?? 'RUTA-LOC',
-          routeName: selectedRte?.name ?? 'Ruta Local',
-          sellerName: session?.user?.displayName ?? 'Vendedor',
+          routeCode: isOffice ? 'OFICINA' : (selectedRte?.code ?? 'RUTA-LOC'),
+          routeName: isOffice ? 'Venta en Mostrador' : (selectedRte?.name ?? 'Ruta Local'),
+          sellerName: isOffice ? 'Oficina Central' : (session?.user?.displayName ?? 'Vendedor'),
           customerCode: selectedCust?.code ?? 'CLI-LOC',
           customerName: selectedCust?.name ?? 'Cliente',
           status: 'CONFIRMED',
@@ -1592,8 +1639,9 @@ export function SalesPage({
           total: Number(localSale.total) || calculatedTotal,
           currencyCode: localSale.currencyCode,
           createdAt: localSale.occurredAtLocal,
-          routeId,
+          routeId: isOffice ? undefined : routeId,
           customerId,
+          originType: saleOrigin,
           items: payloadItems.map(it => {
             const pres = presentations.find(p => p.id === it.presentationId);
             const unitPrice = it.unitPrice || 0;
@@ -1778,12 +1826,17 @@ export function SalesPage({
     }
   };
 
-  const serverCustomers = customers.data?.filter(customer => customer.status === 'ACTIVE' && customer.routeId === routeId) ?? [];
-  const serverCustomerIds = new Set(serverCustomers.map(c => c.id));
-  const availableCustomers = [
-    ...serverCustomers,
-    ...localProvisionalCustomers.filter(c => c.routeId === routeId && !serverCustomerIds.has(c.id)),
-  ];
+  const availableCustomers = useMemo(() => {
+    if (saleOrigin === 'DIRECT_OFFICE') {
+      return customers.data?.filter(customer => customer.status === 'ACTIVE') ?? [];
+    }
+    const serverCustomers = customers.data?.filter(customer => customer.status === 'ACTIVE' && customer.routeId === routeId) ?? [];
+    const serverCustomerIds = new Set(serverCustomers.map(c => c.id));
+    return [
+      ...serverCustomers,
+      ...localProvisionalCustomers.filter(c => c.routeId === routeId && !serverCustomerIds.has(c.id)),
+    ];
+  }, [customers.data, routeId, saleOrigin, localProvisionalCustomers]);
 
   const visitServerCustomers = customers.data?.filter(customer => customer.status === 'ACTIVE' && customer.routeId === visitRouteId) ?? [];
   const visitServerCustomerIds = new Set(visitServerCustomers.map(c => c.id));
@@ -1795,6 +1848,19 @@ export function SalesPage({
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setLocationError('');
+
+    if (saleOrigin === 'DIRECT_OFFICE') {
+      // Venta directa en planta / mostrador: Ubicación de oficina automática sin depender del sensor GPS del dispositivo
+      const officeLocation: GeoLocationSnapshot = {
+        latitude: 14.6349,
+        longitude: -90.5069,
+        accuracyMeters: 5,
+        capturedAt: new Date().toISOString(),
+      };
+      create.mutate(officeLocation);
+      return;
+    }
+
     setIsCapturingLocation(true);
     const currentCustomer = availableCustomers.find(customer => customer.id === customerId);
     const lat = currentCustomer?.confirmedLatitude
@@ -1946,6 +2012,83 @@ export function SalesPage({
     {currentView === 'create' && (
       <>
 
+    {/* ── Segmented Control: Modo Reparto en Ruta vs Venta Directa en Mostrador / Oficina ── */}
+    {isAdminOrSupervisor && (
+      <div
+        className="sale-origin-tabs"
+        style={{
+          display: 'flex',
+          background: '#f1f5f9',
+          padding: '4px',
+          borderRadius: '10px',
+          border: '1px solid #e2e8f0',
+          margin: '0.5rem 0 1rem 0',
+          gap: '6px',
+          width: '100%',
+          maxWidth: '520px',
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            setSaleOrigin('ROUTE');
+            setCustomerId('');
+          }}
+          style={{
+            flex: 1,
+            padding: '10px 14px',
+            borderRadius: '8px',
+            fontSize: '0.9rem',
+            fontWeight: saleOrigin === 'ROUTE' ? 700 : 500,
+            background: saleOrigin === 'ROUTE' ? '#ffffff' : 'transparent',
+            color: saleOrigin === 'ROUTE' ? '#0f172a' : '#64748b',
+            boxShadow: saleOrigin === 'ROUTE' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <span style={{ fontSize: '1.2rem' }}>🚚</span>
+          <span>Reparto en Ruta</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setSaleOrigin('DIRECT_OFFICE');
+            setRouteId('');
+            const mostradorCust = customers.data?.find(c => c.code === 'CLI-MOSTRADOR');
+            if (mostradorCust) {
+              setCustomerId(mostradorCust.id);
+            }
+          }}
+          style={{
+            flex: 1,
+            padding: '10px 14px',
+            borderRadius: '8px',
+            fontSize: '0.9rem',
+            fontWeight: saleOrigin === 'DIRECT_OFFICE' ? 700 : 500,
+            background: saleOrigin === 'DIRECT_OFFICE' ? '#ffffff' : 'transparent',
+            color: saleOrigin === 'DIRECT_OFFICE' ? '#0369a1' : '#64748b',
+            boxShadow: saleOrigin === 'DIRECT_OFFICE' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <span style={{ fontSize: '1.2rem' }}>🏬</span>
+          <span>Venta Directa / Mostrador</span>
+        </button>
+      </div>
+    )}
+
     {isSeller && assignedRoute && (
       <div className="assigned-route-card" style={{
         margin: '0.75rem 0 1.25rem 0',
@@ -2034,8 +2177,8 @@ export function SalesPage({
       </div>
     )}
 
-    {/* ── Banner de Catálogo Offline de Ruta ── */}
-    {effectiveRouteId && (
+    {/* ── Banner de Catálogo Offline de Ruta (solo en ruta) ── */}
+    {saleOrigin === 'ROUTE' && effectiveRouteId && (
       <div
         style={{
           margin: '0.75rem 0 1.25rem 0',
@@ -2116,26 +2259,70 @@ export function SalesPage({
         </button>
       </div>
     )}
-    {routePackageError && (
+    {saleOrigin === 'ROUTE' && routePackageError && (
       <div className="alert error" style={{ margin: '-0.5rem 0 1rem 0', fontSize: '0.82rem' }}>
         {routePackageError}
       </div>
     )}
 
     {canSell && <form className="panel section-panel" onSubmit={submit}>
-      <h2>Nueva venta</h2>
+      <h2>{saleOrigin === 'DIRECT_OFFICE' ? 'Nueva Venta en Mostrador / Oficina' : 'Nueva Venta en Ruta'}</h2>
+
+      {saleOrigin === 'DIRECT_OFFICE' && (
+        <div
+          style={{
+            marginBottom: '1.25rem',
+            padding: '0.85rem 1.1rem',
+            borderRadius: '8px',
+            border: '1.5px solid #bae6fd',
+            background: '#f0f9ff',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.75rem',
+          }}
+        >
+          <span style={{ fontSize: '1.5rem', flexShrink: 0 }}>🏬</span>
+          <div>
+            <strong style={{ color: '#0369a1', fontSize: '0.94rem', display: 'block' }}>
+              Despacho en Planta (Sin Ruta de Camión)
+            </strong>
+            <span style={{ color: '#0284c7', fontSize: '0.82rem' }}>
+              El producto se descuenta de <strong>Bodega Central</strong> y el pago ingresa a caja general sin exigir GPS de ruta ni afectar la liquidación de ningún vendedor.
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className="form-grid compact-grid">
-        {!isSeller && (
-          <label>Ruta<select required value={routeId} onChange={event => { setRouteId(event.target.value); setVisitRouteId(event.target.value); setCustomerId(''); setVisitCustomerId(''); setPayments([newPayment()]); setShowSaleJugReturn(false); setShowSaleAbono(false); }}>
-            <option value="">Seleccionar</option>{routes.data?.filter(route => route.status === 'ACTIVE').map(route => <option key={route.id} value={route.id}>{route.code} · {route.name}</option>)}
-          </select></label>
+        {saleOrigin === 'DIRECT_OFFICE' ? (
+          <label>
+            Bodega / Almacén de Despacho *
+            <select
+              required
+              value={warehouseLocationId}
+              onChange={event => setWarehouseLocationId(event.target.value)}
+            >
+              <option value="">Seleccionar bodega</option>
+              {warehouseLocations.map(w => (
+                <option key={w.id} value={w.id}>
+                  {w.code} · {w.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          !isSeller && (
+            <label>Ruta<select required value={routeId} onChange={event => { setRouteId(event.target.value); setVisitRouteId(event.target.value); setCustomerId(''); setVisitCustomerId(''); setPayments([newPayment()]); setShowSaleJugReturn(false); setShowSaleAbono(false); }}>
+              <option value="">Seleccionar</option>{routes.data?.filter(route => route.status === 'ACTIVE').map(route => <option key={route.id} value={route.id}>{route.code} · {route.name}</option>)}
+            </select></label>
+          )
         )}
-        <div style={isSeller ? { gridColumn: '1 / -1' } : undefined}>
+        <div style={(isSeller && saleOrigin === 'ROUTE') ? { gridColumn: '1 / -1' } : undefined}>
           <CustomerCombobox
             id="sale-customer-select"
             label="Cliente"
             required
-            disabled={!routeId}
+            disabled={saleOrigin === 'ROUTE' && !routeId}
             customers={availableCustomers}
             selectedId={customerId}
             onSelect={selected => {
@@ -2146,7 +2333,35 @@ export function SalesPage({
               setShowSaleAbono(false);
             }}
           />
-          {routeId && (
+          {saleOrigin === 'DIRECT_OFFICE' && (
+            <div style={{ marginTop: '0.45rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <button
+                type="button"
+                className="secondary"
+                style={{
+                  fontSize: '0.82rem',
+                  padding: '0.35rem 0.75rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  width: 'fit-content',
+                  color: '#0369a1',
+                  borderColor: '#bae6fd',
+                  backgroundColor: '#f0f9ff'
+                }}
+                onClick={() => {
+                  const mostradorCust = customers.data?.find(c => c.code === 'CLI-MOSTRADOR');
+                  if (mostradorCust) {
+                    setCustomerId(mostradorCust.id);
+                    setVisitCustomerId(mostradorCust.id);
+                  }
+                }}
+              >
+                <span>⚡</span> Consumidor Final (Mostrador)
+              </button>
+            </div>
+          )}
+          {saleOrigin === 'ROUTE' && routeId && (
             <button
               type="button"
               className="secondary"
@@ -2169,7 +2384,7 @@ export function SalesPage({
           )}
 
           {/* ── Indicador informativo de parada en recorrido ── */}
-          {currentItineraryStop && (
+          {saleOrigin === 'ROUTE' && currentItineraryStop && (
             <div
               style={{
                 marginTop: '0.5rem',
@@ -2195,6 +2410,77 @@ export function SalesPage({
           )}
         </div>
       </div>
+
+      {/* ── Panel de venta rezagada o atribución manual de carga para Administradores en Ruta ── */}
+      {isAdminOrSupervisor && saleOrigin === 'ROUTE' && routeId && (
+        <div
+          style={{
+            margin: '0.75rem 0 1rem 0',
+            padding: '0.75rem 1rem',
+            background: isRetroactive ? '#fefce8' : '#f8fafc',
+            border: isRetroactive ? '1.5px solid #fde047' : '1px solid #e2e8f0',
+            borderRadius: '8px',
+            transition: 'all 0.2s ease',
+          }}
+        >
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '0.88rem', color: isRetroactive ? '#854d0e' : '#334155' }}>
+            <input
+              type="checkbox"
+              checked={isRetroactive}
+              onChange={e => {
+                setIsRetroactive(e.target.checked);
+                if (e.target.checked) {
+                  if (!retroactiveDate) {
+                    const yesterday = new Date(Date.now() - 24 * 3600 * 1000);
+                    setRetroactiveDate(yesterday.toISOString().slice(0, 16));
+                  }
+                  const activeLoadsForRoute = loads.data?.filter(l => l.routeId === routeId && ['STARTED', 'RECEIVED'].includes(l.status)) ?? [];
+                  if (activeLoadsForRoute.length > 0 && !selectedRetroactiveLoadId) {
+                    setSelectedRetroactiveLoadId(activeLoadsForRoute[0].id);
+                  }
+                }
+              }}
+            />
+            <span>⏱️ Registrar venta rezagada / Atribución de carga (ej. ventas no ingresadas de ayer)</span>
+          </label>
+
+          {isRetroactive && (
+            <div className="form-grid compact-grid" style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px dashed #cbd5e1' }}>
+              <label>
+                Fecha y hora real de la venta
+                <input
+                  type="datetime-local"
+                  required={isRetroactive}
+                  value={retroactiveDate}
+                  onChange={e => setRetroactiveDate(e.target.value)}
+                  max={new Date().toISOString().slice(0, 16)}
+                />
+                <small style={{ color: '#64748b', fontSize: '0.76rem' }}>
+                  Asegura que los reportes históricos reflejen el día exacto sin inflar métricas del día de hoy.
+                </small>
+              </label>
+
+              <label>
+                Carga del camión a descontar
+                <select
+                  value={selectedRetroactiveLoadId}
+                  onChange={e => setSelectedRetroactiveLoadId(e.target.value)}
+                >
+                  <option value="">Carga activa automática de la ruta</option>
+                  {loads.data?.filter(l => l.routeId === routeId).map(l => (
+                    <option key={l.id} value={l.id}>
+                      Carga #{l.loadNumber} ({l.status === 'STARTED' ? 'En ruta' : l.status === 'RECEIVED' ? 'Entregada' : l.status})
+                    </option>
+                  ))}
+                </select>
+                <small style={{ color: '#64748b', fontSize: '0.76rem' }}>
+                  El producto se descuenta de esta carga para que cuadre la liquidación física del vendedor.
+                </small>
+              </label>
+            </div>
+          )}
+        </div>
+      )}
 
       {provisionalSuccess && (
         <div className="alert success" style={{ margin: '0.65rem 0', fontSize: '0.88rem' }}>
@@ -2392,7 +2678,7 @@ export function SalesPage({
     </form>}
 
     {/* ── Visita sin compra ─────────────────────────────────────────────── */}
-    {canSell && (
+    {canSell && saleOrigin === 'ROUTE' && (
       <section className="panel section-panel">
         <div className="section-heading">
           <h2>🚶 Visita sin compra</h2>
@@ -2652,13 +2938,13 @@ export function SalesPage({
                     style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', cursor: 'pointer' }}
                   >
                     <div className="route-group-info" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                      <span style={{ fontSize: '1.4rem' }}>🚚</span>
+                      <span style={{ fontSize: '1.4rem' }}>{group.routeCode === 'OFICINA' ? '🏬' : '🚚'}</span>
                       <div>
                         <h3 className="route-group-title" style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>
                           {group.routeCode ? `${group.routeCode} — ` : ''}{group.routeName}
                         </h3>
                         <div className="route-group-subtitle" style={{ fontSize: '0.84rem', color: 'var(--muted)', marginTop: '0.2rem', display: 'flex', gap: '0.85rem', flexWrap: 'wrap' }}>
-                          <span>👤 Vendedor: <strong style={{ color: '#0f766e' }}>{group.sellerName}</strong></span>
+                          <span>{group.routeCode === 'OFICINA' ? '🏢 Despacho:' : '👤 Vendedor:'} <strong style={{ color: '#0f766e' }}>{group.sellerName}</strong></span>
                           <span>📅 Fecha: <strong style={{ color: '#334155' }}>{group.dateFormatted}</strong></span>
                         </div>
                       </div>
@@ -2730,6 +3016,11 @@ export function SalesPage({
                                       <strong className="document-number" style={{ color: '#0f766e', fontSize: '0.92rem' }}>
                                         {sale.documentNumber}
                                       </strong>
+                                      {sale.originType === 'DIRECT_OFFICE' && (
+                                        <span style={{ fontSize: '0.65rem', background: '#e0f2fe', color: '#0369a1', padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: 800, border: '1px solid #bae6fd' }}>
+                                          🏬 Mostrador
+                                        </span>
+                                      )}
                                       {(sale.status === 'LOCAL_PENDING' || sale.documentNumber.startsWith('LOC-')) && (
                                         <span style={{ fontSize: '0.65rem', background: '#fef3c7', color: '#92400e', padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: 800 }}>
                                           📱 En teléfono

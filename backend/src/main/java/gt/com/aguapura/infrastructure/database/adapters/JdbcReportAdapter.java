@@ -26,7 +26,9 @@ public class JdbcReportAdapter implements ReportPort {
     @Override
     public ReportPageResponse<SalesReportRow> sales(Query query, UUID actorId, boolean restricted) {
         var sql = new StringBuilder("""
-                FROM sale s JOIN route r ON r.id=s.route_id JOIN seller seller ON seller.id=s.seller_id
+                FROM sale s
+                LEFT JOIN route r ON r.id=s.route_id
+                LEFT JOIN seller seller ON seller.id=s.seller_id
                 JOIN customer c ON c.id=s.customer_id JOIN sale_item si ON si.sale_id=s.id
                 JOIN product p ON p.id=si.product_id JOIN product_presentation pp ON pp.id=si.presentation_id
                 LEFT JOIN LATERAL (
@@ -51,8 +53,10 @@ public class JdbcReportAdapter implements ReportPort {
         }
         long total = count(sql.toString(), params);
         String select = """
-                SELECT s.id sale_id,s.document_number,s.created_at,seller.code seller_code,seller.display_name seller_name,
-                  r.code route_code,r.name route_name,c.code customer_code,c.name customer_name,p.code product_code,p.name product_name,
+                SELECT s.id sale_id,s.document_number,s.created_at,
+                  COALESCE(seller.code,'ADMIN') seller_code,COALESCE(seller.display_name,'Administración') seller_name,
+                  COALESCE(r.code,'MOSTRADOR') route_code,COALESCE(r.name,'Venta en Mostrador') route_name,
+                  c.code customer_code,c.name customer_name,p.code product_code,p.name product_name,
                   pp.code presentation_code,pp.name presentation_name,si.presentation_quantity,si.quantity_base_units,
                   si.unit_price,si.line_total,s.total sale_total,s.currency_code,COALESCE(pay.methods,'') payment_methods,
                   pay.cash_amount,pay.transfer_amount,pay.credit_amount,

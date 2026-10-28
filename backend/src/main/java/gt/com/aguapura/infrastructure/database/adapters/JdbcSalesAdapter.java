@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.sql.Types;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -59,6 +60,52 @@ public class JdbcSalesAdapter implements SalesPort {
     }
 
     @Override
+    public Optional<SaleContext> findDirectOfficeSaleContext(UUID customerId, UUID warehouseLocationId) {
+        UUID effectiveWarehouseId = warehouseLocationId;
+        if (effectiveWarehouseId == null) {
+            effectiveWarehouseId = findDefaultActiveWarehouseId().orElse(null);
+        }
+        if (effectiveWarehouseId == null) {
+            return Optional.empty();
+        }
+        return jdbc.sql("""
+                SELECT il.id inventory_location_id, c.customer_type, c.credit_allowed, c.credit_limit, c.current_balance
+                FROM customer c
+                JOIN inventory_location il ON il.id = :warehouseId AND il.active AND il.location_type = 'WAREHOUSE'
+                WHERE c.id = :customerId AND c.status = 'ACTIVE'
+                FOR UPDATE OF c
+                """)
+                .param("warehouseId", effectiveWarehouseId)
+                .param("customerId", customerId)
+                .query((rs, row) -> new SaleContext(
+                        null,
+                        rs.getObject("inventory_location_id", UUID.class),
+                        null,
+                        null,
+                        rs.getString("customer_type"),
+                        rs.getBoolean("credit_allowed"),
+                        rs.getBigDecimal("credit_limit"),
+                        rs.getBigDecimal("current_balance")
+                )).optional();
+    }
+
+    @Override
+    public Optional<UUID> findDefaultActiveWarehouseId() {
+        return jdbc.sql("""
+                SELECT id FROM inventory_location
+                WHERE active AND location_type = 'WAREHOUSE'
+                ORDER BY created_at ASC LIMIT 1
+                """).query(UUID.class).optional();
+    }
+
+    @Override
+    public boolean isLoadStarted(UUID routeLoadId) {
+        return Boolean.TRUE.equals(jdbc.sql("""
+                SELECT EXISTS(SELECT 1 FROM route_load WHERE id = :id AND status = 'STARTED')
+                """).param("id", routeLoadId).query(Boolean.class).single());
+    }
+
+    @Override
     public boolean sellerAssignedToRoute(UUID userId, UUID routeId) {
         return Boolean.TRUE.equals(jdbc.sql("""
                 SELECT EXISTS(SELECT 1 FROM route_assignment ra JOIN seller s ON s.id=ra.seller_id
@@ -100,25 +147,36 @@ public class JdbcSalesAdapter implements SalesPort {
         String documentNumber = company.receiptPrefix() + "-" + "%08d".formatted(company.nextNumber());
         jdbc.sql("UPDATE company_configuration SET next_receipt_number=next_receipt_number+1,version=version+1 WHERE id=:id")
                 .param("id", company.id()).update();
+
+        Instant saleCreatedAt = item.createdAt() != null ? item.createdAt() : Instant.now();
+        String originType = item.originType() != null && !item.originType().isBlank() ? item.originType() : "ROUTE";
+
         jdbc.sql("""
-                INSERT INTO sale(id,client_reference,document_number,receipt_sequence_number,route_id,
-                    inventory_location_id,seller_id,customer_id,subtotal,total,currency_code,company_name,
+                INSERT INTO sale(id,client_reference,document_number,receipt_sequence_number,origin_type,route_id,
+                    route_load_id,inventory_location_id,seller_id,customer_id,subtotal,total,currency_code,company_name,
                     company_tax_id,company_address,company_legal_name,company_phone,company_whatsapp,company_email,
-                    company_timezone,company_logo_file_id,document_legend,created_by,device_id)
-                VALUES (:id,:clientReference,:documentNumber,:sequence,:routeId,:locationId,:sellerId,:customerId,
-                    :subtotal,:total,:currency,:companyName,:companyTaxId,:companyAddress,:legalName,:phone,:whatsapp,
-                    :email,:timezone,:logoFileId,:legend,:createdBy,:deviceId)
+                    company_timezone,company_logo_file_id,document_legend,created_by,device_id,created_at)
+                VALUES (:id,:clientReference,:documentNumber,:sequence,:originType,:routeId,
+                    :routeLoadId,:locationId,:sellerId,:customerId,:subtotal,:total,:currency,:companyName,
+                    :companyTaxId,:companyAddress,:legalName,:phone,:whatsapp,:email,
+                    :timezone,:logoFileId,:legend,:createdBy,:deviceId,:createdAt)
                 """).param("id", item.id()).param("clientReference", item.clientReference())
                 .param("documentNumber", documentNumber).param("sequence", company.nextNumber())
-                .param("routeId", item.routeId()).param("locationId", item.inventoryLocationId())
-                .param("sellerId", item.sellerId()).param("customerId", item.customerId())
+                .param("originType", originType)
+                .param("routeId", item.routeId(), Types.OTHER)
+                .param("routeLoadId", item.routeLoadId(), Types.OTHER)
+                .param("locationId", item.inventoryLocationId())
+                .param("sellerId", item.sellerId(), Types.OTHER)
+                .param("customerId", item.customerId())
                 .param("subtotal", item.subtotal()).param("total", item.total()).param("currency", company.currencyCode())
                 .param("companyName", company.commercialName()).param("companyTaxId", company.taxId())
                 .param("companyAddress", company.address()).param("legalName", company.legalName())
                 .param("phone", company.phone()).param("whatsapp", company.whatsapp()).param("email", company.email())
                 .param("timezone", company.timezone()).param("logoFileId", company.logoFileId(), Types.OTHER)
                 .param("legend", company.documentLegend())
-                .param("createdBy", item.createdBy()).param("deviceId", item.deviceId()).update();
+                .param("createdBy", item.createdBy()).param("deviceId", item.deviceId())
+                .param("createdAt", Timestamp.from(saleCreatedAt)).update();
+
         for (var row : item.items()) {
             jdbc.sql("""
                     INSERT INTO sale_item(id,sale_id,product_id,presentation_id,presentation_quantity,
@@ -193,7 +251,8 @@ public class JdbcSalesAdapter implements SalesPort {
                 s.total(), s.currencyCode(), s.companyName(), s.companyTaxId(), s.companyAddress(),
                 s.documentLegend(), s.createdBy(), s.createdByUsername(), s.deviceId(), s.createdAt(),
                 itemsBySale.getOrDefault(s.id(), List.of()),
-                paymentsBySale.getOrDefault(s.id(), List.of())
+                paymentsBySale.getOrDefault(s.id(), List.of()),
+                s.originType()
         )).toList();
     }
 
@@ -287,7 +346,7 @@ public class JdbcSalesAdapter implements SalesPort {
         var payments = jdbc.sql("""
                 SELECT pay.id,pay.payment_method,pay.amount,pay.status,pay.reference,pay.bank,
                        pay.evidence_reference,pay.registered_by,registrar.username registered_by_username,
-                       pay.verified_by,verifier.username verified_by_username,pay.verified_at,
+                       pay.verified_by,verifier.username verifier_username,pay.verified_at,
                        pay.rejection_reason,pay.created_at
                 FROM payment pay JOIN app_user registrar ON registrar.id=pay.registered_by
                 LEFT JOIN app_user verifier ON verifier.id=pay.verified_by
@@ -297,27 +356,34 @@ public class JdbcSalesAdapter implements SalesPort {
                 rs.getString("status"), rs.getString("reference"), rs.getString("bank"),
                 rs.getString("evidence_reference"), rs.getObject("registered_by", UUID.class),
                 rs.getString("registered_by_username"), rs.getObject("verified_by", UUID.class),
-                rs.getString("verified_by_username"), instant(rs, "verified_at"),
+                rs.getString("verifier_username"), instant(rs, "verified_at"),
                 rs.getString("rejection_reason"), instant(rs, "created_at"))).list();
         return new SaleView(sale.id(), sale.clientReference(), sale.documentNumber(), sale.routeId(),
                 sale.routeCode(), sale.routeName(), sale.inventoryLocationId(), sale.sellerId(), sale.sellerName(),
                 sale.customerId(), sale.customerCode(), sale.customerName(), sale.status(), sale.subtotal(),
                 sale.total(), sale.currencyCode(), sale.companyName(), sale.companyTaxId(), sale.companyAddress(),
                 sale.documentLegend(), sale.createdBy(), sale.createdByUsername(), sale.deviceId(), sale.createdAt(),
-                items, payments);
+                items, payments, sale.originType());
     }
 
     private String saleSelect() {
         return """
-                SELECT s.id,s.client_reference,s.document_number,s.route_id,r.code route_code,r.name route_name,
-                       s.inventory_location_id,s.seller_id,seller.display_name seller_name,s.customer_id,
-                       c.code customer_code,c.name customer_name,
+                SELECT s.id,s.client_reference,s.document_number,s.origin_type,s.route_id,
+                       COALESCE(r.code, 'MOSTRADOR') route_code,
+                       COALESCE(r.name, 'Venta en Mostrador') route_name,
+                       s.inventory_location_id,s.seller_id,
+                       COALESCE(seller.display_name, 'Administración') seller_name,
+                       s.customer_id,c.code customer_code,c.name customer_name,
                        CASE WHEN EXISTS(SELECT 1 FROM annulment_request ar WHERE ar.sale_id=s.id AND ar.status='APPROVED') THEN 'ANNULLED' ELSE s.status END AS status,
                        s.subtotal,s.total,s.currency_code,
                        s.company_name,s.company_tax_id,s.company_address,s.document_legend,s.created_by,
                        creator.username created_by_username,s.device_id,s.created_at
-                FROM sale s JOIN route r ON r.id=s.route_id JOIN seller ON seller.id=s.seller_id
-                JOIN customer c ON c.id=s.customer_id JOIN app_user creator ON creator.id=s.created_by WHERE 1=1
+                FROM sale s
+                LEFT JOIN route r ON r.id=s.route_id
+                LEFT JOIN seller ON seller.id=s.seller_id
+                JOIN customer c ON c.id=s.customer_id
+                JOIN app_user creator ON creator.id=s.created_by
+                WHERE 1=1
                 """;
     }
 
@@ -331,7 +397,8 @@ public class JdbcSalesAdapter implements SalesPort {
                 rs.getString("currency_code"), rs.getString("company_name"), rs.getString("company_tax_id"),
                 rs.getString("company_address"), rs.getString("document_legend"),
                 rs.getObject("created_by", UUID.class), rs.getString("created_by_username"),
-                rs.getObject("device_id", UUID.class), instant(rs, "created_at"), List.of(), List.of());
+                rs.getObject("device_id", UUID.class), instant(rs, "created_at"), List.of(), List.of(),
+                rs.getString("origin_type"));
     }
 
     @Override
