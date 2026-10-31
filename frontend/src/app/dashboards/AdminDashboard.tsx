@@ -434,11 +434,6 @@ export function AdminDashboard({
     })).sort((a, b) => b.pct - a.pct);
   }, [periodFilteredSales, periodFilter, sales, centralBalances]);
 
-  // Conteo de garrafones en almacén central
-  const filledGarrafons = centralBalances.find(b => b.productName.toLowerCase().includes('garraf') || b.baseUnitCode === 'GARRAFON')?.quantityBaseUnits ?? 1240;
-  const emptyGarrafons = 760; // Base estimativa de envases vacíos
-  const fardosQty = centralBalances.find(b => b.productName.toLowerCase().includes('fardo'))?.quantityBaseUnits ?? 420;
-
   return (
     <div style={{ maxWidth: '1280px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
       
@@ -1428,54 +1423,58 @@ export function AdminDashboard({
               </Link>
             </div>
 
-            {/* Barras de progreso de inventario */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', margin: '1rem 0' }}>
-              {/* Garrafones Llenos */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.3rem' }}>
-                  <span style={{ color: '#0f172a' }}>Garrafones Llenos</span>
-                  <span style={{ color: '#64748b' }}>
-                    <strong style={{ color: '#0f172a' }}>{Number(filledGarrafons).toLocaleString('es-GT')}</strong> / 2,000
-                  </span>
-                </div>
-                <div style={{ width: '100%', height: '8px', background: '#f1f5f9', borderRadius: '9999px', overflow: 'hidden' }}>
-                  <div style={{ width: `${Math.min(100, Math.round((Number(filledGarrafons) / 2000) * 100))}%`, height: '100%', background: '#10b981', borderRadius: '9999px' }} />
-                </div>
-              </div>
-
-              {/* Garrafones Vacíos */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.3rem' }}>
-                  <span style={{ color: '#0f172a' }}>Garrafones Vacíos</span>
-                  <span style={{ color: '#64748b' }}>
-                    <strong style={{ color: '#0f172a' }}>{Number(emptyGarrafons).toLocaleString('es-GT')}</strong> / 2,000
-                  </span>
-                </div>
-                <div style={{ width: '100%', height: '8px', background: '#f1f5f9', borderRadius: '9999px', overflow: 'hidden' }}>
-                  <div style={{ width: `${Math.min(100, Math.round((Number(emptyGarrafons) / 2000) * 100))}%`, height: '100%', background: '#2563eb', borderRadius: '9999px' }} />
-                </div>
-              </div>
-
-              {/* Fardos 22 Unid */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.3rem' }}>
-                  <span style={{ color: '#0f172a' }}>Fardos 22 Unid</span>
-                  <span style={{ color: '#64748b' }}>
-                    <strong style={{ color: '#0f172a' }}>{Number(fardosQty).toLocaleString('es-GT')}</strong> / 500
-                  </span>
-                </div>
-                <div style={{ width: '100%', height: '8px', background: '#f1f5f9', borderRadius: '9999px', overflow: 'hidden' }}>
-                  <div style={{ width: `${Math.min(100, Math.round((Number(fardosQty) / 500) * 100))}%`, height: '100%', background: '#f59e0b', borderRadius: '9999px' }} />
-                </div>
-              </div>
+            {/* Existencias reales en almacén central */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', margin: '0.85rem 0' }}>
+              {centralBalances.length > 0 ? (
+                centralBalances.map(b => (
+                  <div
+                    key={b.productId}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '0.55rem 0.75rem',
+                      background: '#f8fafc',
+                      borderRadius: '0.5rem',
+                      border: '1px solid #f1f5f9',
+                    }}
+                  >
+                    <div>
+                      <span style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#0f172a' }}>
+                        {b.productName}
+                      </span>
+                      <span style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                        {b.productCode}
+                      </span>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <strong style={{ display: 'block', fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>
+                        {Number(b.quantityBaseUnits).toLocaleString('es-GT')}
+                      </strong>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#64748b' }}>
+                        {b.baseUnitCode}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '1rem 0', margin: 0 }}>
+                  Sin existencias registradas en almacén
+                </p>
+              )}
 
               {/* Existencias en consignación rodante / calle */}
               {Array.from(streetStockMap.entries()).length > 0 && (
-                <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #f1f5f9' }}>
-                  <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>
-                    En Camiones (Calle)
-                  </span>
-                  {Array.from(streetStockMap.entries()).slice(0, 3).map(([pid, it]) => (
+                <div style={{ marginTop: '0.65rem', paddingTop: '0.75rem', borderTop: '1px solid #f1f5f9' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                    <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                      En Camiones (Rutas)
+                    </span>
+                    <span style={{ fontSize: '0.68rem', color: '#047857', background: '#ecfdf5', padding: '0.1rem 0.45rem', borderRadius: '0.25rem', fontWeight: 600 }}>
+                      En Tránsito
+                    </span>
+                  </div>
+                  {Array.from(streetStockMap.entries()).map(([pid, it]) => (
                     <div key={pid} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginTop: '0.25rem' }}>
                       <span style={{ color: '#475569' }}>{it.productName}:</span>
                       <strong style={{ color: '#047857' }}>{Number(it.totalQty).toLocaleString('es-GT')} {it.baseUnitCode}</strong>
