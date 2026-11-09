@@ -874,11 +874,7 @@ export function AdminDashboard({
       </div>
 
       {/* ─── FILA 2: GRID 65% / 35% (TOP VENDEDORES + MEZCLA DE PRODUCTOS) ─── */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-        gap: '1rem',
-      }}>
+      <div className="dashboard-split-grid">
         {/* Izquierda (65% en pantallas grandes): Top Vendedores */}
         <section style={{
           background: '#ffffff',
@@ -886,7 +882,6 @@ export function AdminDashboard({
           borderRadius: '0.75rem',
           padding: '1.25rem',
           boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-          gridColumn: 'span 2',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1.25rem' }}>
             <div>
@@ -1069,11 +1064,7 @@ export function AdminDashboard({
       </div>
 
       {/* ─── FILA 3: GRID 65% / 35% (CUADRE DIARIO Y LIQUIDACIÓN + BODEGA CENTRAL) ─── */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-        gap: '1rem',
-      }}>
+      <div className="dashboard-split-grid">
         {/* Izquierda (65%): Cuadre Diario y Liquidación */}
         <section style={{
           background: '#ffffff',
@@ -1081,7 +1072,6 @@ export function AdminDashboard({
           borderRadius: '0.75rem',
           padding: '1.25rem',
           boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-          gridColumn: 'span 2',
         }}>
           <div style={{
             display: 'flex',
