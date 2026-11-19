@@ -118,7 +118,7 @@ En móvil se usa botón de menú y contenido desplazable; el cierre de sesión d
 - Manual técnico: `docs/MANUAL_TECNICO.md`.
 - Arquitectura: `docs/ARQUITECTURA.md`.
 - Reglas de negocio: `docs/REGLAS_NEGOCIO.md`.
-- Prompt inicial: `PROMPT_MAESTRO_SISTEMA_AGUA_PURA.md`.
+- Prompt inicial: `docs/PROMPT_MAESTRO_SISTEMA_AGUA_PURA.md`.
 
 ## Reglas para la siguiente IA
 

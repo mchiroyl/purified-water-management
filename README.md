@@ -45,7 +45,7 @@ Consulte [la guía de instalación](docs/INSTALACION_LOCAL_PRIMERA_VEZ.md) para 
 
 ## Documentación
 
-- [Manual de usuario](docs/MANUAL_USUARIO.md)
+- [Manual de usuario](docs/MANUAL_USUARIO.md) ([PDF](docs/MANUAL_USUARIO.pdf) · [Word](docs/MANUAL_USUARIO.docx))
 - [Manual técnico](docs/MANUAL_TECNICO.md)
 - [Instalación local y producción](docs/INSTALACION_LOCAL_PRIMERA_VEZ.md)
 - [Respaldo y restauración](docs/RESPALDO_RESTAURACION.md)
@@ -54,6 +54,8 @@ Consulte [la guía de instalación](docs/INSTALACION_LOCAL_PRIMERA_VEZ.md) para 
 - [ERS/SRS](docs/ERS_SRS.md) · [Reglas de negocio](docs/REGLAS_NEGOCIO.md)
 - [Matriz de permisos](docs/MATRIZ_PERMISOS.md) · [Trazabilidad](docs/MATRIZ_TRAZABILIDAD.md)
 - [Arquitectura](docs/ARQUITECTURA.md) · [Diagramas y ERD](diagrams/erd/README.md)
+- [Diseño de interfaces](DESIGN.md) · [Definición de producto](PRODUCT.md)
+- [Especificación funcional base](docs/PROMPT_MAESTRO_SISTEMA_AGUA_PURA.md)
 - [Política de seguridad](SECURITY.md)
 
 ## Desarrollo y pruebas

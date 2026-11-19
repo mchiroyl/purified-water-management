@@ -392,7 +392,8 @@ def create_manual():
     doc.add_paragraph().paragraph_format.space_after = Pt(12)
     add_callout("El cumplimiento de esta separación de funciones asegura la transparencia del negocio, evita descuadres en el inventario de agua y previene pérdidas de garrafones.", "CONCLUSIÓN OPERATIVA:")
 
-    output_path = r"d:\UMG\Purificadora\Manual_de_Usuario_Purificadora.docx"
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    output_path = os.path.join(root_dir, "docs", "MANUAL_USUARIO.docx")
     doc.save(output_path)
     print(f"Manual generado con exito en: {output_path}")
 
